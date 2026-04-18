@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Data Explorer | Schema Weaver</title>
+    <meta
+      name="description"
+      content="Schema Weaver Data Explorer helps you browse PostgreSQL databases, filter rows, inspect column statistics, export data, and use Resona AI for advanced analysis."
+    />
+    <meta
+      name="robots"
+      content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1"
+    />
+    <meta name="author" content="Schema Weaver" />
+    <meta name="theme-color" content="#0f172a" />
+    <meta name="application-name" content="Data Explorer | Schema Weaver" />
+    <meta name="apple-mobile-web-app-title" content="Data Explorer" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="format-detection" content="telephone=no" />
+    <link rel="canonical" href="https://data-explorer.schemaweaver.vivekmind.com/" />
+    <link rel="icon" type="image/png" href="/resona.png" />
+    <link rel="apple-touch-icon" href="/resona.png" />
+    <link rel="shortcut icon" href="/favicon.ico" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="preconnect" href="https://www.gstatic.com" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Schema Weaver" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:url" content="https://data-explorer.schemaweaver.vivekmind.com/" />
+    <meta property="og:title" content="Data Explorer | Schema Weaver" />
+    <meta
+      property="og:description"
+      content="Browse PostgreSQL databases, inspect tables, export data, and use Resona AI for advanced analysis inside Schema Weaver Data Explorer."
+    />
+    <meta property="og:image" content="https://data-explorer.schemaweaver.vivekmind.com/resona.png" />
+    <meta property="og:image:alt" content="Schema Weaver Data Explorer logo" />
+
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:url" content="https://data-explorer.schemaweaver.vivekmind.com/" />
+    <meta name="twitter:title" content="Data Explorer | Schema Weaver" />
+    <meta
+      name="twitter:description"
+      content="Browse PostgreSQL databases, inspect tables, export data, and use Resona AI for advanced analysis in Schema Weaver Data Explorer."
+    />
+    <meta name="twitter:image" content="https://data-explorer.schemaweaver.vivekmind.com/resona.png" />
+    <meta name="twitter:image:alt" content="Schema Weaver Data Explorer logo" />
+
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebPage",
+        "name": "Data Explorer",
+        "url": "https://data-explorer.schemaweaver.vivekmind.com/",
+        "description": "Schema Weaver Data Explorer is a data explorer and SQL workbench for PostgreSQL databases with exports, column statistics, and advanced AI-assisted analysis.",
+        "isPartOf": {
+          "@type": "WebSite",
+          "name": "Schema Weaver",
+          "url": "https://schemaweaver.vivekmind.com/"
+        }
+      }
+    </script>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "Data Explorer",
+        "applicationCategory": "DatabaseApplication",
+        "operatingSystem": "Web",
+        "url": "https://data-explorer.schemaweaver.vivekmind.com/",
+        "description": "A data explorer inside Schema Weaver for PostgreSQL databases with table browsing, filtering, exports, column statistics, SQL workflows, and built-in Resona AI analysis.",
+        "featureList": [
+          "Browse PostgreSQL databases and tables",
+          "Server-side filtering and sorting",
+          "Canvas-measured smart column sizing",
+          "Column statistics and value inspection",
+          "CSV, JSON, NDJSON, Excel, and SQL exports",
+          "Full schema export",
+          "Built-in Resona AI chat for data questions",
+          "Advanced analysis with trends, anomalies, cohorts, and reports",
+          "Workspace, dashboard pinning, and saved artifacts",
+          "Works alongside Schema Weaver SQL Editor"
+        ],
+        "isPartOf": {
+          "@type": "WebSite",
+          "name": "Schema Weaver",
+          "url": "https://schemaweaver.vivekmind.com/"
+        },
+        "softwareHelp": {
+          "@type": "CreativeWork",
+          "url": "https://docs.schemaweaver.vivekmind.com/data-explorer/"
+        }
+      }
+    </script>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "What databases can I use with Data Explorer?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Data Explorer currently supports PostgreSQL databases."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "What can Resona AI do inside Data Explorer?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Resona AI is a feature inside Data Explorer that can help with query drafting, table understanding, advanced analysis, trends, anomalies, charts, and generated reports."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Which export formats are available?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Data Explorer supports CSV, JSON, NDJSON, Excel, and SQL exports for individual tables, plus full schema export."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Is Data Explorer read-only by default?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Yes. The Data Explorer docs describe the product as read-only by default, allowing only SELECT statements unless write access is explicitly enabled for a connection."
+            }
+          }
+        ]
+      }
+    </script>
+    <style>
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border-width: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <noscript>
+      <div class="seo-noscript">
+        Data Explorer requires JavaScript for the live app. Product details and documentation links are available below.
+      </div>
+    </noscript>
+
+    <div id="root"></div>
+
+    <!-- SEO content hidden via sr-only to allow indexing without affecting app-style UI -->
+    <main id="seo-content" class="sr-only seo-shell" aria-label="Schema Weaver Data Explorer overview">
+      <section class="seo-hero">
+        <div class="seo-wrap">
+          <p class="seo-eyebrow">Schema Weaver</p>
+          <h1>Data Explorer and SQL workbench inside Schema Weaver</h1>
+          <p class="seo-lead">
+            Data Explorer is part of Schema Weaver. It helps you browse PostgreSQL databases, filter live rows, inspect
+            column statistics, export data, and use Resona AI for advanced analysis without leaving the explorer workflow.
+          </p>
+          <nav class="seo-links" aria-label="Data Explorer sections">
+            <a href="#features">Core Features</a>
+            <a href="#support">Database Support</a>
+            <a href="#ai-chat">Resona AI</a>
+            <a href="#exports">Exports</a>
+            <a href="#schemaweaver">Schema Weaver Apps</a>
+            <a href="#docs">Docs</a>
+          </nav>
+        </div>
+      </section>
+
+      <section id="features" class="seo-section">
+        <div class="seo-wrap">
+          <div class="seo-grid">
+            <article class="seo-card">
+              <h2>Explore live data quickly</h2>
+              <p>
+                Data Explorer uses a two-panel layout with a schema-aware sidebar on the left and a high-performance
+                data grid on the right. You can search tables, open previews, sort columns, apply filters, refresh
+                results, and copy values directly from the grid.
+              </p>
+            </article>
+            <article class="seo-card">
+              <h2>Inspect columns with smarter grid behavior</h2>
+              <p>
+                Column widths are measured with canvas-based sizing and 95th-percentile sampling so wide datasets stay
+                readable. Clicking a header opens column statistics such as null percentage, distinct counts, top
+                values, and min or max details.
+              </p>
+            </article>
+            <article class="seo-card">
+              <h2>Move from browsing to SQL and advanced AI analysis</h2>
+              <p>
+                Data Explorer is part of a larger Schema Weaver workflow. You can inspect raw PostgreSQL data here,
+                export what you need, open deeper query workflows in the SQL Editor, and use Resona AI when you want
+                help drafting queries or running more advanced analysis.
+              </p>
+            </article>
+          </div>
+
+          <div class="seo-columns">
+            <article>
+              <h2>What you can do in Data Explorer</h2>
+              <ul>
+                <li>Browse PostgreSQL schemas and tables from a searchable sidebar.</li>
+                <li>Sort and filter rows server-side for large datasets.</li>
+                <li>Show or hide columns based on the current task.</li>
+                <li>Open column statistics to inspect quality and value distribution.</li>
+                <li>Copy individual cell values directly from the grid.</li>
+                <li>Export current tables or full schemas in multiple formats.</li>
+                <li>Use Resona AI for query help and advanced analysis inside the explorer workflow.</li>
+                <li>Save outputs into dashboard, workspace, and artifact history views.</li>
+              </ul>
+            </article>
+            <article>
+              <h2>How Data Explorer fits into Schema Weaver</h2>
+              <p>
+                Data Explorer is one part of Schema Weaver, hosted on its own subdomain while still remaining part of
+                the main platform experience.
+              </p>
+              <p>
+                It works alongside the main Schema Weaver site, the docs portal, and the SQL Editor so users can move
+                from product overview to documentation to deeper PostgreSQL query workflows without losing context.
+              </p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section id="support" class="seo-section seo-section-alt">
+        <div class="seo-wrap">
+          <div class="seo-columns">
+            <article>
+              <h2>Current database support</h2>
+              <p>
+                Data Explorer currently supports PostgreSQL databases. The product name remains Data Explorer, while the
+                support scope is described clearly in the page copy.
+              </p>
+            </article>
+            <article>
+              <h2>Clear support messaging</h2>
+              <p>
+                The page should make it easy to understand that Data Explorer works with PostgreSQL databases today,
+                while still keeping the product branding centered on Data Explorer as a Schema Weaver feature.
+              </p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section id="ai-chat" class="seo-section">
+        <div class="seo-wrap">
+          <div class="seo-columns">
+            <article>
+              <h2>Resona AI is a feature inside Data Explorer</h2>
+              <p>
+                Resona AI belongs inside Data Explorer. It can help users ask questions in plain English, draft SQL,
+                inspect tables, summarize findings, and move faster through PostgreSQL analysis tasks without becoming a
+                separate product identity.
+              </p>
+              <p>
+                The page treats Resona AI as one capability within Data Explorer instead of positioning it as the
+                primary brand.
+              </p>
+            </article>
+            <article>
+              <h2>Advanced analysis supported by Resona AI</h2>
+              <ul>
+                <li>Generate a starting PostgreSQL query from a plain-English prompt.</li>
+                <li>Explain what a table or result set is showing.</li>
+                <li>Suggest filters, aggregations, or follow-up queries.</li>
+                <li>Analyze trends, anomalies, cohorts, retention, and funnel behavior.</li>
+                <li>Generate charts, reports, and slide-ready artifacts from the analysis workflow.</li>
+              </ul>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section id="exports" class="seo-section seo-section-alt">
+        <div class="seo-wrap">
+          <div class="seo-columns">
+            <article>
+              <h2>Export PostgreSQL data in multiple formats</h2>
+              <p>
+                Data Explorer supports CSV, JSON, NDJSON, Excel, and SQL exports for current tables, plus full schema
+                export. This is useful for reporting, handoff to notebooks, stakeholder sharing, and moving selected
+                data into follow-up workflows.
+              </p>
+              <p>
+                Export support is one of the strongest product-specific topics on this page and should remain prominent
+                in both search snippets and on-page content.
+              </p>
+            </article>
+            <article>
+              <h2>Read-only by default</h2>
+              <p>
+                Data Explorer is documented as read-only by default, which helps communicate safer production
+                exploration. That supports trust for users evaluating the tool for operational PostgreSQL access.
+              </p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section id="schemaweaver" class="seo-section">
+        <div class="seo-wrap">
+          <h2>Schema Weaver app structure</h2>
+          <div class="seo-faq">
+            <article class="seo-card">
+              <h3>Landing</h3>
+              <p><a href="https://schemaweaver.vivekmind.com/">schemaweaver.vivekmind.com</a></p>
+            </article>
+            <article class="seo-card">
+              <h3>Docs</h3>
+              <p><a href="https://docs.schemaweaver.vivekmind.com/">docs.schemaweaver.vivekmind.com</a></p>
+            </article>
+            <article class="seo-card">
+              <h3>SQL Editor</h3>
+              <p><a href="https://sql.schemaweaver.vivekmind.com/">sql.schemaweaver.vivekmind.com</a></p>
+            </article>
+            <article class="seo-card">
+              <h3>Data Explorer</h3>
+              <p><a href="https://data-explorer.schemaweaver.vivekmind.com/">data-explorer.schemaweaver.vivekmind.com</a></p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section id="faq" class="seo-section seo-section-alt">
+        <div class="seo-wrap">
+          <h2>Frequently asked questions</h2>
+          <div class="seo-faq">
+            <article class="seo-card">
+              <h3>What databases can I use with Data Explorer?</h3>
+              <p>Data Explorer currently supports PostgreSQL databases.</p>
+            </article>
+            <article class="seo-card">
+              <h3>What can Resona AI do inside Data Explorer?</h3>
+              <p>Resona AI can help with query drafting, explanation, advanced analysis, charts, and generated reports.</p>
+            </article>
+            <article class="seo-card">
+              <h3>Can I export query results and tables?</h3>
+              <p>Yes. Data Explorer supports CSV, JSON, NDJSON, Excel, SQL, and full schema export workflows.</p>
+            </article>
+            <article class="seo-card">
+              <h3>Is Data Explorer read-only by default?</h3>
+              <p>
+                Yes. The documented default is read-only mode, which helps teams explore PostgreSQL data more safely in
+                production-oriented workflows.
+              </p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section id="docs" class="seo-section">
+        <div class="seo-wrap">
+          <h2>Documentation links</h2>
+          <p class="seo-subtext">
+            Use the docs site for step-by-step guides, feature details, and deeper workflows related to Data Explorer.
+          </p>
+          <div class="seo-docs">
+            <a href="https://docs.schemaweaver.vivekmind.com/data-explorer/">Data Explorer Overview</a>
+            <a href="https://docs.schemaweaver.vivekmind.com/data-explorer/connecting-database">Connecting a Database</a>
+            <a href="https://docs.schemaweaver.vivekmind.com/data-explorer/exploring-data">Exploring Your Data</a>
+            <a href="https://docs.schemaweaver.vivekmind.com/data-explorer/exporting-data">Exporting Data</a>
+            <a href="https://docs.schemaweaver.vivekmind.com/data-explorer/ai-overview">AI Chat Overview</a>
+            <a href="https://docs.schemaweaver.vivekmind.com/data-explorer/agentic-workflows">How AI Chat Works</a>
+            <a href="https://docs.schemaweaver.vivekmind.com/data-explorer/ai-artifacts">Charts and Analysis Results</a>
+            <a href="https://docs.schemaweaver.vivekmind.com/data-explorer/ai-workspace">Workspace and Projects</a>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

@@ -1,0 +1,38 @@
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "What databases can I use with Data Explorer?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Data Explorer currently supports PostgreSQL databases."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "What can Resona AI do inside Data Explorer?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Resona AI is a feature inside Data Explorer that can help with query drafting, table understanding, advanced analysis, trends, anomalies, charts, and generated reports."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Which export formats are available?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Data Explorer supports CSV, JSON, NDJSON, Excel, and SQL exports for individual tables, plus full schema export."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Is Data Explorer read-only by default?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Yes. The Data Explorer docs describe the product as read-only by default, allowing only SELECT statements unless write access is explicitly enabled for a connection."
+      }
+    }
+  ]
+}
