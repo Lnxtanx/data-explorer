@@ -5,31 +5,44 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { getCurrentUser, type UserProfileResponse } from '@/lib/api';
+import { get } from '@/lib/api/client';
 import { queryKeys } from '@/lib/queryClient';
 import { useAuth } from '@/components/auth/AuthProvider';
 
 /**
  * Fetches user profile (name, email, avatar) and usage (plan, requests).
- * Data is cached for 5 minutes — opens instantly after first load.
- * Only fetches when user is logged in.
+ * Now also includes real-time subscription status for accurate plan display.
  */
 export function useUserProfile() {
   const { user } = useAuth();
 
-  const query = useQuery<UserProfileResponse>({
+  const profileQuery = useQuery<UserProfileResponse>({
     queryKey: queryKeys.user.profile,
     queryFn: getCurrentUser,
-    staleTime: 5 * 60 * 1000,    // 5 minutes — profile rarely changes
-    gcTime: 10 * 60 * 1000,      // Keep in cache for 10 min
-    enabled: !!user,              // Only fetch when logged in
-    retry: false,                 // Don't retry auth failures
+    staleTime: 5 * 60 * 1000,
+    enabled: !!user,
+    retry: false,
   });
 
+  const subQuery = useQuery({
+    queryKey: ['subscription'],
+    queryFn: () => get<any>('/api/payments/subscription'),
+    staleTime: 5 * 60 * 1000,
+    enabled: !!user,
+  });
+
+  const planId = subQuery.data?.plan_id || profileQuery.data?.usage?.plan_id || 'free';
+
   return {
-    profile: query.data?.user ?? null,
-    usage: query.data?.usage ?? null,
-    isLoading: query.isLoading,
-    error: query.error,
-    refetch: query.refetch,
+    profile: profileQuery.data?.user ?? null,
+    usage: profileQuery.data?.usage ?? null,
+    subscription: subQuery.data ?? null,
+    planId,
+    isLoading: profileQuery.isLoading || subQuery.isLoading,
+    error: profileQuery.error || subQuery.error,
+    refetch: () => {
+      profileQuery.refetch();
+      subQuery.refetch();
+    },
   };
 }

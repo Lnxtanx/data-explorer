@@ -20,7 +20,7 @@ interface ProfileSettingsProps {
 }
 
 export function ProfileSettings({ user, signOut, signInWithGoogle }: ProfileSettingsProps) {
-  const { profile, usage, isLoading } = useUserProfile();
+  const { profile, planId, isLoading } = useUserProfile();
   const { isLoggingIn } = useAuth();
 
   if (!user && !isLoggingIn) {
@@ -85,7 +85,7 @@ export function ProfileSettings({ user, signOut, signInWithGoogle }: ProfileSett
     })
     : 'Joined recently';
 
-  const planName = (usage?.plan_id || 'Free').charAt(0).toUpperCase() + (usage?.plan_id || 'Free').slice(1);
+  const planName = (planId || 'free').charAt(0).toUpperCase() + (planId || 'free').slice(1);
 
   return (
     <div className="h-full overflow-y-auto">
