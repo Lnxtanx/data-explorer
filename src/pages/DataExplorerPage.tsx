@@ -11,9 +11,17 @@ import { Loader2, ChevronRight } from 'lucide-react';
 import { SettingsModal } from '@/components/settings';
 import { ExportButton } from '@/components/data-explorer/ExportButton';
 import { Button } from '@/components/ui/button';
-import type { TableInfo } from '@/lib/api/data/explorer/types';
+import { TableInfo } from '@/lib/api/data/explorer/types';
 import { useConnections } from '@/lib/api/data/connection';
 import { toast } from 'sonner';
+import { 
+  acceptTeamInvitation, 
+  getInvitationInfo, 
+  declineTeamInvitation,
+  InvitationInfo 
+} from '@/lib/api/projects/collaboration';
+import { InvitationReviewModal } from '@/components/auth/InvitationReviewModal';
+import { NotificationBanner } from '@/components/ui/NotificationBanner';
 
 const STORAGE_KEY = 'sw-data-explorer:connection-id';
 
@@ -26,7 +34,7 @@ export default function DataExplorerPage() {
   const [settingsSection, setSettingsSection] = useState<'profile' | 'usage' | 'plans' | 'appearance' | 'shortcuts' | 'documentation' | 'collaboration'>('profile');
   const [hasShownSelectToast, setHasShownSelectToast] = useState(false);
 
-  const { data: connections, isSuccess: connectionsLoaded } = useConnections();
+  const { data: connections, isSuccess: connectionsLoaded, refetch: refetchConnections } = useConnections();
 
   const [isAiMode, setIsAiMode] = useState(false);
   const [aiContextTable, setAiContextTable] = useState<string | null>(null);
@@ -34,6 +42,11 @@ export default function DataExplorerPage() {
     table: null,
     schema: 'public',
   });
+
+  // Invitation State
+  const [pendingInviteInfo, setPendingInviteInfo] = useState<InvitationInfo | null>(null);
+  const [inviteToken, setInviteToken] = useState<string | null>(null);
+  const [isProcessingInvite, setIsProcessingInvite] = useState(false);
 
   useEffect(() => {
     if (connectionsLoaded && connections && connections.length > 0 && !connectionId) {
@@ -61,6 +74,63 @@ export default function DataExplorerPage() {
     }
   }, [user, connectionId, hasShownSelectToast, connectionsLoaded, connections]);
 
+  // Handle Invitations Detection
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const teamInviteToken = params.get('teamInvite');
+    
+    if (teamInviteToken) {
+      setInviteToken(teamInviteToken);
+      const fetchInfo = async () => {
+        try {
+          const info = await getInvitationInfo(teamInviteToken, 'team');
+          setPendingInviteInfo(info);
+        } catch (error) {
+          console.error('[Invitation] Info fetch failed:', error);
+          if (!pendingInviteInfo) {
+            toast.error('Invalid or expired invitation link');
+          }
+          window.history.replaceState({}, document.title, window.location.pathname);
+        }
+      };
+      fetchInfo();
+    }
+  }, []);
+
+  const handleAcceptInvite = async () => {
+    if (!inviteToken || !pendingInviteInfo || !user) return;
+    setIsProcessingInvite(true);
+    try {
+      const res = await acceptTeamInvitation(inviteToken);
+      if (res.success) {
+        toast.success('Joined team successfully!');
+        refetchConnections();
+      }
+      setPendingInviteInfo(null);
+      setInviteToken(null);
+      window.history.replaceState({}, document.title, window.location.pathname);
+    } catch (error: any) {
+      console.error('[Invitation] Accept failed:', error);
+      toast.error(error.message || 'Failed to join');
+    } finally {
+      setIsProcessingInvite(false);
+    }
+  };
+
+  const handleDeclineInvite = async () => {
+    if (!inviteToken || !pendingInviteInfo) return;
+    try {
+      if (pendingInviteInfo.type === 'team' && pendingInviteInfo.teamId) {
+        await declineTeamInvitation(pendingInviteInfo.teamId, pendingInviteInfo.id);
+      }
+    } catch (e) {
+      console.warn('Backend decline failed', e);
+    }
+    setPendingInviteInfo(null);
+    setInviteToken(null);
+    window.history.replaceState({}, document.title, window.location.pathname);
+  };
+
   const handleConnectionChange = useCallback((newConnectionId: string | null) => {
     setConnectionId(newConnectionId);
     setSelectedTable({ table: null, schema: 'public' });
@@ -80,6 +150,7 @@ export default function DataExplorerPage() {
 
   return (
     <>
+      <NotificationBanner />
       <div className="h-screen flex bg-background">
         <DataExplorerLayout
           isAiMode={isAiMode}
@@ -176,6 +247,17 @@ export default function DataExplorerPage() {
         signOut={signOut}
         signInWithGoogle={signInWithGoogle}
         initialSection={settingsSection}
+      />
+
+      <InvitationReviewModal
+        isOpen={!!pendingInviteInfo}
+        onClose={() => setPendingInviteInfo(null)}
+        invitation={pendingInviteInfo}
+        onAccept={handleAcceptInvite}
+        onDecline={handleDeclineInvite}
+        isAuthenticated={!!user}
+        onSignIn={signInWithGoogle}
+        isProcessing={isProcessingInvite}
       />
     </>
   );

@@ -38,9 +38,17 @@ export function NotificationBanner() {
 
         fetchNotification();
 
+        // Auto-dismiss after 6 seconds if not already dismissed
+        const dismissTimer = setTimeout(() => {
+            setIsDismissed(true);
+        }, 6000);
+
         // Optional: Poll every 5 minutes for new notifications
         const interval = setInterval(fetchNotification, 5 * 60 * 1000);
-        return () => clearInterval(interval);
+        return () => {
+            clearInterval(interval);
+            clearTimeout(dismissTimer);
+        };
     }, []);
 
     const handleDismiss = () => {

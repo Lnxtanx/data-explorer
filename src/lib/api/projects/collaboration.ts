@@ -49,6 +49,21 @@ export interface TeamInvitation {
     created_at: string;
 }
 
+// Invitation Review Info
+export interface InvitationInfo {
+    id: string;
+    type: 'team' | 'project';
+    projectId?: string;
+    teamId?: string;
+    teamName?: string;
+    projectName?: string;
+    inviterName: string;
+    role: string;
+    email: string;
+    status: string;
+    expiresAt: string;
+}
+
 export async function listTeams(): Promise<TeamListResponse> {
     return get<TeamListResponse>('/api/teams');
 }
@@ -95,4 +110,27 @@ export async function revokeTeamInvitation(
     inviteId: string
 ): Promise<{ success: boolean }> {
     return del<{ success: boolean }>(`/api/teams/${teamId}/invitations/${inviteId}`);
+}
+
+export async function acceptTeamInvitation(
+    token: string
+): Promise<{ success: boolean; membership: any }> {
+    return post<{ success: boolean; membership: any }>('/api/teams/invitations/accept', { token });
+}
+
+export async function declineTeamInvitation(
+    teamId: string,
+    inviteId: string
+): Promise<{ success: boolean; message: string }> {
+    return post(`/api/teams/${teamId}/invitations/${inviteId}/decline`);
+}
+
+/**
+ * Publicly fetch invitation details for review
+ */
+export async function getInvitationInfo(token: string, type: 'team' | 'project'): Promise<InvitationInfo> {
+    const endpoint = type === 'team'
+        ? `/api/teams/invitations/info/${token}`
+        : `/api/files/projects/invitations/info/${token}`;
+    return get<InvitationInfo>(endpoint);
 }

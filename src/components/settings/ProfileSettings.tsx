@@ -85,7 +85,14 @@ export function ProfileSettings({ user, signOut, signInWithGoogle }: ProfileSett
     })
     : 'Joined recently';
 
-  const planName = (planId || 'free').charAt(0).toUpperCase() + (planId || 'free').slice(1);
+  const PLAN_LABELS: Record<string, string> = {
+    free: 'Free',
+    starter: 'Starter',
+    pro_monthly: 'Pro',
+    power_monthly: 'Power',
+  };
+
+  const planName = PLAN_LABELS[planId] || planId.split('_')[0].charAt(0).toUpperCase() + planId.split('_')[0].slice(1);
 
   return (
     <div className="h-full overflow-y-auto">

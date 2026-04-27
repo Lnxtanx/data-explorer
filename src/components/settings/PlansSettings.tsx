@@ -8,7 +8,9 @@ import {
     CircleDashed,
     Clock3,
     CreditCard,
+    ExternalLink,
     Layers3,
+    Loader2,
     ReceiptText,
     ShieldCheck,
 } from 'lucide-react';
@@ -23,8 +25,11 @@ import {
     TableRow,
 } from '@/components/ui/table';
 import { get } from '@/lib/api/client';
-import { PricingModal } from '@/components/payment/PricingModal';
 import { cn } from '@/lib/utils';
+import { useCreateOrder, useVerifyPayment } from '@/hooks/usePayments';
+import { toast } from 'sonner';
+
+const PRICING_URL = 'https://schemaweaver.vivekmind.com/pricing';
 
 interface PlansSettingsProps {
     user?: User | Partial<User> | null;
@@ -86,6 +91,11 @@ function formatMoneyFromPaise(amountPaise: number): string {
     return `Rs ${(amountPaise / 100).toLocaleString('en-IN')}`;
 }
 
+function formatUSD(amount: number): string {
+    if (amount <= 0) return '$0';
+    return `$${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
 function formatAmount(amount: number, currency: string): string {
     if (currency === 'INR') return `Rs ${amount.toLocaleString('en-IN')}`;
     return `${currency} ${amount.toLocaleString('en-IN')}`;
@@ -132,7 +142,10 @@ function Metric({ label, value }: { label: string; value: string }) {
 }
 
 export function PlansSettings({ user }: PlansSettingsProps) {
-    const [showPricing, setShowPricing] = useState(false);
+    const [isUpgrading, setIsUpgrading] = useState<string | null>(null);
+    const { mutateAsync: createOrder } = useCreateOrder();
+    const { mutateAsync: verifyPayment } = useVerifyPayment();
+
     const { data: plansData, isLoading: plansLoading, error: plansError } = useQuery({
         queryKey: ['sw_plans'],
         queryFn: () => get<{ plans: SwPlan[] }>('/api/payments/plans'),
@@ -158,6 +171,67 @@ export function PlansSettings({ user }: PlansSettingsProps) {
         () => [...(plansData?.plans ?? [])].sort((a, b) => a.price_inr - b.price_inr),
         [plansData],
     );
+
+    const handleUpgrade = async (plan: SwPlan) => {
+        if (plan.id === currentPlanId) return;
+
+        setIsUpgrading(plan.id);
+        try {
+            // 1. Create order on backend
+            const { order } = await createOrder({ planId: plan.id });
+
+            // 2. Open Razorpay Checkout
+            const options = {
+                key: order.keyId,
+                amount: order.amount,
+                currency: order.currency,
+                name: 'Schema Weaver',
+                description: `Upgrade to ${plan.name}`,
+                order_id: order.id,
+                prefill: {
+                    name: (user as any)?.full_name || '',
+                    email: user?.email || '',
+                },
+                theme: {
+                    color: '#0f172a',
+                },
+                handler: async (response: any) => {
+                    try {
+                        toast.loading('Verifying payment...', { id: 'payment-verify' });
+                        await verifyPayment({
+                            razorpay_order_id: response.razorpay_order_id,
+                            razorpay_payment_id: response.razorpay_payment_id,
+                            razorpay_signature: response.razorpay_signature,
+                            plan_id: plan.id,
+                            email: user?.email,
+                            name: (user as any)?.full_name
+                        });
+                        toast.success(`Successfully upgraded to ${plan.name}!`, { id: 'payment-verify' });
+                    } catch (err: any) {
+                        toast.error(err.message || 'Verification failed', { id: 'payment-verify' });
+                    } finally {
+                        setIsUpgrading(null);
+                    }
+                },
+                modal: {
+                    ondismiss: () => {
+                        setIsUpgrading(null);
+                    }
+                }
+            };
+
+            const rzp = new (window as any).Razorpay(options);
+            rzp.on('payment.failed', function (response: any) {
+                toast.error(`Payment failed: ${response.error.description}`);
+                setIsUpgrading(null);
+            });
+            rzp.open();
+        } catch (err: any) {
+            console.error('Upgrade failed:', err);
+            toast.error(err.message || 'Failed to initiate upgrade');
+            setIsUpgrading(null);
+        }
+    };
 
     const currentPlanId = subscription?.plan_id ?? 'free';
     const currentPlan = subscription?.sw_plans ?? plans.find((plan) => plan.id === currentPlanId) ?? null;
@@ -210,8 +284,13 @@ export function PlansSettings({ user }: PlansSettingsProps) {
                             </div>
                         </div>
 
-                        <Button variant="outline" className="rounded-xl" onClick={() => setShowPricing(true)}>
-                            Change plan
+                        <Button
+                            variant="outline"
+                            className="rounded-xl gap-2"
+                            onClick={() => window.open(`${PRICING_URL}?plan=${currentPlanId}`, '_blank', 'noopener')}
+                        >
+                            Upgrade
+                            <ExternalLink className="h-3.5 w-3.5" />
                         </Button>
                     </div>
 
@@ -307,7 +386,7 @@ export function PlansSettings({ user }: PlansSettingsProps) {
                 {isLoading ? (
                     <div className="px-6 py-12 text-center text-sm text-muted-foreground">Loading plans...</div>
                 ) : (
-                    <div className="grid gap-4 p-6 md:grid-cols-2 xl:grid-cols-4">
+                    <div className="grid gap-8 p-6 md:grid-cols-2 max-w-5xl mx-auto">
                         {plans.map((plan) => {
                             const meta = PLAN_META[plan.id] ?? PLAN_META.free;
                             const isCurrent = plan.id === currentPlanId;
@@ -332,9 +411,12 @@ export function PlansSettings({ user }: PlansSettingsProps) {
                                         )}
                                     </div>
                                     <p className="mt-3 text-2xl font-semibold tracking-tight text-foreground">
-                                        {formatMoneyFromPaise(plan.price_inr)}
+                                        {formatUSD(plan.price_usd)}
                                     </p>
-                                    <p className="mt-1 text-sm text-muted-foreground">{intervalLabel(plan.billing_interval)}</p>
+                                    <p className="text-sm font-medium text-muted-foreground/80">
+                                        ≈ {formatMoneyFromPaise(plan.price_inr)}
+                                    </p>
+                                    <p className="mt-1 text-xs text-muted-foreground">{intervalLabel(plan.billing_interval)}</p>
 
                                     <div className="mt-5 space-y-3 text-sm">
                                         <div className="flex items-center justify-between">
@@ -364,12 +446,19 @@ export function PlansSettings({ user }: PlansSettingsProps) {
                                     </div>
 
                                     <Button
-                                        className="mt-6 w-full rounded-xl"
+                                        className="mt-6 w-full rounded-xl gap-2"
                                         variant={isCurrent ? 'secondary' : 'default'}
-                                        disabled={isCurrent}
-                                        onClick={isCurrent ? undefined : () => setShowPricing(true)}
+                                        disabled={isCurrent || isUpgrading !== null}
+                                        onClick={isCurrent ? undefined : () => handleUpgrade(plan)}
                                     >
-                                        {isCurrent ? 'Current plan' : `Choose ${plan.name}`}
+                                        {isUpgrading === plan.id ? (
+                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                        ) : isCurrent ? (
+                                            'Current plan'
+                                        ) : (
+                                            `Choose ${plan.name}`
+                                        )}
+                                        {!isCurrent && !isUpgrading && <CreditCard className="h-3.5 w-3.5" />}
                                     </Button>
                                 </div>
                             );
@@ -378,14 +467,6 @@ export function PlansSettings({ user }: PlansSettingsProps) {
                 )}
             </section>
 
-            <PricingModal
-                isOpen={showPricing}
-                onClose={() => setShowPricing(false)}
-                currentPlanId={currentPlanId}
-                onSuccess={() => {
-                    setShowPricing(false);
-                }}
-            />
         </div>
     );
 }

@@ -69,7 +69,7 @@ export function SidebarFooter({ onOpenSettings, onOpenAI, isAiMode, isCollapsed 
                         <Button
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground opacity-70 hover:opacity-100"
+                            className="h-8 w-8 rounded-lg text-foreground/80 hover:text-foreground hover:bg-muted/60"
                             onClick={onOpenSettings}
                         >
                             {user && (profile?.avatar_url || user.user_metadata.avatar_url) ? (
