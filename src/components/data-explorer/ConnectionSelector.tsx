@@ -15,6 +15,8 @@ import {
 import { useConnections } from '@/lib/api/data/connection';
 import type { Connection } from '@/lib/api/data/connection';
 import { ConnectionFormModal } from './ConnectionFormModal';
+import { useAuth } from '@/components/auth/AuthProvider';
+import { toast } from 'sonner';
 
 interface ConnectionSelectorProps {
   selectedConnectionId: string | null;
@@ -25,11 +27,23 @@ export function ConnectionSelector({
   selectedConnectionId,
   onConnectionChange,
 }: ConnectionSelectorProps) {
+  const { user } = useAuth();
   const { data: connections, isLoading } = useConnections();
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const selectedConnection = connections?.find(c => c.id === selectedConnectionId);
+
+  const handleAddConnection = () => {
+    if (!user) {
+      toast.error('Authentication Required', {
+        description: 'Please sign in to add your own database connections.',
+      });
+      return;
+    }
+    setEditingId(null);
+    setIsAddModalOpen(true);
+  };
 
   return (
     <>
@@ -51,10 +65,7 @@ export function ConnectionSelector({
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="w-64">
           <DropdownMenuItem
-            onClick={() => {
-              setEditingId(null);
-              setIsAddModalOpen(true);
-            }}
+            onClick={handleAddConnection}
             className="flex items-center gap-2 py-2 text-blue-600 dark:text-blue-400 font-medium"
           >
             <Plus className="w-4 h-4" />
@@ -107,7 +118,15 @@ export function ConnectionSelector({
               </DropdownMenuItem>
             ))
           ) : (
-            <DropdownMenuItem disabled>No connections found</DropdownMenuItem>
+            <div className="px-2 py-6 text-center space-y-2">
+              <Database className="w-8 h-8 mx-auto text-muted-foreground/20" />
+              <p className="text-xs text-muted-foreground font-medium">No connections found</p>
+              {!user && (
+                <p className="text-[10px] text-muted-foreground/60 px-2 leading-relaxed text-balance">
+                  Sign in to see your databases or add a new one.
+                </p>
+              )}
+            </div>
           )}
         </DropdownMenuContent>
       </DropdownMenu>
