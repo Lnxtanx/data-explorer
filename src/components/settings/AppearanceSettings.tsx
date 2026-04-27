@@ -11,11 +11,10 @@ import { cn } from '@/lib/utils';
 
 const THEMES = [
     { id: 'light', label: 'Light', icon: Sun, preview: 'bg-white border-slate-200' },
-    { id: 'dark', label: 'Dark', icon: Moon, preview: 'bg-slate-900 border-slate-700' },
-    { id: 'modern-gray', label: 'Modern Gray', icon: Monitor, preview: 'bg-[#1e1e1e] border-[#404040]' },
+    { id: 'dark', label: 'Dark', icon: Moon, preview: 'bg-[#1e1e1e] border-[#404040]' },
     { id: 'dark-black', label: 'Dark Black', icon: Moon, preview: 'bg-[#09090b] border-[#262626]' },
     { id: 'blue-gray', label: 'Blue Gray', icon: Monitor, preview: 'bg-[#0f172a] border-[#1e293b]' },
-    { id: 'system', label: 'System', icon: Monitor, preview: 'bg-gradient-to-r from-white to-slate-900 border-slate-400' },
+    { id: 'system', label: 'System', icon: Monitor, preview: 'bg-gradient-to-r from-white to-[#1e1e1e] border-slate-400' },
 ];
 
 export function AppearanceSettings() {

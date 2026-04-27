@@ -43,6 +43,8 @@ export function CollaborationSettings() {
     const [newTeamName, setNewTeamName] = useState('');
     const [email, setEmail] = useState('');
     const [inviteRole, setInviteRole] = useState<'admin' | 'member'>('member');
+    const [submittingInvite, setSubmittingInvite] = useState(false);
+    const [submittingCreate, setSubmittingCreate] = useState(false);
 
     // ─── Data Fetching (React Query) ─────────────────────────────────────────
 
@@ -127,7 +129,7 @@ export function CollaborationSettings() {
             const { team } = await createTeam({ name: newTeamName });
             setNewTeamName('');
             setIsCreatingTeam(false);
-            await loadTeams();
+            await queryClient.invalidateQueries({ queryKey: queryKeys.teams });
             setSelectedTeamId(team.id);
             toast.success('Team created successfully!');
         } catch (error) {
@@ -143,7 +145,8 @@ export function CollaborationSettings() {
         try {
             await inviteTeamMember(selectedTeamId, { email, role: inviteRole });
             setEmail('');
-            await loadTeamData();
+            await queryClient.invalidateQueries({ queryKey: queryKeys.members(selectedTeamId) });
+            await queryClient.invalidateQueries({ queryKey: queryKeys.invites(selectedTeamId) });
             toast.success('Invitation sent');
         } catch (error: any) {
             toast.error(error.message || 'Failed to add team member');
@@ -157,7 +160,7 @@ export function CollaborationSettings() {
         try {
             await updateProject(projectId, { teamId: isLinked ? null : selectedTeamId } as any);
             toast.success(isLinked ? 'Project removed from team' : 'Project added to team');
-            await loadTeamData();
+            await queryClient.invalidateQueries({ queryKey: queryKeys.projects });
         } catch (error) {
             toast.error('Failed to update project');
         }

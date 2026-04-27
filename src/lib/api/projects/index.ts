@@ -7,12 +7,19 @@ export interface AIProject {
     title: string;
     description: string | null;
     connectionId: string | null;
+    connection_id?: string | null;
+    teamId?: string | null;
+    team_id?: string | null;
     context: string | null;
     color: 'orange' | 'purple' | 'blue' | 'green';
     fileCount: number;
+    file_count?: number;
     chatCount: number;
+    chat_count?: number;
     createdAt: string;
+    created_at?: string;
     updatedAt: string;
+    updated_at?: string;
 }
 
 export interface ProjectChat {

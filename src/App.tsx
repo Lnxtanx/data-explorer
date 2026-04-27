@@ -31,7 +31,7 @@ export default function App() {
         attribute="class"
         defaultTheme="system"
         enableSystem
-        themes={["light", "dark", "modern-gray", "dark-black", "blue-gray", "system"]}
+        themes={["light", "dark", "dark-black", "blue-gray", "system"]}
       >
         <TooltipProvider>
           <AuthProvider>
