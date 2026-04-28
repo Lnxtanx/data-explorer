@@ -47,6 +47,61 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const [loading, setLoading] = useState(true);
     const [isLoggingIn, setIsLoggingIn] = useState(false);
 
+    // Shared login handler — used by both redirect flow (URL code) and popup fallback
+    const handleGoogleLogin = useCallback(async (code: string) => {
+        setIsLoggingIn(true);
+        try {
+            const response = await loginWithGoogle(code);
+            const { user: dbUser, sessionExpiresAt } = response;
+
+            const mappedUser: User = {
+                id: dbUser.id,
+                app_metadata: { provider: 'google' },
+                user_metadata: {
+                    full_name: dbUser.full_name,
+                    avatar_url: dbUser.avatar_url
+                },
+                email: dbUser.email,
+                aud: 'authenticated',
+                created_at: dbUser.created_at,
+                updated_at: dbUser.updated_at
+            };
+
+            setUser(mappedUser);
+
+            setSessionCookie({
+                userId: dbUser.id,
+                expiresAt: sessionExpiresAt,
+            });
+
+            broadcastSync({
+                type: 'session_changed',
+                payload: {
+                    userId: dbUser.id,
+                }
+            });
+
+            toast.success(`Welcome back, ${dbUser.full_name}`);
+
+        } catch (err: any) {
+            console.error('Login failed:', err);
+            toast.error(err?.message || 'Login failed');
+        } finally {
+            setIsLoggingIn(false);
+        }
+    }, []);
+
+    // ── Redirect flow: detect ?code= in URL after Google redirects back ──
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const code = params.get('code');
+        if (code) {
+            // Remove code from URL to prevent re-processing on refresh
+            window.history.replaceState({}, '', window.location.pathname);
+            handleGoogleLogin(code);
+        }
+    }, [handleGoogleLogin]);
+
     // Restore session and validate with backend
     useEffect(() => {
         const initializeAuth = async () => {
@@ -173,51 +228,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
     }, [user]);
 
+    // ── Google Login: use redirect flow in production to avoid COOP popup issues ──
+    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+
     const login = useGoogleLogin({
         flow: 'auth-code',
+        ux_mode: isLocalhost ? 'popup' : 'redirect',
+        redirect_uri: isLocalhost ? undefined : window.location.origin,
         onSuccess: async (codeResponse) => {
-            setIsLoggingIn(true);
-            try {
-                const { code } = codeResponse;
-
-                const response = await loginWithGoogle(code);
-                const { user: dbUser, sessionExpiresAt } = response;
-
-                const mappedUser: User = {
-                    id: dbUser.id,
-                    app_metadata: { provider: 'google' },
-                    user_metadata: {
-                        full_name: dbUser.full_name,
-                        avatar_url: dbUser.avatar_url
-                    },
-                    email: dbUser.email,
-                    aud: 'authenticated',
-                    created_at: dbUser.created_at,
-                    updated_at: dbUser.updated_at
-                };
-
-                setUser(mappedUser);
-
-                setSessionCookie({
-                    userId: dbUser.id,
-                    expiresAt: sessionExpiresAt,
-                });
-
-                broadcastSync({
-                    type: 'session_changed',
-                    payload: {
-                        userId: dbUser.id,
-                    }
-                });
-
-                toast.success(`Welcome back, ${dbUser.full_name}`);
-
-            } catch (err: any) {
-                console.error('Login failed:', err);
-                toast.error(err?.message || 'Login failed');
-            } finally {
-                setIsLoggingIn(false);
-            }
+            // This only fires in popup mode (localhost)
+            await handleGoogleLogin(codeResponse.code);
         },
         onError: () => {
             setIsLoggingIn(false);
