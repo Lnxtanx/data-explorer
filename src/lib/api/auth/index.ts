@@ -79,8 +79,8 @@ export interface AIModelInfo {
 /**
  * Authenticate with Google OAuth code
  */
-export async function loginWithGoogle(code: string): Promise<AuthResponse> {
-    return post<AuthResponse>('/api/auth/google', { code });
+export async function loginWithGoogle(code: string, redirectUri?: string): Promise<AuthResponse> {
+    return post<AuthResponse>('/api/auth/google', { code, redirect_uri: redirectUri });
 }
 
 /**
