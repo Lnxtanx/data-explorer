@@ -26,7 +26,7 @@ import { NotificationBanner } from '@/components/ui/NotificationBanner';
 const STORAGE_KEY = 'sw-data-explorer:connection-id';
 
 export default function DataExplorerPage() {
-  const { user, loading: authLoading, signOut, signInWithGoogle } = useAuth();
+  const { user, loading: authLoading, isLoggingIn, signOut, signInWithGoogle } = useAuth();
   const [connectionId, setConnectionId] = useState<string | null>(() => {
     return localStorage.getItem(STORAGE_KEY);
   });
@@ -140,10 +140,11 @@ export default function DataExplorerPage() {
     setSelectedTable({ table, schema: schemaName });
   }, []);
 
-  if (authLoading) {
+  if (authLoading || isLoggingIn) {
     return (
-      <div className="h-screen w-screen flex items-center justify-center">
+      <div className="h-screen w-screen flex flex-col items-center justify-center gap-3">
         <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+        {isLoggingIn && <p className="text-sm text-muted-foreground">Signing you in...</p>}
       </div>
     );
   }
