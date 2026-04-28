@@ -5,7 +5,7 @@
 // Pure async function — no React state, no hooks.
 // =============================================================================
 
-import { getCsrfToken } from '../lib/api/client';
+import { getCsrfToken, API_BASE_URL } from '../lib/api/client';
 import type { AgentRequest } from './agentTypes';
 
 /**
@@ -76,7 +76,7 @@ async function _streamOnce(
     onEvent: StreamEventCallback,
     signal: AbortSignal,
 ): Promise<void> {
-    const response = await fetch('/api/ai/agent', {
+    const response = await fetch(`${API_BASE_URL}/api/ai/agent`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',

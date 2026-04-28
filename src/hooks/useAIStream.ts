@@ -15,7 +15,7 @@
 
 import { useCallback, useRef, useState } from 'react';
 import type { ChatRequest, SqlArtifact, HistoryMessage } from '../lib/api/ai';
-import { getCsrfToken } from '../lib/api/client';
+import { getCsrfToken, API_BASE_URL } from '../lib/api/client';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -107,7 +107,7 @@ export function useAIStream(): UseAIStreamResult {
         });
 
         try {
-            const response = await fetch('/api/ai/chat', {
+            const response = await fetch(`${API_BASE_URL}/api/ai/chat`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

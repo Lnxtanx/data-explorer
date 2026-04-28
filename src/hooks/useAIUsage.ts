@@ -27,8 +27,10 @@ export interface AIUsageStatus {
     weekly_reset_at: string;  // weekly reset (Sunday 5:30 PM IST)
 }
 
+import { API_BASE_URL } from '../lib/api/client';
+
 async function fetchUsage(): Promise<AIUsageStatus> {
-    const res = await fetch('/api/ai/usage', { credentials: 'include' });
+    const res = await fetch(`${API_BASE_URL}/api/ai/usage`, { credentials: 'include' });
     if (!res.ok) throw new Error(`Usage fetch failed: ${res.status}`);
     return res.json() as Promise<AIUsageStatus>;
 }

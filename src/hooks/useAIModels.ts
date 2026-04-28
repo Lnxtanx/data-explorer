@@ -1,8 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
 import type { ModelMeta } from '@/components/data-explorer/ai/models/modelConfig';
 
+import { API_BASE_URL } from '../lib/api/client';
+
 async function fetchModels(): Promise<ModelMeta[]> {
-    const res = await fetch('/api/ai/models', { credentials: 'include' });
+    const res = await fetch(`${API_BASE_URL}/api/ai/models`, { credentials: 'include' });
     if (!res.ok) throw new Error(`Failed to fetch models: ${res.status}`);
     const data = await res.json() as { models: ModelMeta[] };
     return data.models;
