@@ -27,6 +27,7 @@ export interface Connection {
     updatedAt: string;
     lastUsedAt?: string;
     isShared?: boolean;
+    isDemo?: boolean;
 }
 
 export interface TestResult {
