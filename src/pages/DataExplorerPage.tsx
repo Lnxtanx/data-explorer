@@ -49,6 +49,13 @@ export default function DataExplorerPage() {
   const [isProcessingInvite, setIsProcessingInvite] = useState(false);
 
   useEffect(() => {
+    // If not logged in and no connection selected, auto-select Demo DB
+    if (!authLoading && !user && !connectionId) {
+      const DEMO_ID = 'demo-0000-0000-0000-000000000000';
+      setConnectionId(DEMO_ID);
+      localStorage.setItem(STORAGE_KEY, DEMO_ID);
+    }
+
     if (connectionsLoaded && connections && connections.length > 0 && !connectionId) {
       const firstId = connections[0].id;
       setConnectionId(firstId);

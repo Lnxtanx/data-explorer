@@ -5,6 +5,7 @@
 import { useState } from 'react';
 import { ChevronDown, Database, Check, Users, Plus, Settings2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -84,18 +85,23 @@ export function ConnectionSelector({
                 className="flex items-center justify-between group"
               >
                 <div className="flex items-center gap-2">
-                  <Database className="w-4 h-4 text-muted-foreground" />
+                  <Database className={cn("w-4 h-4", connection.isDemo ? "text-blue-500" : "text-muted-foreground")} />
                   <div className="flex flex-col">
                     <div className="flex items-center gap-1.5">
                       <span className="font-medium">{connection.name}</span>
-                      {connection.isShared && (
+                      {connection.isDemo && (
+                        <div className="flex items-center gap-0.5 px-1 py-0 rounded bg-blue-500/10 text-[9px] text-blue-600 font-bold uppercase">
+                          Demo
+                        </div>
+                      )}
+                      {connection.isShared && !connection.isDemo && (
                         <div className="flex items-center gap-0.5 px-1 py-0 rounded bg-primary/10 text-[9px] text-primary font-bold uppercase">
                           <Users className="w-2.5 h-2.5" />
                           Shared
                         </div>
                       )}
                     </div>
-                    <span className="text-xs text-muted-foreground">
+                    <span className="text-xs text-muted-foreground font-mono">
                       {connection.database}
                     </span>
                   </div>
