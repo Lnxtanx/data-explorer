@@ -10,9 +10,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import type { SchemaInfo } from '@/lib/api/data/explorer';
 
 interface SchemaSelectorProps {
-  schemas: string[];
+  schemas: SchemaInfo[];
   value: string;
   onChange: (schema: string) => void;
   isLoading?: boolean;
@@ -35,8 +36,8 @@ export function SchemaSelector({
         </SelectTrigger>
         <SelectContent>
           {schemas.map((schema) => (
-            <SelectItem key={schema} value={schema} className="text-xs">
-              {schema}
+            <SelectItem key={schema.name} value={schema.name} className="text-xs">
+              {schema.name}
             </SelectItem>
           ))}
         </SelectContent>

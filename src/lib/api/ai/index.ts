@@ -35,11 +35,13 @@ export interface ModelConfig {
 export interface ChatRequest {
     connectionId?: string;
     chatId?: string;
+    projectId?: string;
     message: string;
     tableContext?: TableContext;
     mentionedTables?: string[];
     modelConfig?: ModelConfig;
     history?: HistoryMessage[];
+    fileIds?: string[];
 }
 
 export interface AIChat {
@@ -51,6 +53,8 @@ export interface AIChat {
     messageCount: number;
     updatedAt: string;
     modelUsed: string;
+    agentMode?: 'flash' | 'deep';
+    thinkingEnabled?: boolean;
 }
 
 export interface AIMessage {
@@ -60,6 +64,12 @@ export interface AIMessage {
     artifacts: SqlArtifact[];
     created_at: string;
     token_count: number | null;
+    /** Author of this message (team-shared chats attribute per member). */
+    user_id?: string | null;
+    /** False when a teammate wrote this message in a shared thread. */
+    isMine?: boolean;
+    authorName?: string | null;
+    authorEmail?: string | null;
     execution_trace?: {
         toolSteps?: Array<{
             id: string;
@@ -123,6 +133,8 @@ export interface ChatMessagesResponse {
         connection_id: string | null;
         project_id: string | null;
         created_at: string;
+        agent_mode?: 'flash' | 'deep';
+        thinking_enabled?: boolean;
     };
     messages: AIMessage[];
 }
@@ -159,15 +171,6 @@ export interface AIHealthResponse {
 // ─── Chat ─────────────────────────────────────────────────────────────────────
 
 /**
- * Returns a native EventSource-compatible URL for SSE streaming.
- * The actual SSE connection is managed by `useAIStream`.
- * This function builds the fetch request manually (EventSource doesn't support POST).
- */
-export function buildChatStreamUrl(): string {
-    return '/api/ai/chat';
-}
-
-/**
  * List the user's AI chats (for the sidebar history).
  */
 export async function listChats(params?: {
@@ -197,6 +200,26 @@ export async function getChatMessages(chatId: string): Promise<ChatMessagesRespo
 export async function deleteChat(chatId: string): Promise<{ success: boolean }> {
     return apiRequest<{ success: boolean }>(`/api/ai/chats/${chatId}`, {
         method: 'DELETE',
+    });
+}
+
+export interface UpdateChatParams {
+    title?: string;
+    projectId?: string | null;
+}
+
+export interface UpdateChatResponse {
+    success: boolean;
+    chat?: AIChat;
+}
+
+/**
+ * Update chat properties (title, assigned project).
+ */
+export async function updateChat(chatId: string, updates: UpdateChatParams): Promise<UpdateChatResponse> {
+    return apiRequest<UpdateChatResponse>(`/api/ai/chats/${chatId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(updates),
     });
 }
 
@@ -274,4 +297,46 @@ export async function listArtifacts(params?: {
  */
 export async function checkAIHealth(): Promise<AIHealthResponse> {
     return apiRequest<AIHealthResponse>('/api/ai/health');
+}
+
+// ─── File Uploads ─────────────────────────────────────────────────────────────
+
+export interface UploadedFileItem {
+    file_id: string;
+    filename: string;
+    file_type: string;
+    size_bytes: number;
+    token_estimate: number;
+    preview: string;
+    metadata: Record<string, unknown>;
+}
+
+export interface UploadFilesResponse {
+    ok: boolean;
+    files: UploadedFileItem[];
+}
+
+/**
+ * Upload one or more user files (PDF, DOCX, XLSX, CSV, PPTX, TXT, Code)
+ * to be parsed and prepared for AI chat / agent sessions.
+ *
+ * @param opts.chatId / opts.sessionId — associates the attachments with a chat
+ *        session so they are not stored as "unassigned" (#11).
+ */
+export async function uploadFilesForAI(
+    files: File[],
+    opts?: { chatId?: string | null; sessionId?: string | null },
+): Promise<UploadFilesResponse> {
+    const formData = new FormData();
+    files.forEach(f => formData.append('files', f));
+
+    const chatId = opts?.chatId || opts?.sessionId;
+    if (chatId) {
+        formData.append('chatId', chatId);
+    }
+
+    return apiRequest<UploadFilesResponse>('/api/ai/files/upload', {
+        method: 'POST',
+        body: formData,
+    });
 }

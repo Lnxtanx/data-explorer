@@ -19,13 +19,14 @@ import type { TableRowsParams } from './types';
 export const dataExplorerKeys = {
   all: ['data-explorer'] as const,
   schemas: (connectionId: string) => [...dataExplorerKeys.all, 'schemas', connectionId] as const,
-  tables: (connectionId: string) => [...dataExplorerKeys.all, 'tables', connectionId] as const,
+  tables: (connectionId: string, schemaName: string) =>
+    [...dataExplorerKeys.all, 'tables', connectionId, schemaName] as const,
   rows: (connectionId: string, tableName: string) => 
     [...dataExplorerKeys.all, 'rows', connectionId, tableName] as const,
-  stats: (connectionId: string, tableName: string) => 
-    [...dataExplorerKeys.all, 'stats', connectionId, tableName] as const,
-  schema: (connectionId: string, tableName: string) => 
-    [...dataExplorerKeys.all, 'schema', connectionId, tableName] as const,
+  stats: (connectionId: string, tableName: string, schemaName: string) =>
+    [...dataExplorerKeys.all, 'stats', connectionId, tableName, schemaName] as const,
+  schema: (connectionId: string, tableName: string, schemaName: string) =>
+    [...dataExplorerKeys.all, 'schema', connectionId, tableName, schemaName] as const,
 };
 
 // =============================================================================
@@ -38,6 +39,9 @@ export function useSchemas(connectionId: string | null) {
     queryFn: () => fetchSchemas(connectionId!),
     enabled: !!connectionId,
     staleTime: 60_000, // 1 minute (schemas rarely change)
+    retry: 2,
+    retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 5000),
+    refetchOnReconnect: true,
   });
 }
 
@@ -47,10 +51,13 @@ export function useSchemas(connectionId: string | null) {
 
 export function useTableList(connectionId: string | null, schemaName: string = 'public') {
   return useQuery({
-    queryKey: dataExplorerKeys.tables(connectionId || ''),
+    queryKey: dataExplorerKeys.tables(connectionId || '', schemaName),
     queryFn: () => fetchTableList(connectionId!, schemaName),
     enabled: !!connectionId,
     staleTime: 30_000, // 30 seconds
+    retry: 2,
+    retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 5000),
+    refetchOnReconnect: true,
   });
 }
 
@@ -71,8 +78,16 @@ export function useTableRows(
     }),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => lastPage.pagination.nextCursor,
+    maxPages: 5,
     enabled: !!connectionId && !!tableName,
-    staleTime: 10_000, // 10 seconds
+    staleTime: 60_000, // 1 minute (rows only refetch in background on revisit)
+    gcTime: 30 * 60_000, // keep visited tables in memory for 30 minutes
+    placeholderData: (prevData, prevQuery) =>
+      prevData && prevQuery &&
+      prevQuery.queryKey[2] === connectionId &&
+      prevQuery.queryKey[3] === tableName
+        ? prevData
+        : undefined,
   });
 }
 
@@ -89,7 +104,14 @@ export function useTableRowsSimple(
     queryKey: [...dataExplorerKeys.rows(connectionId || '', tableName || ''), params],
     queryFn: () => fetchTableRows(connectionId!, tableName!, params),
     enabled: !!connectionId && !!tableName,
-    staleTime: 10_000, // 10 seconds
+    staleTime: 60_000, // 1 minute (rows only refetch in background on revisit)
+    gcTime: 30 * 60_000, // keep visited tables in memory for 30 minutes
+    placeholderData: (prevData, prevQuery) =>
+      prevData && prevQuery &&
+      prevQuery.queryKey[2] === connectionId &&
+      prevQuery.queryKey[3] === tableName
+        ? prevData
+        : undefined,
   });
 }
 
@@ -100,13 +122,33 @@ export function useTableRowsSimple(
 export function useColumnStats(
   connectionId: string | null,
   tableName: string | null,
+  schemaName: string = 'public',
+  column?: string | null
+) {
+  return useQuery({
+    queryKey: [...dataExplorerKeys.stats(connectionId || '', tableName || '', schemaName), column ?? 'all'],
+    queryFn: () => fetchColumnStats(connectionId!, tableName!, schemaName, column || undefined),
+    enabled: !!connectionId && !!tableName,
+    staleTime: 60_000, // 1 minute (stats are expensive)
+  });
+}
+
+// =============================================================================
+// Header Distribution Profiles Hook
+// Cheap pg_stats-only profile for every column of a table, used to render the
+// inline distribution bar under column headers (single relay query).
+// =============================================================================
+
+export function useColumnHeaderProfiles(
+  connectionId: string | null,
+  tableName: string | null,
   schemaName: string = 'public'
 ) {
   return useQuery({
-    queryKey: dataExplorerKeys.stats(connectionId || '', tableName || ''),
-    queryFn: () => fetchColumnStats(connectionId!, tableName!, schemaName),
+    queryKey: [...dataExplorerKeys.all, 'header-profiles', connectionId || '', tableName || '', schemaName],
+    queryFn: () => fetchColumnStats(connectionId!, tableName!, schemaName, undefined, 'pg_stats'),
     enabled: !!connectionId && !!tableName,
-    staleTime: 60_000, // 1 minute (stats are expensive)
+    staleTime: 60_000,
   });
 }
 
@@ -120,7 +162,7 @@ export function useTableSchema(
   schemaName: string = 'public'
 ) {
   return useQuery({
-    queryKey: dataExplorerKeys.schema(connectionId || '', tableName || ''),
+    queryKey: dataExplorerKeys.schema(connectionId || '', tableName || '', schemaName),
     queryFn: () => fetchTableSchema(connectionId!, tableName!, schemaName),
     enabled: !!connectionId && !!tableName,
     staleTime: 60_000, // 1 minute
@@ -145,10 +187,10 @@ export function usePrefetchTableRows() {
 export function usePrefetchColumnStats() {
   const queryClient = useQueryClient();
   
-  return (connectionId: string, tableName: string, schemaName: string = 'public') => {
+  return (connectionId: string, tableName: string, schemaName: string = 'public', column?: string) => {
     queryClient.prefetchQuery({
-      queryKey: dataExplorerKeys.stats(connectionId, tableName),
-      queryFn: () => fetchColumnStats(connectionId, tableName, schemaName),
+      queryKey: [...dataExplorerKeys.stats(connectionId, tableName, schemaName), column ?? 'all'],
+      queryFn: () => fetchColumnStats(connectionId, tableName, schemaName, column || undefined),
     });
   };
 }

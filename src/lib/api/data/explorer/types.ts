@@ -4,8 +4,13 @@
 
 // ─── Schema List ────────────────────────────────────────────────────────────
 
+export interface SchemaInfo {
+  name: string;
+  tableCount: number;
+}
+
 export interface SchemaListResponse {
-  schemas: string[];
+  schemas: SchemaInfo[];
 }
 
 // ─── Table List ─────────────────────────────────────────────────────────────
@@ -60,10 +65,26 @@ export interface TableRowsResponse {
   orderDirection: 'asc' | 'desc';
 }
 
+export type FilterOperator =
+  | 'eq'
+  | 'neq'
+  | 'gt'
+  | 'gte'
+  | 'lt'
+  | 'lte'
+  | 'like'
+  | 'not_like'
+  | 'starts_with'
+  | 'ends_with'
+  | 'is_empty'
+  | 'is_null'
+  | 'not_null'
+  | 'in';
+
 export interface FilterCondition {
   column: string;
-  operator: 'eq' | 'neq' | 'gt' | 'gte' | 'lt' | 'lte' | 'like' | 'is_null' | 'not_null' | 'in';
-  value?: any; // Optional for is_null/not_null
+  operator: FilterOperator;
+  value?: any; // Optional for is_null/not_null/is_empty
 }
 
 export interface TableRowsParams {
@@ -83,18 +104,36 @@ export interface TopValue {
   percent: number;
 }
 
+export interface Quantiles {
+  q25: any;
+  q50: any;
+  q75: any;
+}
+
+export interface HistogramBin {
+  bucket: number;
+  count: number;
+  percent: number;
+  label?: string;
+}
+
 export interface ColumnStats {
   name: string;
   type: string;
   nullable: boolean;
   isPrimaryKey: boolean;
   isIndexed: boolean;
-  nullCount: number;
-  nullPercent: number;
-  distinctCount: number;
+  nullCount: number | null;
+  nullPercent: number | null;
+  distinctCount: number | null;
   minValue: any;
   maxValue: any;
   avgValue: number | null;
+  stdDevValue: number | null;
+  quantiles: Quantiles | null;
+  histogram?: HistogramBin[];
+  /** True when min/max/quantiles/histogram derive from pg_stats (approximate). */
+  approx: boolean;
   sampleValues: any[];
   topValues?: TopValue[];
 }
@@ -130,7 +169,27 @@ export interface TableSchema {
 
 // ─── Export ──────────────────────────────────────────────────────────────────
 
+export type ExportScope = 'view' | 'table' | 'database';
+export type ExportFormat = 'csv' | 'excel' | 'json' | 'ndjson' | 'sql';
+export type SchemaExportStatus = 'running' | 'done' | 'error' | 'cancelled';
+
 export interface ExportParams {
   schemaName?: string;
   maxRows?: number;
+  format?: ExportFormat;
+  filters?: FilterCondition[];
+  orderBy?: string;
+  orderDirection?: 'asc' | 'desc';
+  columns?: string[];
+}
+
+/** Snapshot of the grid's active state, used by the View-scope export. */
+export interface ExportGridContext {
+  filters: FilterCondition[];
+  orderBy: string | null;
+  orderDirection: 'asc' | 'desc';
+  visibleColumns: string[];
+  allColumnsCount: number;
+  estimatedTotal: number;
+  tableCount?: number;
 }

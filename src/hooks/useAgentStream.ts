@@ -93,6 +93,10 @@ async function _streamOnce(
             databaseName:    request.databaseName,
             history:         request.history ?? [],
             synthesisModel:  request.synthesisModel,
+            agentMode:       request.agentMode,
+            thinkingEnabled: request.thinking,
+            projectId:       request.projectId ?? null,
+            fileIds:         request.fileIds ?? [],
         }),
         signal,
     });

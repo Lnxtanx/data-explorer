@@ -2,7 +2,7 @@
 // Data Explorer API Functions
 // =============================================================================
 
-import { get, API_BASE_URL } from '../../client';
+import { get, post, del, API_BASE_URL } from '../../client';
 import type {
   SchemaListResponse,
   TableListResponse,
@@ -10,6 +10,8 @@ import type {
   TableRowsParams,
   ColumnStatsResponse,
   TableSchema,
+  ExportParams,
+  SchemaExportStatus,
 } from './types';
 
 /**
@@ -24,6 +26,13 @@ interface ApiResponse<T> {
  * Unwrap sendSuccess response - backend returns { success: true, ...data }
  */
 function unwrapResponse<T>(response: ApiResponse<T>): T {
+  if (response?.success === false) {
+    const err = new Error((response as any).message || (response as any).error || 'Request failed');
+    (err as any).status = 500;
+    (err as any).code = (response as any).code || (response as any).error;
+    (err as any).hint = (response as any).hint;
+    throw err;
+  }
   const { success, ...data } = response;
   return data as T;
 }
@@ -75,13 +84,20 @@ export async function fetchTableRows(
 
 /**
  * Get column statistics for a table.
+ * Pass `column` to restrict computation to a single column (cheap for wide tables).
+ * Pass `mode='pg_stats'` for a cheap whole-table profile (header distribution
+ * bars) computed only from Postgres statistics.
  */
 export async function fetchColumnStats(
   connectionId: string,
   tableName: string,
-  schemaName: string = 'public'
+  schemaName: string = 'public',
+  column?: string,
+  mode?: 'pg_stats'
 ): Promise<ColumnStatsResponse> {
   const params = new URLSearchParams({ schemaName });
+  if (column) params.set('column', column);
+  if (mode) params.set('mode', mode);
   const response = await get<ApiResponse<ColumnStatsResponse>>(
     `/api/data/${connectionId}/tables/${encodeURIComponent(tableName)}/stats?${params}`
   );
@@ -105,79 +121,146 @@ export async function fetchTableSchema(
 
 /**
  * Get data export URL for a table.
- * Returns URL for direct download.
+ * Honors filters, sort and visible-column projection (server-side).
  */
 export function getExportUrl(
   connectionId: string,
   tableName: string,
   schemaName: string = 'public',
-  maxRows: number = 10000,
-  format: string = 'csv'
+  params: ExportParams = {}
 ): string {
-  const params = new URLSearchParams({
+  const qs = new URLSearchParams({
     schemaName,
-    maxRows: String(maxRows),
-    format,
+    format: params.format || 'csv',
+    maxRows: String(params.maxRows ?? 10000),
   });
-  return `${API_BASE_URL}/api/data/${connectionId}/tables/${encodeURIComponent(tableName)}/export?${params}`;
+  if (params.filters && params.filters.length > 0) {
+    qs.set('filters', JSON.stringify(params.filters));
+  }
+  if (params.orderBy) qs.set('orderBy', params.orderBy);
+  if (params.orderDirection) qs.set('orderDirection', params.orderDirection);
+  if (params.columns && params.columns.length > 0) {
+    qs.set('columns', params.columns.join(','));
+  }
+  return `${API_BASE_URL}/api/data/${connectionId}/tables/${encodeURIComponent(tableName)}/export?${qs}`;
 }
 
 /**
- * Trigger data download for a table.
+ * Fetch a table export as a blob (instead of anchor navigation) so we can
+ * read response headers (row count / cap status) and detect failures.
  */
-export function downloadTableData(
+export async function fetchTableExport(
   connectionId: string,
   tableName: string,
   schemaName: string = 'public',
-  maxRows: number = 10000,
-  format: string = 'csv'
-): void {
-  const url = getExportUrl(connectionId, tableName, schemaName, maxRows, format);
+  params: ExportParams = {}
+): Promise<{ blob: Blob; filename: string; rowCount: number; capped: boolean }> {
+  const response = await fetch(getExportUrl(connectionId, tableName, schemaName, params), {
+    credentials: 'include',
+  });
 
-  // Create a temporary link and click it
-  const link = document.createElement('a');
-  link.href = url;
+  if (!response.ok) {
+    const message = await response.text().catch(() => '');
+    throw new Error(message || `Export failed (${response.status})`);
+  }
 
-  // Set accurate extension
-  const ext = format === 'excel' ? 'xlsx' : format;
-  link.download = `${tableName}_${new Date().toISOString().split('T')[0]}.${ext}`;
-
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
+  const rowCount = Number(response.headers.get('X-Export-Row-Count') || 0);
+  const capped = response.headers.get('X-Export-Capped') === 'true';
+  const disposition = response.headers.get('Content-Disposition') || '';
+  const match = disposition.match(/filename="?([^"]+)"?/);
+  const filename = match ? match[1] : `${tableName}.${params.format || 'csv'}`;
+  const blob = await response.blob();
+  return { blob, filename, rowCount, capped };
 }
 
 /**
- * Get data export URL for all tables in a schema.
- * Returns URL for direct download of ZIP archive.
+ * Start a background database/schema export. `schemas` is the comma-separated
+ * list of schema names to include; empty → all user schemas. Returns a job id
+ * that is polled for progress and then used to download the streamed ZIP.
  */
-export function getExportAllUrl(
+export async function startSchemaExport(
   connectionId: string,
-  schemaName: string = 'public',
+  schemas: string[],
   format: string = 'csv'
-): string {
-  const params = new URLSearchParams({ schemaName, format });
-  return `${API_BASE_URL}/api/data/${connectionId}/export-all?${params}`;
+): Promise<{ jobId: string; tableCount: number }> {
+  const params = new URLSearchParams({ format });
+  if (schemas.length > 0) params.set('schemas', schemas.join(','));
+  const response = await post<ApiResponse<{ jobId: string; tableCount: number }>>(
+    `/api/data/${connectionId}/export-all?${params}`
+  );
+  return unwrapResponse(response);
 }
 
 /**
- * Trigger data download for all tables in a schema as a ZIP archive.
+ * Poll progress of a schema/database export job.
  */
-export function downloadAllTablesData(
+export async function getSchemaExportProgress(
   connectionId: string,
-  schemaName: string = 'public',
-  format: string = 'csv'
-): void {
-  const url = getExportAllUrl(connectionId, schemaName, format);
+  jobId: string
+): Promise<{ done: number; total: number; status: SchemaExportStatus }> {
+  const response = await get<ApiResponse<{ done: number; total: number; status: SchemaExportStatus }>>(
+    `/api/data/${connectionId}/export-all/${jobId}/progress`
+  );
+  return unwrapResponse(response);
+}
 
-  // Create a temporary link and click it
+/**
+ * Cancel a running schema/database export job.
+ */
+export async function cancelSchemaExport(
+  connectionId: string,
+  jobId: string
+): Promise<{ status: SchemaExportStatus }> {
+  const response = await del<ApiResponse<{ status: SchemaExportStatus }>>(
+    `/api/data/${connectionId}/export-all/${jobId}`
+  );
+  return unwrapResponse(response);
+}
+/**
+ * URL that streams the finished ZIP for a schema export job.
+ */
+export function getSchemaExportDownloadUrl(connectionId: string, jobId: string): string {
+  return `${API_BASE_URL}/api/data/${connectionId}/export-all/${jobId}/download`;
+}
+
+/**
+ * Trigger a schema ZIP download via the browser (anchor navigation).
+ */
+export function downloadSchemaExport(
+  connectionId: string,
+  jobId: string
+): void {
   const link = document.createElement('a');
-  link.href = url;
-  
-  // Set ZIP extension
+  link.href = getSchemaExportDownloadUrl(connectionId, jobId);
   link.download = `schema_export_${new Date().toISOString().split('T')[0]}.zip`;
-
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
+}
+
+/**
+ * Stream and fetch the generated ZIP blob for a schema export job.
+ */
+export async function fetchSchemaExportBlob(
+  connectionId: string,
+  jobId: string,
+  signal?: AbortSignal
+): Promise<{ blob: Blob; filename: string; tableCount: number }> {
+  const url = getSchemaExportDownloadUrl(connectionId, jobId);
+  const response = await fetch(url, {
+    credentials: 'include',
+    signal,
+  });
+
+  if (!response.ok) {
+    const message = await response.text().catch(() => '');
+    throw new Error(message || `Schema export failed (${response.status})`);
+  }
+
+  const tableCount = Number(response.headers.get('X-Export-Table-Count') || 0);
+  const disposition = response.headers.get('Content-Disposition') || '';
+  const match = disposition.match(/filename="?([^"]+)"?/);
+  const filename = match ? match[1] : `database_export_${new Date().toISOString().split('T')[0]}.zip`;
+  const blob = await response.blob();
+  return { blob, filename, tableCount };
 }

@@ -3,13 +3,11 @@
 // Professional database explorer with table browsing and data inspection
 // =============================================================================
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, lazy, Suspense } from 'react';
 import { DataExplorerLayout } from '@/components/data-explorer';
 import { ConnectionSelector } from '@/components/data-explorer/ConnectionSelector';
 import { useAuth } from '@/components/auth/AuthProvider';
-import { Loader2, ChevronRight } from 'lucide-react';
-import { SettingsModal } from '@/components/settings';
-import { ExportButton } from '@/components/data-explorer/ExportButton';
+import { Loader2, ChevronRight, LogIn } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { TableInfo } from '@/lib/api/data/explorer/types';
 import { useConnections } from '@/lib/api/data/connection';
@@ -17,22 +15,30 @@ import { toast } from 'sonner';
 import { 
   acceptTeamInvitation, 
   getInvitationInfo, 
-  declineTeamInvitation,
+  declineTeamInvitation, 
   InvitationInfo 
 } from '@/lib/api/projects/collaboration';
-import { InvitationReviewModal } from '@/components/auth/InvitationReviewModal';
 import { NotificationBanner } from '@/components/ui/NotificationBanner';
+import { logger } from '@/lib/logger';
+import { storePendingInvite, getPendingInvite, clearPendingInvite } from '@/lib/inviteToken';
+
+// Lazy-load heavy modals so their subviews/dependencies are not loaded on first render
+const SettingsModal = lazy(() => import('@/components/settings/SettingsModal').then(m => ({ default: m.SettingsModal })));
+const ConnectorDialog = lazy(() => import('@/components/connector/ConnectorDialog').then(m => ({ default: m.ConnectorDialog })));
+const InvitationReviewModal = lazy(() => import('@/components/auth/InvitationReviewModal').then(m => ({ default: m.InvitationReviewModal })));
 
 const STORAGE_KEY = 'sw-data-explorer:connection-id';
 
 export default function DataExplorerPage() {
-  const { user, loading: authLoading, isLoggingIn, signOut, signInWithGoogle } = useAuth();
+  const { user, loading: authLoading, isLoggingIn, signOut, signInWithGoogle, signInWithGithub } = useAuth();
   const [connectionId, setConnectionId] = useState<string | null>(() => {
-    return localStorage.getItem(STORAGE_KEY);
+    return localStorage.getItem(STORAGE_KEY) || null;
   });
   const [showSettings, setShowSettings] = useState(false);
   const [settingsSection, setSettingsSection] = useState<'profile' | 'usage' | 'plans' | 'appearance' | 'shortcuts' | 'documentation' | 'collaboration'>('profile');
   const [hasShownSelectToast, setHasShownSelectToast] = useState(false);
+  const [showConnectorDialog, setShowConnectorDialog] = useState(false);
+  const [connectorDialogTab, setConnectorDialogTab] = useState<'overview' | 'connectors' | 'databases' | 'logs' | 'settings' | 'health' | 'connect'>('connect');
 
   const { data: connections, isSuccess: connectionsLoaded, refetch: refetchConnections } = useConnections();
 
@@ -49,17 +55,12 @@ export default function DataExplorerPage() {
   const [isProcessingInvite, setIsProcessingInvite] = useState(false);
 
   useEffect(() => {
-    // If not logged in and no connection selected, auto-select Demo DB
-    if (!authLoading && !user && !connectionId) {
-      const DEMO_ID = 'demo-0000-0000-0000-000000000000';
-      setConnectionId(DEMO_ID);
-      localStorage.setItem(STORAGE_KEY, DEMO_ID);
-    }
-
+    // Auto-select first active discovered database if available and no connection is set
     if (connectionsLoaded && connections && connections.length > 0 && !connectionId) {
-      const firstId = connections[0].id;
-      setConnectionId(firstId);
-      localStorage.setItem(STORAGE_KEY, firstId);
+      const activeConn = connections.find(c => c.is_online) || connections[0];
+      if (activeConn) {
+        setConnectionId(activeConn.id);
+      }
     }
   }, [connectionsLoaded, connections, connectionId]);
 
@@ -84,8 +85,15 @@ export default function DataExplorerPage() {
   // Handle Invitations Detection
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const teamInviteToken = params.get('teamInvite');
-    
+    const urlToken = params.get('teamInvite');
+    // Survive the OAuth round-trip: persist on arrival, restore after login
+    // redirects back to a bare origin.
+    if (urlToken) {
+      storePendingInvite(urlToken, 'team');
+    }
+    const stored = getPendingInvite();
+    const teamInviteToken = urlToken || (stored?.k === 'team' ? stored.t : null);
+
     if (teamInviteToken) {
       setInviteToken(teamInviteToken);
       const fetchInfo = async () => {
@@ -93,14 +101,29 @@ export default function DataExplorerPage() {
           const info = await getInvitationInfo(teamInviteToken, 'team');
           setPendingInviteInfo(info);
         } catch (error) {
-          console.error('[Invitation] Info fetch failed:', error);
+          logger.error('[Invitation] Info fetch failed:', error);
           if (!pendingInviteInfo) {
             toast.error('Invalid or expired invitation link');
           }
+          clearPendingInvite();
           window.history.replaceState({}, document.title, window.location.pathname);
         }
       };
       fetchInfo();
+    } else {
+      // Nothing pending - drop stale storage from previous sessions.
+      clearPendingInvite();
+    }
+  }, []);
+
+  // Handle ?plan= deep link — open the Plans & Billing section so the user can
+  // purchase/upgrade directly in-app (the marketing site deep-links here).
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.has('plan')) {
+      setSettingsSection('plans');
+      setShowSettings(true);
+      window.history.replaceState({}, document.title, window.location.pathname);
     }
   }, []);
 
@@ -112,12 +135,13 @@ export default function DataExplorerPage() {
       if (res.success) {
         toast.success('Joined team successfully!');
         refetchConnections();
+        clearPendingInvite();
       }
       setPendingInviteInfo(null);
       setInviteToken(null);
       window.history.replaceState({}, document.title, window.location.pathname);
     } catch (error: any) {
-      console.error('[Invitation] Accept failed:', error);
+      logger.error('[Invitation] Accept failed:', error);
       toast.error(error.message || 'Failed to join');
     } finally {
       setIsProcessingInvite(false);
@@ -131,12 +155,21 @@ export default function DataExplorerPage() {
         await declineTeamInvitation(pendingInviteInfo.teamId, pendingInviteInfo.id);
       }
     } catch (e) {
-      console.warn('Backend decline failed', e);
+      logger.warn('Backend decline failed', e);
     }
+    clearPendingInvite();
     setPendingInviteInfo(null);
-    setInviteToken(null);
     window.history.replaceState({}, document.title, window.location.pathname);
   };
+
+  // Persist the token before the full-page OAuth redirect so the invite
+  // survives the round-trip (restored on mount after login).
+  const handleSignInForInvite = useCallback(() => {
+    if (inviteToken) {
+      storePendingInvite(inviteToken, 'team');
+    }
+    signInWithGoogle();
+  }, [inviteToken, signInWithGoogle]);
 
   const handleConnectionChange = useCallback((newConnectionId: string | null) => {
     setConnectionId(newConnectionId);
@@ -147,11 +180,24 @@ export default function DataExplorerPage() {
     setSelectedTable({ table, schema: schemaName });
   }, []);
 
-  if (authLoading || isLoggingIn) {
+  const handleOpenConnector = useCallback((tab: 'overview' | 'connect' | 'databases' = 'overview') => {
+    if (!user) {
+      setSettingsSection('profile');
+      setShowSettings(true);
+      toast.info('Sign in required', {
+        description: 'Please sign in to connect and manage your PostgreSQL databases.',
+      });
+      return;
+    }
+    setConnectorDialogTab(tab);
+    setShowConnectorDialog(true);
+  }, [user]);
+
+  if (isLoggingIn) {
     return (
-      <div className="h-screen w-screen flex flex-col items-center justify-center gap-3">
+      <div className="h-screen w-screen flex flex-col items-center justify-center gap-3 bg-background">
         <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
-        {isLoggingIn && <p className="text-sm text-muted-foreground">Signing you in...</p>}
+        <p className="text-sm text-muted-foreground">Signing you in...</p>
       </div>
     );
   }
@@ -186,10 +232,12 @@ export default function DataExplorerPage() {
           headerContent={
             <div className="flex items-center justify-between px-4 h-10 border-b border-border bg-card w-full shrink-0">
               <div className="flex items-center gap-2 min-w-0 flex-1">
-                <div className="w-44 shrink-0">
+                <div className="flex items-center shrink-0">
                   <ConnectionSelector
                     selectedConnectionId={connectionId}
                     onConnectionChange={handleConnectionChange}
+                    onOpenOverview={() => handleOpenConnector('overview')}
+                    onOpenConnectWizard={() => handleOpenConnector('connect')}
                   />
                 </div>
                 {selectedTable.table && (
@@ -216,24 +264,20 @@ export default function DataExplorerPage() {
                     <img src="/resona.png" alt="Resona AI" className="w-4 h-4" />
                   </button>
                 )}
-                <ExportButton
-                  connectionId={connectionId}
-                  tableName={selectedTable.table?.name || ''}
-                  schemaName={selectedTable.schema}
-                />
-                {!user && (
+                {/* Export Button Portal Target (placed after Resona AI on top right) */}
+                <div id="table-export-portal" className="flex items-center" />
+                {!user && !authLoading && (
                   <Button
-                    onClick={signInWithGoogle}
+                    onClick={() => {
+                      setSettingsSection('profile');
+                      setShowSettings(true);
+                    }}
                     variant="outline"
                     size="sm"
-                    className="gap-2 text-blue-600 border-blue-200 hover:bg-blue-50 hover:text-blue-700"
+                    className="gap-1.5 text-xs px-2.5"
                   >
-                    <img
-                      src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
-                      alt="Google"
-                      className="w-4 h-4"
-                    />
-                    Sign In
+                    <LogIn className="w-3.5 h-3.5" />
+                    <span>Sign In</span>
                   </Button>
                 )}
               </div>
@@ -243,30 +287,52 @@ export default function DataExplorerPage() {
             setAiContextTable(tableName);
             setIsAiMode(true);
           }}
+          onOpenConnectWizard={() => handleOpenConnector('connect')}
           aiContextTable={aiContextTable}
           aiContextSchema={selectedTable.schema}
         />
       </div>
 
-      <SettingsModal
-        isOpen={showSettings}
-        onClose={() => setShowSettings(false)}
-        user={user}
-        signOut={signOut}
-        signInWithGoogle={signInWithGoogle}
-        initialSection={settingsSection}
-      />
+      {showSettings && (
+        <Suspense fallback={null}>
+          <SettingsModal
+            isOpen={showSettings}
+            onClose={() => setShowSettings(false)}
+            user={user}
+            signOut={signOut}
+            signInWithGoogle={signInWithGoogle}
+            signInWithGithub={signInWithGithub}
+            initialSection={settingsSection}
+          />
+        </Suspense>
+      )}
 
-      <InvitationReviewModal
-        isOpen={!!pendingInviteInfo}
-        onClose={() => setPendingInviteInfo(null)}
-        invitation={pendingInviteInfo}
-        onAccept={handleAcceptInvite}
-        onDecline={handleDeclineInvite}
-        isAuthenticated={!!user}
-        onSignIn={signInWithGoogle}
-        isProcessing={isProcessingInvite}
-      />
+      {pendingInviteInfo && (
+        <Suspense fallback={null}>
+          <InvitationReviewModal
+            isOpen={!!pendingInviteInfo}
+            onClose={() => setPendingInviteInfo(null)}
+            invitation={pendingInviteInfo}
+            onAccept={handleAcceptInvite}
+            onDecline={handleDeclineInvite}
+            isAuthenticated={!!user}
+            currentUserEmail={user?.email ?? null}
+            onSignIn={handleSignInForInvite}
+            isProcessing={isProcessingInvite}
+          />
+        </Suspense>
+      )}
+
+      {showConnectorDialog && (
+        <Suspense fallback={null}>
+          <ConnectorDialog
+            open={showConnectorDialog}
+            onClose={() => setShowConnectorDialog(false)}
+            initialTab={connectorDialogTab}
+            onSelectConnection={handleConnectionChange}
+          />
+        </Suspense>
+      )}
     </>
   );
 }

@@ -4,19 +4,13 @@
 // Does NOT include: migrations, schema pull/diff, security checks, health events.
 // =============================================================================
 
-export type { Connection, ConnectionCredentials } from './types';
+import type { Connection } from './types';
+export type { Connection } from './types';
 export { listConnections } from './crud';
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { 
-    listConnections, 
-    testConnection, 
-    saveConnection, 
-    updateConnection, 
-    deleteConnection 
-} from './crud';
+import { useQuery } from '@tanstack/react-query';
+import { listConnections } from './crud';
 import { useAuth } from '@/components/auth/AuthProvider';
-import type { ConnectionCredentials } from './types';
 
 export const connectionKeys = {
     all: ['connections'] as const,
@@ -30,49 +24,16 @@ export function useConnections() {
         queryKey: connectionKeys.list(user?.id),
         queryFn: () => listConnections(),
         select: (data) => data.connections,
-        staleTime: 30_000, // 30s
-    });
-}
-
-// ─── Mutations ───────────────────────────────────────────────────────────────
-
-export function useTestConnection() {
-    return useMutation({
-        mutationFn: (credentials: ConnectionCredentials) => testConnection(credentials),
-    });
-}
-
-export function useSaveConnection() {
-    const queryClient = useQueryClient();
-    const { user } = useAuth();
-    return useMutation({
-        mutationFn: ({ name, credentials }: { name: string; credentials: ConnectionCredentials }) =>
-            saveConnection(name, credentials),
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: connectionKeys.list(user?.id) });
+        enabled: Boolean(user?.id),
+        staleTime: 2_000, // 2s - quick re-validation on focus or dropdown open
+        refetchInterval: (query) => {
+            // If user is logged in, poll every 4s when no databases/online agents, or 8s continuously
+            const data = query.state.data as { connections?: Connection[] } | Connection[] | undefined;
+            const conns = Array.isArray(data) ? data : data?.connections;
+            const hasOnline = conns && conns.length > 0 && conns.some((c) => c.is_online);
+            return hasOnline ? 8_000 : 4_000;
         },
-    });
-}
-
-export function useUpdateConnection() {
-    const queryClient = useQueryClient();
-    const { user } = useAuth();
-    return useMutation({
-        mutationFn: ({ id, name, credentials }: { id: string; name: string; credentials: ConnectionCredentials }) =>
-            updateConnection(id, name, credentials),
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: connectionKeys.list(user?.id) });
-        },
-    });
-}
-
-export function useDeleteConnection() {
-    const queryClient = useQueryClient();
-    const { user } = useAuth();
-    return useMutation({
-        mutationFn: (id: string) => deleteConnection(id),
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: connectionKeys.list(user?.id) });
-        },
+        refetchOnWindowFocus: true,
+        refetchOnReconnect: true,
     });
 }

@@ -1,6 +1,6 @@
 /**
  * Cookie Utility Library
- * Provides secure cookie management with type safety
+ * Provides secure cookie management and session lifecycle utilities.
  */
 
 export interface CookieOptions {
@@ -14,7 +14,7 @@ export interface CookieOptions {
 
 const DEFAULT_OPTIONS: CookieOptions = {
   path: '/',
-  secure: window.location.protocol === 'https:',
+  secure: typeof window !== 'undefined' ? window.location.protocol === 'https:' : false,
   sameSite: 'lax',
 };
 
@@ -104,42 +104,12 @@ export function deleteCookie(name: string, options: Pick<CookieOptions, 'path' |
   document.cookie = `${encodeURIComponent(name)}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=${opts.path}${opts.domain ? `; domain=${opts.domain}` : ''}`;
 }
 
-/**
- * Check if a cookie exists
- */
-export function hasCookie(name: string): boolean {
-  return getCookie(name) !== null;
-}
-
-/**
- * Get all cookies as an object
- */
-export function getAllCookies(): Record<string, string> {
-  const cookies: Record<string, string> = {};
-  
-  if (!document.cookie) return cookies;
-
-  document.cookie.split(';').forEach(cookie => {
-    const [name, value] = cookie.trim().split('=');
-    if (name && value) {
-      cookies[decodeURIComponent(name)] = decodeURIComponent(value);
-    }
-  });
-
-  return cookies;
-}
-
 // =============================================================================
 // Application-Specific Cookie Keys
 // =============================================================================
 
 export const COOKIE_KEYS = {
   SESSION_TOKEN: 'sw_session',
-  RECENT_FILES: 'sw_recent_files',
-  USER_PREFERENCES: 'sw_preferences',
-  SIDEBAR_STATE: 'sidebar:state',
-  AI_SESSION: 'sw_ai_session',
-  AI_PREFERENCES: 'sw_ai_preferences',
 } as const;
 
 // =============================================================================
@@ -149,18 +119,6 @@ export const COOKIE_KEYS = {
 export interface SessionData {
   userId: string;
   expiresAt: number; // Unix timestamp
-}
-
-/**
- * @deprecated Use SessionData instead. Kept for migration from old cookie format.
- */
-export interface LegacySessionData {
-  userId: string;
-  email?: string;
-  name?: string;
-  avatar?: string;
-  expiresAt: number;
-  refreshToken?: string;
 }
 
 const SESSION_DURATION_DAYS = 7;
@@ -228,246 +186,4 @@ export function refreshSessionCookie(): void {
  */
 export function deleteSessionCookie(): void {
   deleteCookie(COOKIE_KEYS.SESSION_TOKEN);
-}
-
-// =============================================================================
-// Recent Files Cookie Helpers
-// =============================================================================
-
-export interface RecentFile {
-  id: string;
-  title: string;
-  accessedAt: number; // Unix timestamp
-}
-
-const MAX_RECENT_FILES = 10;
-const RECENT_FILES_EXPIRY_DAYS = 30;
-
-/**
- * Get recent files from cookie
- */
-export function getRecentFiles(): RecentFile[] {
-  return getCookie<RecentFile[]>(COOKIE_KEYS.RECENT_FILES) || [];
-}
-
-/**
- * Add or update a file in recent files
- */
-export function addRecentFile(file: { id: string; title: string }): void {
-  const recent = getRecentFiles();
-  
-  // Remove if already exists
-  const filtered = recent.filter(f => f.id !== file.id);
-  
-  // Add to front
-  const updated: RecentFile[] = [
-    { id: file.id, title: file.title, accessedAt: Date.now() },
-    ...filtered,
-  ].slice(0, MAX_RECENT_FILES);
-  
-  setCookie(COOKIE_KEYS.RECENT_FILES, updated, {
-    expires: RECENT_FILES_EXPIRY_DAYS,
-  });
-}
-
-/**
- * Remove a file from recent files
- */
-export function removeRecentFile(fileId: string): void {
-  const recent = getRecentFiles();
-  const filtered = recent.filter(f => f.id !== fileId);
-  
-  setCookie(COOKIE_KEYS.RECENT_FILES, filtered, {
-    expires: RECENT_FILES_EXPIRY_DAYS,
-  });
-}
-
-/**
- * Clear all recent files
- */
-export function clearRecentFiles(): void {
-  deleteCookie(COOKIE_KEYS.RECENT_FILES);
-}
-
-// =============================================================================
-// User Preferences Cookie Helpers
-// =============================================================================
-
-export interface UserPreferences {
-  theme?: 'light' | 'dark' | 'system';
-  autosaveEnabled?: boolean;
-  sidebarCollapsed?: boolean;
-  layoutDirection?: 'LR' | 'TB' | 'RL' | 'BT';
-  lastFileId?: string;
-  lastProjectId?: string;
-  editorShowMinimap?: boolean;
-  editorShowLineNumbers?: boolean;
-  editorWordWrap?: boolean;
-  editorBracketMatching?: boolean;
-  editorAutoCloseBrackets?: boolean;
-  editorFoldGutter?: boolean;
-  editorHighlightActiveLine?: boolean;
-}
-
-const PREFERENCES_EXPIRY_DAYS = 365;
-
-/**
- * Get user preferences from cookie
- */
-export function getUserPreferences(): UserPreferences {
-  return getCookie<UserPreferences>(COOKIE_KEYS.USER_PREFERENCES) || {};
-}
-
-/**
- * Update user preferences
- */
-export function updateUserPreferences(updates: Partial<UserPreferences>): void {
-  const current = getUserPreferences();
-  
-  setCookie(COOKIE_KEYS.USER_PREFERENCES, { ...current, ...updates }, {
-    expires: PREFERENCES_EXPIRY_DAYS,
-  });
-}
-
-/**
- * Clear user preferences
- */
-export function clearUserPreferences(): void {
-  deleteCookie(COOKIE_KEYS.USER_PREFERENCES);
-}
-
-// =============================================================================
-// AI Session Cookie Helpers
-// =============================================================================
-
-export interface AISessionState {
-  /** Active global AI session ID for resume */
-  globalSessionId?: string;
-  /** Active table-specific session ID */
-  tableSessionId?: string;
-  /** Table name for table-specific session */
-  tableSessionTarget?: string;
-  /** Last accessed timestamp */
-  lastAccessedAt: number;
-  /** Recent AI session IDs for quick access (max 5) */
-  recentSessionIds?: string[];
-}
-
-const AI_SESSION_EXPIRY_DAYS = 30;
-const MAX_RECENT_AI_SESSIONS = 5;
-
-/**
- * Get AI session state from cookie
- */
-export function getAISessionState(): AISessionState | null {
-  return getCookie<AISessionState>(COOKIE_KEYS.AI_SESSION);
-}
-
-/**
- * Save active AI session to cookie for resume
- */
-export function saveAISession(
-  sessionId: string, 
-  scope: 'global' | 'table',
-  tableName?: string
-): void {
-  const current = getAISessionState() || { lastAccessedAt: Date.now() };
-  
-  // Update recent sessions list
-  const recentIds = current.recentSessionIds || [];
-  const updatedRecent = [sessionId, ...recentIds.filter(id => id !== sessionId)]
-    .slice(0, MAX_RECENT_AI_SESSIONS);
-
-  const updated: AISessionState = {
-    ...current,
-    lastAccessedAt: Date.now(),
-    recentSessionIds: updatedRecent,
-  };
-
-  if (scope === 'global') {
-    updated.globalSessionId = sessionId;
-  } else {
-    updated.tableSessionId = sessionId;
-    updated.tableSessionTarget = tableName;
-  }
-
-  setCookie(COOKIE_KEYS.AI_SESSION, updated, {
-    expires: AI_SESSION_EXPIRY_DAYS,
-  });
-}
-
-/**
- * Get the active AI session ID for quick resume
- */
-export function getActiveAISession(scope: 'global' | 'table'): string | null {
-  const state = getAISessionState();
-  if (!state) return null;
-  
-  return scope === 'global' ? state.globalSessionId || null : state.tableSessionId || null;
-}
-
-/**
- * Get recent AI session IDs
- */
-export function getRecentAISessions(): string[] {
-  const state = getAISessionState();
-  return state?.recentSessionIds || [];
-}
-
-/**
- * Clear AI session state (e.g., on logout)
- */
-export function clearAISessionState(): void {
-  deleteCookie(COOKIE_KEYS.AI_SESSION);
-}
-
-// =============================================================================
-// AI Preferences Cookie Helpers
-// =============================================================================
-
-export interface AIPreferences {
-  /** Auto-apply tool calls without confirmation */
-  autoApply?: boolean;
-  /** Show SQL preview in chat */
-  showSQLPreview?: boolean;
-  /** Verbosity level: 'concise' | 'normal' | 'detailed' */
-  verbosity?: 'concise' | 'normal' | 'detailed';
-  /** Preferred AI panel position */
-  panelPosition?: 'left' | 'right' | 'float';
-  /** Whether AI panel is expanded */
-  panelExpanded?: boolean;
-  /** Last used preset/action */
-  lastPreset?: string;
-}
-
-const AI_PREFERENCES_EXPIRY_DAYS = 365;
-
-/**
- * Get AI preferences from cookie
- */
-export function getAIPreferences(): AIPreferences {
-  return getCookie<AIPreferences>(COOKIE_KEYS.AI_PREFERENCES) || {
-    autoApply: false,
-    showSQLPreview: true,
-    verbosity: 'normal',
-    panelExpanded: true,
-  };
-}
-
-/**
- * Update AI preferences
- */
-export function updateAIPreferences(updates: Partial<AIPreferences>): void {
-  const current = getAIPreferences();
-  
-  setCookie(COOKIE_KEYS.AI_PREFERENCES, { ...current, ...updates }, {
-    expires: AI_PREFERENCES_EXPIRY_DAYS,
-  });
-}
-
-/**
- * Clear AI preferences
- */
-export function clearAIPreferences(): void {
-  deleteCookie(COOKIE_KEYS.AI_PREFERENCES);
 }

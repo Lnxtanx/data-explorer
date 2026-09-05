@@ -6,7 +6,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { useTableSchema, useTableRowsSimple } from '@/lib/api/data/explorer';
 import { MentionPicker } from '../input/MentionPicker';
 import { MicButton } from '../MicButton';
-import { ModelPicker } from '../models/ModelPicker';
+import { ModeSelector } from '../models/ModeSelector';
+import type { AgentMode } from '../models/ModeSelector';
 
 import { TablePreview } from '../messages/TablePreview';
 
@@ -78,7 +79,8 @@ export interface ChatInputProps {
     dbName?: string;
     dashboardCount: number;
     showDashboard: boolean;
-    selectedModel: string;
+    mode: AgentMode;
+    thinking: boolean;
     textareaRef: React.RefObject<HTMLTextAreaElement | null>;
     fileInputRef: React.RefObject<HTMLInputElement | null>;
     onInput: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
@@ -91,7 +93,8 @@ export interface ChatInputProps {
     onMentionSelect: (table: string) => void;
     onMentionClose: () => void;
     onMentionTrigger: () => void;
-    onModelChange: (id: string) => void;
+    onModeChange: (mode: AgentMode) => void;
+    onThinkingChange: (thinking: boolean) => void;
     onToggleDashboard: () => void;
     onToggleWorkspace?: () => void;
     showWorkspace?: boolean;
@@ -99,16 +102,18 @@ export interface ChatInputProps {
     quotaError?: string | null;
     quotaWarning?: { level: 'warning' | 'critical'; message: string } | null;
     onOpenPlans?: () => void;
+    uploadError?: string | null;
+    isUploading?: boolean;
 }
 
 export function ChatInput({
     input, scrollTop, attachedFiles, mentionQuery, availableTables, isStreaming,
-    agentMode, connectionId, dbName, dashboardCount, showDashboard, selectedModel,
+    agentMode, connectionId, dbName, dashboardCount, showDashboard, mode, thinking,
     textareaRef, fileInputRef,
     onInput, onScroll, onKeyDown, onSend, onAbort, onFileSelect, onRemoveFile,
-    onMentionSelect, onMentionClose, onMentionTrigger, onModelChange,
+    onMentionSelect, onMentionClose, onMentionTrigger, onModeChange, onThinkingChange,
     onToggleDashboard, onToggleWorkspace, showWorkspace, onTranscript,
-    quotaError, quotaWarning, onOpenPlans,
+    quotaError, quotaWarning, onOpenPlans, uploadError, isUploading,
 }: ChatInputProps) {
     let leftPadOffset = 44;
     if (connectionId) leftPadOffset += 34;
@@ -181,6 +186,13 @@ export function ChatInput({
                         </button>
                     </div>
                 )}
+                {/* Upload error banner — transient, auto-dismisses */}
+                {uploadError && (
+                    <div className="flex items-start gap-2 mb-2 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800/50 rounded-xl px-3 py-2 text-xs text-red-800 dark:text-red-200">
+                        <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5 text-red-500" />
+                        <span className="flex-1 leading-relaxed">{uploadError}</span>
+                    </div>
+                )}
                 <div className="relative flex flex-col w-full bg-background border border-border rounded-xl shadow-sm focus-within:border-border/70 transition-colors">
 
                     {/* Attached files */}
@@ -205,7 +217,7 @@ export function ChatInput({
                     <div className="relative flex items-end w-full">
                         {/* Left action buttons */}
                         <div className="absolute left-2 bottom-[14px] z-10 flex items-center gap-0.5">
-                            <input type="file" ref={fileInputRef} onChange={onFileSelect} className="hidden" multiple />
+                            <input type="file" ref={fileInputRef} onChange={onFileSelect} className="hidden" multiple accept=".pdf,.docx,.xlsx,.xls,.csv,.tsv,.pptx,.txt,.md,.json,.sql,.py,.ts,.js,.tsx,.jsx,.yaml,.yml,.xml,.html,.css,.sh,.env,.log,.toml,.rs,.go,.java" />
                             <button
                                 className="h-8 w-8 flex items-center justify-center rounded-lg bg-muted/50 hover:bg-muted text-muted-foreground transition-colors"
                                 onClick={() => fileInputRef.current?.click()}
@@ -272,7 +284,7 @@ export function ChatInput({
                         <div className="absolute right-2 bottom-[14px] z-10 flex items-center gap-1">
                             {agentMode && (
                                 <div className="mr-1">
-                                    <ModelPicker value={selectedModel} onChange={onModelChange} />
+                                    <ModeSelector mode={mode} thinking={thinking} onModeChange={onModeChange} onThinkingChange={onThinkingChange} disabled={isStreaming} />
                                 </div>
                             )}
                             {!isStreaming && <MicButton onTranscript={handleTranscript} disabled={isStreaming} />}
@@ -282,6 +294,13 @@ export function ChatInput({
                                     className="h-8 w-8 flex items-center justify-center rounded-lg bg-muted hover:bg-muted/80 text-foreground transition-colors"
                                 >
                                     <Square className="w-3.5 h-3.5 fill-current" />
+                                </button>
+                            ) : isUploading ? (
+                                <button
+                                    disabled
+                                    className="h-8 w-8 flex items-center justify-center rounded-lg bg-muted text-muted-foreground cursor-wait"
+                                >
+                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
                                 </button>
                             ) : (
                                 <button

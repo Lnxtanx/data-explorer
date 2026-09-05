@@ -5,21 +5,17 @@
 
 // ─── Credentials & Connection ────────────────────────────────────────────────
 
-export interface ConnectionCredentials {
-    host: string;
-    port: number;
-    database: string;
-    username: string;
-    password: string;
-    sslMode?: 'disable' | 'require' | 'verify-full';
-    sslRootCert?: string; // PEM-format CA certificate for verify-full mode
-}
+
 
 export interface Connection {
     id: string;
     name: string;
     database: string;
     sslMode: string;
+    agent_id?: string;
+    db_alias?: string;
+    machine_label?: string;
+    is_online?: boolean;
     host_hash?: string;
     health_status?: 'healthy' | 'unhealthy' | 'unknown';
     last_health_check?: string;
@@ -27,15 +23,13 @@ export interface Connection {
     updatedAt: string;
     lastUsedAt?: string;
     isShared?: boolean;
-    isDemo?: boolean;
+    // Team Sharing V2
+    access_type?: 'owner' | 'team';
+    team_name?: string | null;
+    shared_by_name?: string | null;
 }
 
-export interface TestResult {
-    success: boolean;
-    message: string;
-    serverVersion?: string;
-    errorCode?: string;
-}
+
 
 // ─── Events & Files ──────────────────────────────────────────────────────────
 

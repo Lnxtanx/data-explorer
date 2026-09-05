@@ -1,4 +1,4 @@
-import { FolderKanban, ArrowLeft, MessageSquare, Plus, Activity, Loader2, Trash2 } from 'lucide-react';
+import { FolderKanban, ArrowLeft, MessageSquare, Plus, Activity, Loader2, Trash2, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useProjects, useProjectChats } from '@/hooks/useProjects';
@@ -48,6 +48,10 @@ export function ProjectDetailView({ projectId, onClose, onOpenChat, onNewChat }:
         );
     }
 
+    const isTeamProject = Boolean(project.team_id || project.teamId);
+    const teamLabel = project.team_name || project.teamName || 'Team Shared';
+    const isOwner = project.is_mine ?? true;
+
     return (
         <main className="flex-1 flex flex-col h-full bg-background overflow-hidden relative">
             {/* Header / Nav */}
@@ -58,7 +62,15 @@ export function ProjectDetailView({ projectId, onClose, onOpenChat, onNewChat }:
                 <div className={cn('w-7 h-7 rounded-md flex items-center justify-center', colorClass[project.color])}>
                     <FolderKanban className="w-4 h-4" />
                 </div>
-                <h2 className="text-sm font-semibold text-foreground truncate">{project.title}</h2>
+                <div className="flex items-center gap-2 min-w-0 flex-1">
+                    <h2 className="text-sm font-semibold text-foreground truncate">{project.title}</h2>
+                    {isTeamProject && (
+                        <span className="flex items-center gap-1 bg-primary/10 text-primary px-2 py-0.5 rounded-full text-[10px] font-semibold tracking-tight border border-primary/20 shrink-0">
+                            <Users className="w-3 h-3" />
+                            <span>{teamLabel}</span>
+                        </span>
+                    )}
+                </div>
             </div>
 
             {/* Content */}
@@ -68,9 +80,22 @@ export function ProjectDetailView({ projectId, onClose, onOpenChat, onNewChat }:
                     <div className="flex flex-col gap-4 pb-6 border-b border-border/30">
                         <div className="flex items-start justify-between gap-6">
                             <div className="flex flex-col gap-2 flex-1">
-                                <h1 className="text-3xl font-bold tracking-tight text-foreground">{project.title}</h1>
+                                <div className="flex items-center gap-3 flex-wrap">
+                                    <h1 className="text-3xl font-bold tracking-tight text-foreground">{project.title}</h1>
+                                    {isTeamProject && (
+                                        <span className="flex items-center gap-1 bg-primary/10 text-primary px-2.5 py-0.5 rounded-full text-xs font-semibold tracking-tight border border-primary/20">
+                                            <Users className="w-3.5 h-3.5" />
+                                            <span>{teamLabel}</span>
+                                        </span>
+                                    )}
+                                </div>
+                                {!isOwner && (project.owner_name || project.owner_email) && (
+                                    <p className="text-xs text-muted-foreground">
+                                        Shared by <span className="font-medium text-foreground">{project.owner_name || project.owner_email}</span>
+                                    </p>
+                                )}
                                 {project.description && (
-                                    <p className="text-muted-foreground text-[15px] leading-relaxed">
+                                    <p className="text-muted-foreground text-[15px] leading-relaxed mt-1">
                                         {project.description}
                                     </p>
                                 )}
@@ -121,31 +146,43 @@ export function ProjectDetailView({ projectId, onClose, onOpenChat, onNewChat }:
                                         <div className="w-10 h-10 rounded-full bg-muted/40 flex items-center justify-center shrink-0">
                                             <MessageSquare className="w-4 h-4 text-muted-foreground" />
                                         </div>
-                                        <div className="flex flex-col min-w-0 flex-1 gap-1">
-                                            <span className="font-medium text-[15px] text-foreground truncate">
-                                                {chat.title || 'New chat'}
-                                            </span>
-                                            <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                                                <span className="flex items-center gap-1.5">
-                                                    <Activity className="w-3.5 h-3.5" />
-                                                    {timeAgo(chat.updatedAt)}
+                                            <div className="flex flex-col min-w-0 flex-1 gap-1">
+                                                <span className="font-medium text-[15px] text-foreground truncate">
+                                                    {chat.title || 'New chat'}
+                                                    {!chat.isMine && (
+                                                        <span className="ml-2 text-[9px] uppercase font-black tracking-wide text-primary bg-primary/10 rounded px-1.5 py-0.5 align-middle">
+                                                            Team
+                                                        </span>
+                                                    )}
                                                 </span>
-                                                {chat.messageCount > 0 && (
-                                                    <span>{chat.messageCount} messages</span>
-                                                )}
+                                                <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                                                    <span className="flex items-center gap-1.5">
+                                                        <Activity className="w-3.5 h-3.5" />
+                                                        {timeAgo(chat.updatedAt)}
+                                                    </span>
+                                                    {chat.messageCount > 0 && (
+                                                        <span>{chat.messageCount} messages</span>
+                                                    )}
+                                                    {!chat.isMine && (chat.authorName || chat.authorEmail) && (
+                                                        <span className="truncate">
+                                                            by {chat.authorName || chat.authorEmail}
+                                                        </span>
+                                                    )}
+                                                </div>
                                             </div>
-                                        </div>
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                deleteChat.mutate(chat.id);
-                                            }}
-                                            className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-red-500 h-8 w-8"
-                                        >
-                                            <Trash2 className="w-4 h-4" />
-                                        </Button>
+                                            {chat.isMine && (
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        deleteChat.mutate(chat.id);
+                                                    }}
+                                                    className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-red-500 h-8 w-8"
+                                                >
+                                                    <Trash2 className="w-4 h-4" />
+                                                </Button>
+                                            )}
                                     </div>
                                 ))}
                             </div>

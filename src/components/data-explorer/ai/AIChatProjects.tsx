@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, FolderKanban, Activity, Trash2, MessageSquare, X, Loader2 } from 'lucide-react';
+import { Plus, FolderKanban, Activity, Trash2, MessageSquare, X, Loader2, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -120,6 +120,9 @@ function ProjectCard({
     onOpen: (id: string) => void;
 }) {
     const deleteProject = useDeleteProject();
+    const isTeamProject = Boolean(project.team_id || project.teamId);
+    const teamLabel = project.team_name || project.teamName || 'Team Shared';
+    const isOwner = project.is_mine ?? true;
 
     return (
         <div
@@ -134,20 +137,30 @@ function ProjectCard({
             onClick={() => onOpen(project.id)}
         >
             <div className="flex justify-between items-start mb-4">
-                <div className={cn('w-10 h-10 rounded-xl flex items-center justify-center', colorClass[project.color])}>
-                    <FolderKanban className="w-5 h-5" />
+                <div className="flex items-center gap-2">
+                    <div className={cn('w-10 h-10 rounded-xl flex items-center justify-center', colorClass[project.color])}>
+                        <FolderKanban className="w-5 h-5" />
+                    </div>
+                    {isTeamProject && (
+                        <div className="flex items-center gap-1 bg-primary/10 text-primary px-2 py-0.5 rounded-full text-[10px] font-semibold tracking-tight border border-primary/20">
+                            <Users className="w-3 h-3" />
+                            <span className="truncate max-w-[110px]">{teamLabel}</span>
+                        </div>
+                    )}
                 </div>
-                <Button
-                    variant="ghost"
-                    size="icon"
-                    className="w-7 h-7 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-red-500"
-                    onClick={e => {
-                        e.stopPropagation();
-                        deleteProject.mutate(project.id);
-                    }}
-                >
-                    <Trash2 className="w-3.5 h-3.5" />
-                </Button>
+                {isOwner && (
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="w-7 h-7 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-red-500"
+                        onClick={e => {
+                            e.stopPropagation();
+                            deleteProject.mutate(project.id);
+                        }}
+                    >
+                        <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                )}
             </div>
 
             <h3 className="font-semibold text-foreground text-base mb-1.5 truncate">{project.title}</h3>
@@ -155,15 +168,22 @@ function ProjectCard({
                 <p className="text-sm text-muted-foreground mb-4 line-clamp-2">{project.description}</p>
             )}
 
-            <div className="mt-auto flex items-center gap-4 text-xs text-muted-foreground">
-                <div className="flex items-center gap-1.5">
-                    <Activity className="w-3.5 h-3.5" />
-                    <span>{timeAgo(project.updatedAt)}</span>
+            <div className="mt-auto flex items-center justify-between text-xs text-muted-foreground pt-2">
+                <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-1.5">
+                        <Activity className="w-3.5 h-3.5" />
+                        <span>{timeAgo(project.updatedAt || project.updated_at)}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                        <MessageSquare className="w-3.5 h-3.5" />
+                        <span>{project.chatCount ?? project.chat_count ?? 0} chat{(project.chatCount ?? project.chat_count) !== 1 ? 's' : ''}</span>
+                    </div>
                 </div>
-                <div className="flex items-center gap-1.5">
-                    <MessageSquare className="w-3.5 h-3.5" />
-                    <span>{project.chatCount} chat{project.chatCount !== 1 ? 's' : ''}</span>
-                </div>
+                {!isOwner && (project.owner_name || project.owner_email) && (
+                    <span className="text-[11px] text-muted-foreground/70 truncate max-w-[100px]" title={project.owner_name || project.owner_email || ''}>
+                        by {project.owner_name || project.owner_email}
+                    </span>
+                )}
             </div>
         </div>
     );

@@ -4,6 +4,7 @@
 
 // Types
 export type {
+  SchemaInfo,
   SchemaListResponse,
   TableInfo,
   TableListResponse,
@@ -13,8 +14,14 @@ export type {
   TableRowsParams,
   ColumnStats,
   ColumnStatsResponse,
+  Quantiles,
+  HistogramBin,
   TableSchema,
   ExportParams,
+  ExportGridContext,
+  ExportScope,
+  ExportFormat,
+  SchemaExportStatus,
 } from './types';
 
 // API Functions
@@ -25,9 +32,13 @@ export {
   fetchColumnStats,
   fetchTableSchema,
   getExportUrl,
-  downloadTableData,
-  getExportAllUrl,
-  downloadAllTablesData,
+  fetchTableExport,
+  startSchemaExport,
+  getSchemaExportProgress,
+  getSchemaExportDownloadUrl,
+  downloadSchemaExport,
+  fetchSchemaExportBlob,
+  cancelSchemaExport,
 } from './api';
 
 // Hooks
@@ -38,7 +49,16 @@ export {
   useTableRows,
   useTableRowsSimple,
   useColumnStats,
+  useColumnHeaderProfiles,
   useTableSchema,
   usePrefetchTableRows,
   usePrefetchColumnStats,
 } from './hooks';
+
+// Error helpers
+export {
+  getExplorerErrorMessage,
+  getExplorerErrorHint,
+  getExplorerErrorTitle,
+  EXPLORER_ERROR_CATALOG,
+} from './errors';

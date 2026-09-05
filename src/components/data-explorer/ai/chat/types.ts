@@ -15,4 +15,10 @@ export type LocalMessage = {
     tokenCount?: number | null;
     creditsUsed?: number | null;
     model?: string | null;
+    /** Author id (team-shared chats attribute messages per member). */
+    userId?: string | null;
+    /** False when a teammate wrote this message in a shared thread. */
+    isMine?: boolean;
+    authorName?: string | null;
+    authorEmail?: string | null;
 };

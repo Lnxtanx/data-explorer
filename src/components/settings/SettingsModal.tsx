@@ -31,10 +31,11 @@ interface SettingsModalProps {
     user?: User | Partial<User> | null;
     signOut?: () => void;
     signInWithGoogle?: () => void;
+    signInWithGithub?: () => void;
     initialSection?: SettingsSection;
 }
 
-export function SettingsModal({ isOpen, onClose, user, signOut, signInWithGoogle, initialSection }: SettingsModalProps) {
+export function SettingsModal({ isOpen, onClose, user, signOut, signInWithGoogle, signInWithGithub, initialSection }: SettingsModalProps) {
     const [activeSection, setActiveSection] = useState<SettingsSection>(initialSection ?? 'profile');
 
     // When modal is reopened with a different initialSection, jump to it
@@ -45,9 +46,9 @@ export function SettingsModal({ isOpen, onClose, user, signOut, signInWithGoogle
     const renderContent = () => {
         switch (activeSection) {
             case 'profile':
-                return <ProfileSettings user={user as User | null} signOut={signOut} signInWithGoogle={signInWithGoogle} />;
+                return <ProfileSettings user={user as User | null} signOut={signOut} signInWithGoogle={signInWithGoogle} signInWithGithub={signInWithGithub} />;
             case 'usage':
-                return <UsageSettings />;
+                return <UsageSettings onNavigate={setActiveSection} />;
             case 'plans':
                 return <PlansSettings user={user} />;
             case 'appearance':
@@ -61,7 +62,7 @@ export function SettingsModal({ isOpen, onClose, user, signOut, signInWithGoogle
             case 'feedback':
                 return <FeedbackSettings />;
             default:
-                return <ProfileSettings user={user as User | null} signOut={signOut} signInWithGoogle={signInWithGoogle} />;
+                return <ProfileSettings user={user as User | null} signOut={signOut} signInWithGoogle={signInWithGoogle} signInWithGithub={signInWithGithub} />;
         }
     };
 

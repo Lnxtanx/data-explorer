@@ -29,16 +29,21 @@ export function measureTextWidth(text: string, font: string = "13px Inter, sans-
 }
 
 /**
- * Calculates a particular percentile (e.g., 90) of an array of numbers
+ * Formats verbose SQL data types into concise readable labels
  */
-export function getPercentile(arr: number[], p: number): number {
-  if (arr.length === 0) return 0;
-  if (arr.length === 1) return arr[0];
-  const sorted = [...arr].sort((a, b) => a - b);
-  const index = (p / 100) * (sorted.length - 1);
-  const lower = Math.floor(index);
-  const upper = lower + 1;
-  const weight = index % 1;
-  if (upper >= sorted.length) return sorted[lower];
-  return sorted[lower] * (1 - weight) + sorted[upper] * weight;
+export function formatShortType(typeStr: string): string {
+  if (!typeStr) return '';
+  const lower = typeStr.toLowerCase();
+  if (lower.startsWith('character varying') || lower.startsWith('varchar')) return 'varchar';
+  if (lower.startsWith('timestamp with time zone') || lower.startsWith('timestamptz')) return 'timestamptz';
+  if (lower.startsWith('timestamp without time zone') || lower === 'timestamp') return 'timestamp';
+  if (lower.startsWith('double precision')) return 'float8';
+  if (lower === 'integer') return 'int4';
+  if (lower === 'bigint') return 'int8';
+  if (lower === 'smallint') return 'int2';
+  if (lower === 'boolean') return 'bool';
+  if (lower === 'text') return 'text';
+  if (lower === 'json' || lower === 'jsonb') return lower;
+  if (lower.startsWith('numeric') || lower.startsWith('decimal')) return 'numeric';
+  return typeStr.length > 10 ? typeStr.slice(0, 8) + '…' : typeStr;
 }

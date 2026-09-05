@@ -1,197 +1,119 @@
-import { useCallback, useMemo, useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { 
-    Loader2, Mail, Shield, Trash2, UserPlus, Users, Plus, 
-    Database, Settings2, Lock, Globe, CheckSquare, Square, Info
-} from 'lucide-react';
-import { toast } from 'sonner';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Loader2, Users, Shield, Plus, RefreshCw, LogOut } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ScrollArea } from '@/components/ui/scroll-area';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import {
-    listTeams,
-    createTeam,
-    getTeamMembers,
-    inviteTeamMember,
-    removeTeamMember,
-    Team,
-    TeamMember,
-    TeamInvitation,
-    getTeamInvitations,
-    revokeTeamInvitation,
-} from '@/lib/api/projects/collaboration';
 import { useAuth } from '@/components/auth/AuthProvider';
-import { listProjects, updateProject } from '@/lib/api/projects';
-import { useConnections } from '@/lib/api/data/connection';
-
-const queryKeys = {
-    teams: ['collaboration', 'teams'],
-    members: (teamId: string) => ['collaboration', 'members', teamId],
-    invites: (teamId: string) => ['collaboration', 'invites', teamId],
-    projects: ['collaboration', 'projects'],
-};
+import { cn } from '@/lib/utils';
+import { SectionLabel, ConfirmAction } from '../collab/primitives';
+import { MembersPanel } from '../collab/MembersPanel';
+import { AgentSharesPanel } from '../collab/AgentSharesPanel';
+import { ProjectsPanel } from '../collab/ProjectsPanel';
+import { ConnectionsPanel } from '../collab/ConnectionsPanel';
+import { useTeamData } from '../collab/useTeamData';
+import { EMAIL_REGEX, queryKeys } from '../collab/types';
 
 export function CollaborationSettings() {
-    const { user } = useAuth();
-    const queryClient = useQueryClient();
-    const [selectedTeamId, setSelectedTeamId] = useState<string>('');
-    const [isCreatingTeam, setIsCreatingTeam] = useState(false);
-    const [newTeamName, setNewTeamName] = useState('');
-    const [email, setEmail] = useState('');
-    const [inviteRole, setInviteRole] = useState<'admin' | 'member'>('member');
-    const [submittingInvite, setSubmittingInvite] = useState(false);
-    const [submittingCreate, setSubmittingCreate] = useState(false);
+    const { user, signInWithGoogle, signInWithGithub } = useAuth();
+    const data = useTeamData();
 
-    // ─── Data Fetching (React Query) ─────────────────────────────────────────
+    const {
+        teams, teamsLoading, selectedTeamId, setSelectedTeamId, selectedTeam,
+        isCreatingTeam, setIsCreatingTeam, newTeamName, setNewTeamName,
+        handleCreateTeam, submittingCreate,
+        currentRole, canManage,
+        members, membersLoading, removeMemberMutation, changeRoleMutation,
+        email, setEmail, inviteRole, setInviteRole,
+        handleInvite, submittingInvite, lastInvite, copiedLink, copyInviteLink,
+        pendingInvites, invitesLoading, revokeInviteMutation,
+        seatsData, seatsFull,
+        leaveTeamMutation,
+        allAgentEntries, agentSharesLoading, shareAgentMutation, unshareAgentMutation,
+        allProjects, projectsLoading, visibleProjects, handleToggleProjectTeam,
+        sharedConnections, connections,
+        isRefreshingDbs, handleRefreshSharedDbs,
+        isRefreshing, handleRefreshAll,
+        renameValue, setRenameValue, renameTeamMutation,
+        deleteConfirmText, setDeleteConfirmText, deleteTeamMutation,
+        queryClient,
+    } = data;
 
-    const { data: teams = [] } = useQuery({
-        queryKey: queryKeys.teams,
-        queryFn: async () => {
-            const res = await listTeams();
-            if (res.teams.length > 0 && !selectedTeamId) setSelectedTeamId(res.teams[0].id);
-            return res.teams;
-        },
-        enabled: !!user,
-    });
+    const isOwner = selectedTeam?.is_owner ?? currentRole === 'owner';
+    const canChangeRoles = currentRole === 'owner';
+    const emailValid = EMAIL_REGEX.test(email.trim());
 
-    const selectedTeam = useMemo(() => teams.find(t => t.id === selectedTeamId), [teams, selectedTeamId]);
+    /* ─── Signed-out state ─────────────────────────────────────────────────── */
 
-    const { data: memberData, isLoading: membersLoading } = useQuery({
-        queryKey: queryKeys.members(selectedTeamId),
-        queryFn: () => getTeamMembers(selectedTeamId),
-        enabled: !!selectedTeamId,
-    });
-
-    const members = memberData?.members || [];
-    const currentRole = memberData?.currentRole || 'member';
-    const canManage = currentRole === 'owner' || currentRole === 'admin';
-
-    const { data: invitations = [] } = useQuery({
-        queryKey: queryKeys.invites(selectedTeamId),
-        queryFn: async () => {
-            const res = await getTeamInvitations(selectedTeamId);
-            return res.invitations;
-        },
-        enabled: !!selectedTeamId && canManage,
-    });
-
-    const { data: allProjects = [], isLoading: projectsLoading } = useQuery({
-        queryKey: queryKeys.projects,
-        queryFn: async () => {
-            const res = await listProjects();
-            return res.projects;
-        },
-        enabled: !!user,
-    });
-
-    const { data: connections } = useConnections();
-
-    // ─── Mutations (Optimistic Updates) ──────────────────────────────────────
-
-    const toggleProjectMutation = useMutation({
-        mutationFn: ({ id, isLinked }: { id: string, isLinked: boolean }) => 
-            updateProject(id, { teamId: isLinked ? null : selectedTeamId } as any),
-        onMutate: async ({ id, isLinked }) => {
-            await queryClient.cancelQueries({ queryKey: queryKeys.projects });
-            const previous = queryClient.getQueryData(queryKeys.projects);
-            queryClient.setQueryData(queryKeys.projects, (old: any[]) => 
-                old.map(p => p.id === id ? { ...p, team_id: isLinked ? null : selectedTeamId } : p)
-            );
-            return { previous };
-        },
-        onError: (err, variables, context) => {
-            queryClient.setQueryData(queryKeys.projects, context?.previous);
-            toast.error('Failed to update project');
-        },
-        onSuccess: () => toast.success('Project shared updated')
-    });
-
-    const inviteMutation = useMutation({
-        mutationFn: (data: { email: string, role: any }) => inviteTeamMember(selectedTeamId, data),
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: queryKeys.invites(selectedTeamId) });
-            setEmail('');
-            toast.success('Invitation sent');
-        },
-        onError: (err: any) => toast.error(err.message || 'Failed to send invite')
-    });
-
-    // ... (rest of logic remains but uses mutations for instant feedback)
-    
-    const handleCreateTeam = async () => {
-        if (!newTeamName.trim()) return;
-        setSubmittingCreate(true);
-        try {
-            const { team } = await createTeam({ name: newTeamName });
-            setNewTeamName('');
-            setIsCreatingTeam(false);
-            await queryClient.invalidateQueries({ queryKey: queryKeys.teams });
-            setSelectedTeamId(team.id);
-            toast.success('Team created successfully!');
-        } catch (error) {
-            toast.error('Failed to create team');
-        } finally {
-            setSubmittingCreate(false);
-        }
+    if (!user) {
+        return (
+            <div className="p-8 w-full flex flex-col items-center justify-center text-center space-y-4 py-16">
+                <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center text-primary">
+                    <Users className="w-6 h-6" />
+                </div>
+                <div className="space-y-1 max-w-sm">
+                    <h3 className="text-base font-semibold tracking-tight">Sign in to manage teams</h3>
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                        Sign in with Google or GitHub to collaborate with your team and share database projects.
+                    </p>
+                </div>
+                <div className="flex flex-col w-full max-w-xs gap-2.5 pt-2">
+                    <Button
+                        onClick={() => signInWithGoogle()}
+                        variant="outline"
+                        className="w-full h-9 text-xs rounded-xl font-medium gap-2 shadow-sm"
+                    >
+                        <svg className="w-4 h-4" viewBox="0 0 24 24">
+                            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                            <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+                            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
+                        </svg>
+                        Continue with Google
+                    </Button>
+                    <Button
+                        onClick={() => signInWithGithub()}
+                        variant="outline"
+                        className="w-full h-9 text-xs rounded-xl font-medium gap-2 shadow-sm"
+                    >
+                        <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
+                            <path fillRule="evenodd" clipRule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" />
+                        </svg>
+                        Continue with GitHub
+                    </Button>
+                </div>
+            </div>
+        );
     }
 
-    const handleInvite = async () => {
-        if (!selectedTeamId) return;
-        setSubmittingInvite(true);
-        try {
-            await inviteTeamMember(selectedTeamId, { email, role: inviteRole });
-            setEmail('');
-            await queryClient.invalidateQueries({ queryKey: queryKeys.members(selectedTeamId) });
-            await queryClient.invalidateQueries({ queryKey: queryKeys.invites(selectedTeamId) });
-            toast.success('Invitation sent');
-        } catch (error: any) {
-            toast.error(error.message || 'Failed to add team member');
-        } finally {
-            setSubmittingInvite(false);
-        }
-    };
-
-    const handleToggleProjectTeam = async (projectId: string, isLinked: boolean) => {
-        if (!selectedTeamId || !canManage) return;
-        try {
-            await updateProject(projectId, { teamId: isLinked ? null : selectedTeamId } as any);
-            toast.success(isLinked ? 'Project removed from team' : 'Project added to team');
-            await queryClient.invalidateQueries({ queryKey: queryKeys.projects });
-        } catch (error) {
-            toast.error('Failed to update project');
-        }
-    };
-
-    const sharedConnections = useMemo(() => {
-        const teamProjects = allProjects.filter(p => p.team_id === selectedTeamId);
-        const uniqueConnIds = new Set(teamProjects.map(p => p.connection_id || p.connectionId).filter(Boolean));
-        
-        return Array.from(uniqueConnIds).map(id => {
-            const conn = connections?.find(c => c.id === id);
-            return {
-                id,
-                name: conn?.name || 'Shared Connection',
-                database: conn?.database || 'postgres'
-            };
-        });
-    }, [allProjects, selectedTeamId, connections]);
-
-    if (!user) return <div className="p-6 text-center text-muted-foreground font-medium">Sign in to manage team collaboration.</div>;
+    /* ─── Signed-in state ──────────────────────────────────────────────────── */
 
     return (
         <div className="p-6 space-y-6">
+            {/* Header */}
             <div className="flex items-start justify-between">
                 <div>
-                    <h3 className="text-lg font-semibold tracking-tight">Teams & Shared Resources</h3>
+                    <h3 className="text-base font-semibold tracking-tight">Teams &amp; Shared Resources</h3>
                     <p className="text-sm text-muted-foreground">Manage your workspace teams and which projects are shared with them.</p>
                 </div>
-                <Button variant="outline" size="sm" onClick={() => setIsCreatingTeam(!isCreatingTeam)} className="h-8 rounded-lg border-dashed">
-                    <Plus className="mr-2 h-3.5 w-3.5" /> New Team
-                </Button>
+                <div className="flex items-center gap-2">
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleRefreshAll}
+                        disabled={isRefreshing}
+                        className="h-8 rounded-lg text-xs gap-1.5 text-muted-foreground hover:text-foreground"
+                        title="Refresh all team data"
+                        aria-label="Refresh all team data"
+                    >
+                        <RefreshCw className={cn("h-3.5 w-3.5", isRefreshing && "animate-spin")} />
+                        <span>{isRefreshing ? 'Refreshing...' : 'Refresh'}</span>
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => setIsCreatingTeam(!isCreatingTeam)} className="h-8 rounded-lg border-dashed text-xs" aria-label="Create a new team">
+                        <Plus className="mr-1.5 h-3.5 w-3.5" /> New Team
+                    </Button>
+                </div>
             </div>
 
             {isCreatingTeam && (
@@ -209,7 +131,12 @@ export function CollaborationSettings() {
                 </div>
             )}
 
-            {teams.length === 0 ? (
+            {teamsLoading ? (
+                <div className="space-y-3">
+                    <Skeleton className="h-20 w-full rounded-xl" />
+                    <Skeleton className="h-40 w-full rounded-xl" />
+                </div>
+            ) : teams.length === 0 ? (
                 <div className="py-12 flex flex-col items-center justify-center border-2 border-dashed rounded-2xl bg-muted/20 text-center space-y-4">
                     <Users className="h-10 w-10 text-muted-foreground/30" />
                     <div className="space-y-1">
@@ -222,13 +149,12 @@ export function CollaborationSettings() {
                 </div>
             ) : (
                 <>
-                    <div className="grid gap-4 sm:grid-cols-2">
-                        <div className="rounded-xl border bg-card/30 p-4 space-y-3">
-                            <div className="flex items-center gap-2 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-                                <Users className="h-3 w-3" /> Active Team
-                            </div>
+                    {/* Team switcher + role + seats */}
+                    <div className="grid gap-4 sm:grid-cols-3">
+                        <div className="rounded-xl border bg-card/40 p-4 space-y-2 sm:col-span-2">
+                            <SectionLabel><span className="flex items-center gap-1.5"><Users className="h-3 w-3" /> Active Team</span></SectionLabel>
                             <Select value={selectedTeamId} onValueChange={setSelectedTeamId}>
-                                <SelectTrigger className="bg-background/50 border-none h-10 font-semibold focus:ring-0">
+                                <SelectTrigger className="bg-background/50 border h-9 font-medium">
                                     <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent className="rounded-xl">
@@ -236,169 +162,138 @@ export function CollaborationSettings() {
                                 </SelectContent>
                             </Select>
                         </div>
-                        <div className="rounded-xl border bg-card/30 p-4 space-y-3">
-                            <div className="flex items-center gap-2 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-                                <Shield className="h-3 w-3" /> Your Permission
-                            </div>
-                            <div className="flex items-center gap-2 h-10">
-                                <span className="font-bold text-lg capitalize">{currentRole}</span>
-                                {selectedTeam?.is_owner && <Badge className="bg-amber-500/10 text-amber-600 border-none h-5 px-1.5 text-[9px] font-black">OWNER</Badge>}
+                        <div className="rounded-xl border bg-card/40 p-4 space-y-2">
+                            <SectionLabel><span className="flex items-center gap-1.5"><Shield className="h-3 w-3" /> Your Permission</span></SectionLabel>
+                            <div className="flex items-center justify-between h-9">
+                                <div className="flex items-center gap-2 min-w-0">
+                                    <span className="font-semibold text-sm capitalize text-foreground truncate">{currentRole ? currentRole : '—'}</span>
+                                    {isOwner && (
+                                        <Badge variant="outline" className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20 text-[10px] font-medium px-2 py-0.5">
+                                            OWNER
+                                        </Badge>
+                                    )}
+                                </div>
+                                {!isOwner && selectedTeamId && (
+                                    <ConfirmAction
+                                        title={`Leave ${selectedTeam?.name || 'this team'}?`}
+                                        description="You will immediately lose access to all projects and databases shared with this team. Your own projects are automatically unshared from it."
+                                        confirmLabel="Leave Team"
+                                        processing={leaveTeamMutation.isPending}
+                                        onConfirm={() => leaveTeamMutation.mutate()}
+                                        trigger={
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                className="h-7 px-2 text-[11px] text-muted-foreground hover:text-destructive gap-1"
+                                                aria-label="Leave this team"
+                                            >
+                                                <LogOut className="h-3 w-3" /> Leave
+                                            </Button>
+                                        }
+                                    />
+                                )}
                             </div>
                         </div>
                     </div>
 
+                    {seatsData && (
+                        <div className="flex items-center gap-2 px-1">
+                            <Badge
+                                variant="outline"
+                                className={cn(
+                                    "text-[10px] font-medium px-2 py-0.5",
+                                    seatsFull
+                                        ? "border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                                        : "text-muted-foreground"
+                                )}
+                                title="Seats used by team members against the owner's plan"
+                            >
+                                <Users className="h-3 w-3 mr-1" />
+                                Seats {seatsData.occupied}/{seatsData.seats}
+                            </Badge>
+                            {seatsFull && (
+                                <span className="text-[11px] text-muted-foreground">
+                                    Seat limit reached — the team owner must upgrade to invite more people.
+                                </span>
+                            )}
+                        </div>
+                    )}
+
                     <Tabs defaultValue="members" className="w-full">
-                        <TabsList className="bg-muted/50 p-1 rounded-xl mb-6 w-full sm:w-auto">
-                            <TabsTrigger value="members" className="rounded-lg px-6 py-2 text-xs font-semibold">Members</TabsTrigger>
-                            <TabsTrigger value="projects" className="rounded-lg px-6 py-2 text-xs font-semibold">Share Projects</TabsTrigger>
-                            <TabsTrigger value="connections" className="rounded-lg px-6 py-2 text-xs font-semibold">Shared DBs</TabsTrigger>
+                        <TabsList className="bg-muted/50 p-1 rounded-xl mb-4 w-full sm:w-auto">
+                            <TabsTrigger value="members" className="rounded-lg px-4 py-1.5 text-xs font-medium">Members</TabsTrigger>
+                            <TabsTrigger value="agents" className="rounded-lg px-4 py-1.5 text-xs font-medium">SW-Agents</TabsTrigger>
+                            <TabsTrigger value="projects" className="rounded-lg px-4 py-1.5 text-xs font-medium">Share Projects</TabsTrigger>
+                            <TabsTrigger value="connections" className="rounded-lg px-4 py-1.5 text-xs font-medium">Shared DBs</TabsTrigger>
                         </TabsList>
 
-                        <TabsContent value="members" className="space-y-6 animate-in fade-in duration-300">
-                            {canManage && (
-                                <div className="rounded-xl border bg-card/50 p-5 space-y-4">
-                                    <div className="flex flex-col gap-1">
-                                        <div className="flex items-center gap-2 text-sm font-semibold">
-                                            <UserPlus className="h-4 w-4 text-primary" /> 
-                                            Invite Member
-                                        </div>
-                                        <p className="text-xs text-muted-foreground">Send an invite to someone's email to join this team.</p>
-                                    </div>
-                                    <div className="flex gap-2">
-                                        <Input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="colleague@company.com" className="flex-1 h-10 bg-background" />
-                                        <Select value={inviteRole} onValueChange={v => setInviteRole(v as any)}>
-                                            <SelectTrigger className="w-[110px] h-10 bg-background"><SelectValue /></SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="member">Member</SelectItem>
-                                                <SelectItem value="admin" disabled={currentRole !== 'owner'}>Admin</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                        <Button onClick={handleInvite} disabled={!email.trim() || submittingInvite} className="h-10 px-6 font-semibold">
-                                            {submittingInvite ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Invite'}
-                                        </Button>
-                                    </div>
-                                </div>
-                            )}
+                        <TabsContent value="members" className="space-y-5 animate-in fade-in duration-300">
+                            <MembersPanel
+                                selectedTeamId={selectedTeamId}
+                                canManage={canManage}
+                                isOwner={isOwner}
+                                currentRole={currentRole}
+                                members={members}
+                                membersLoading={membersLoading}
+                                user={user}
+                                email={email}
+                                setEmail={setEmail}
+                                emailValid={emailValid}
+                                inviteRole={inviteRole}
+                                setInviteRole={(v) => setInviteRole(v as 'admin' | 'member')}
+                                handleInvite={handleInvite}
+                                submittingInvite={submittingInvite}
+                                seatsFull={seatsFull}
+                                lastInvite={lastInvite}
+                                copiedLink={copiedLink}
+                                copyInviteLink={copyInviteLink}
+                                pendingInvites={pendingInvites}
+                                invitesLoading={invitesLoading}
+                                removeMemberMutation={removeMemberMutation}
+                                changeRoleMutation={changeRoleMutation}
+                                revokeInviteMutation={revokeInviteMutation}
+                                selectedTeam={selectedTeam}
+                                renameValue={renameValue}
+                                setRenameValue={setRenameValue}
+                                renameTeamMutation={renameTeamMutation}
+                                deleteConfirmText={deleteConfirmText}
+                                setDeleteConfirmText={setDeleteConfirmText}
+                                deleteTeamMutation={deleteTeamMutation}
+                            />
+                        </TabsContent>
 
-                            <div className="space-y-2">
-                                <h4 className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-1">Active Members ({members.length})</h4>
-                                <div className="rounded-xl border bg-card/30 overflow-hidden divide-y divide-border/40">
-                                    {members.map(member => (
-                                        <div key={member.user_id} className="flex items-center justify-between p-4 hover:bg-muted/20 transition-colors">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-sm uppercase">
-                                                    {(member.full_name || member.email || '?')[0]}
-                                                </div>
-                                                <div>
-                                                    <div className="text-sm font-semibold">{member.full_name || 'Team Member'}</div>
-                                                    <div className="text-xs text-muted-foreground">{member.email}</div>
-                                                </div>
-                                            </div>
-                                            <Badge variant="secondary" className="text-[10px] font-black uppercase h-5 px-2 bg-muted/50 border-none tracking-tight">
-                                                {member.role}
-                                            </Badge>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
+                        <TabsContent value="agents" className="space-y-4 animate-in fade-in duration-300">
+                            <AgentSharesPanel
+                                selectedTeamId={selectedTeamId}
+                                canManage={canManage}
+                                allAgentEntries={allAgentEntries}
+                                agentSharesLoading={agentSharesLoading}
+                                shareAgentMutation={shareAgentMutation}
+                                unshareAgentMutation={unshareAgentMutation}
+                                queryClient={queryClient}
+                                queryKeys={queryKeys}
+                            />
                         </TabsContent>
 
                         <TabsContent value="projects" className="space-y-4 animate-in fade-in duration-300">
-                            <div className="bg-primary/5 border border-primary/10 rounded-xl p-4 flex gap-3">
-                                <Info className="h-4 w-4 text-primary mt-0.5 shrink-0" />
-                                <div className="space-y-1">
-                                    <p className="text-xs font-semibold text-primary">Manage Team Projects</p>
-                                    <p className="text-[11px] text-muted-foreground leading-relaxed">
-                                        Linking a project to this team grants all members <b>Editor</b> access. 
-                                        Members can view all database connections linked to these projects.
-                                    </p>
-                                </div>
-                            </div>
-
-                            <ScrollArea className="h-[350px] rounded-xl border bg-card/30">
-                                <div className="p-4 space-y-3">
-                                    {allProjects.length === 0 ? (
-                                        <div className="py-20 text-center text-muted-foreground italic text-xs">
-                                            No AI projects found.
-                                        </div>
-                                    ) : (
-                                        allProjects.map(project => {
-                                            const isLinked = project.team_id === selectedTeamId;
-                                            const isOtherTeam = project.team_id && project.team_id !== selectedTeamId;
-                                            const conn = connections?.find(c => c.id === (project.connection_id || project.connectionId));
-
-                                            return (
-                                                <div key={project.id} className={`flex items-center justify-between p-4 rounded-xl border transition-all ${isLinked ? 'bg-primary/5 border-primary/20 shadow-sm' : 'bg-background hover:bg-muted/10'}`}>
-                                                    <div className="flex items-center gap-4">
-                                                        <div className={`p-2.5 rounded-lg ${isLinked ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground'}`}>
-                                                            <Settings2 className="w-4 h-4" />
-                                                        </div>
-                                                        <div>
-                                                            <div className="text-sm font-bold flex items-center gap-2">
-                                                                {project.title}
-                                                                {isLinked && <Badge className="bg-primary/10 text-primary border-none text-[8px] h-4 uppercase font-black">Shared</Badge>}
-                                                            </div>
-                                                            <div className="flex items-center gap-2 mt-1">
-                                                                <div className="flex items-center gap-1 text-[10px] text-muted-foreground font-mono bg-muted/50 px-1.5 py-0.5 rounded">
-                                                                    <Database className="w-2.5 h-2.5" />
-                                                                    {conn?.name || 'No Database'}
-                                                                </div>
-                                                                {isOtherTeam && <Badge className="h-4 text-[8px] bg-muted text-muted-foreground border-none">SHARED ELSEWHERE</Badge>}
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                    <Button 
-                                                        variant={isLinked ? "destructive" : "outline"} 
-                                                        size="sm" 
-                                                        disabled={(isOtherTeam || !canManage) && !selectedTeam?.is_owner}
-                                                        onClick={() => handleToggleProjectTeam(project.id, isLinked)}
-                                                        className={`h-8 px-4 rounded-lg text-[10px] font-bold ${!isLinked && 'border-primary/20 text-primary hover:bg-primary/5'}`}
-                                                    >
-                                                        {isLinked ? 'Unshare' : 'Share with Team'}
-                                                    </Button>
-                                                </div>
-                                            );
-                                        })
-                                    )}
-                                </div>
-                            </ScrollArea>
+                            <ProjectsPanel
+                                allProjects={allProjects}
+                                projectsLoading={projectsLoading}
+                                selectedTeamId={selectedTeamId}
+                                connections={connections}
+                                canManage={canManage}
+                                handleToggleProjectTeam={handleToggleProjectTeam}
+                                queryClient={queryClient}
+                                queryKeys={queryKeys}
+                            />
                         </TabsContent>
 
                         <TabsContent value="connections" className="space-y-4 animate-in fade-in duration-300">
-                            <div className="rounded-xl border bg-card/30 overflow-hidden shadow-sm">
-                                <div className="px-5 py-4 bg-muted/40 border-b flex items-center justify-between">
-                                    <div className="flex items-center gap-2 font-bold text-sm">
-                                        <Database className="w-4 h-4 text-primary" />
-                                        Shared Databases
-                                    </div>
-                                    <Badge variant="outline" className="font-mono text-[10px]">{sharedConnections.length} Active</Badge>
-                                </div>
-                                <div className="p-4 bg-background/50">
-                                    {sharedConnections.length === 0 ? (
-                                        <div className="text-center py-16 opacity-50 space-y-3">
-                                            <Database className="w-10 h-10 mx-auto mb-2 opacity-10" />
-                                            <p className="text-sm font-medium">No databases shared</p>
-                                            <p className="text-[10px] max-w-[250px] mx-auto leading-relaxed">
-                                                Databases are shared automatically when you link an AI project that uses them in the <b>Share Projects</b> tab.
-                                            </p>
-                                        </div>
-                                    ) : (
-                                        <div className="grid gap-3 sm:grid-cols-2">
-                                            {sharedConnections.map(conn => (
-                                                <div key={conn.id} className="p-4 rounded-xl border bg-card/50 flex items-center gap-3 group hover:border-primary/20 transition-colors">
-                                                    <div className="p-2 rounded-lg bg-primary/10 text-primary group-hover:bg-primary group-hover:text-white transition-colors">
-                                                        <Database className="w-4 h-4" />
-                                                    </div>
-                                                    <div className="min-w-0">
-                                                        <div className="text-sm font-black truncate">{conn.name}</div>
-                                                        <div className="text-[10px] text-muted-foreground font-mono truncate opacity-70">{conn.database}</div>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
+                            <ConnectionsPanel
+                                sharedConnections={sharedConnections}
+                                isRefreshingDbs={isRefreshingDbs}
+                                handleRefreshSharedDbs={handleRefreshSharedDbs}
+                            />
                         </TabsContent>
                     </Tabs>
                 </>

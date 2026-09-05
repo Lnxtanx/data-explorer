@@ -1,4 +1,4 @@
-import { Check, Copy, AtSign, FileText } from 'lucide-react';
+import { Check, Copy, AtSign, FileText, Download, Database } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { MarkdownText } from '../messages/MarkdownText';
 import { InlineSqlBlock } from '../messages/InlineSqlBlock';
@@ -7,7 +7,6 @@ import { PlanSteps } from '../messages/PlanSteps';
 import { LiveToolSteps } from '../tools/LiveToolSteps';
 import { ArtifactView } from '../artifacts/ArtifactView';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
-import { Database } from 'lucide-react';
 import { TablePreview } from '../messages/TablePreview';
 import type { AgentPhase, AgentStatus } from '@/hooks/useAIAgent';
 import type { LocalMessage } from './types';
@@ -90,12 +89,41 @@ export function ChatMessage({
                     )
                 )}
 
+                {/* Teammate author label in shared threads */}
+                {msg.role === 'user' && msg.isMine === false && (msg.authorName || msg.authorEmail) && (
+                    <span className="text-[11px] text-muted-foreground mb-0.5">
+                        by {msg.authorName || msg.authorEmail}
+                    </span>
+                )}
+
                 {/* User bubble */}
                 {msg.role === 'user' && (
                     <div className="bg-muted/60 text-foreground px-4 py-2.5 rounded-2xl text-[15px] leading-relaxed">
-                        {msg.files && msg.files.length > 0 && (
+                        {/* Attachments (from artifacts or local files list) */}
+                        {((msg.artifacts?.filter(a => (a as any).type === 'attachment') ?? []).length > 0 || (msg.files && msg.files.length > 0)) && (
                             <div className="flex flex-wrap gap-1.5 mb-2">
-                                {msg.files.map((f, i) => (
+                                {msg.artifacts?.filter(a => (a as any).type === 'attachment').map((att: any, i: number) => (
+                                    <div key={i} className="flex items-center gap-2 bg-background/80 border border-border/60 rounded-lg px-2.5 py-1.5 text-xs shadow-xs">
+                                        <FileText className="w-3.5 h-3.5 text-primary" />
+                                        <div className="flex flex-col text-left">
+                                            <span className="font-medium text-foreground truncate max-w-[140px]">{att.filename || 'Attachment'}</span>
+                                            {att.size_bytes && <span className="text-[10px] text-muted-foreground">{(att.size_bytes / 1024).toFixed(0)} KB</span>}
+                                        </div>
+                                        {att.download_url && (
+                                            <a
+                                                href={att.download_url}
+                                                target="_blank"
+                                                rel="noreferrer"
+                                                download={att.filename}
+                                                className="ml-1 p-1 hover:bg-muted rounded text-muted-foreground hover:text-foreground transition-colors"
+                                                title="Download file"
+                                            >
+                                                <Download className="w-3 h-3" />
+                                            </a>
+                                        )}
+                                    </div>
+                                ))}
+                                {!msg.artifacts?.some(a => (a as any).type === 'attachment') && msg.files?.map((f, i) => (
                                     <span key={i} className="flex items-center gap-1.5 bg-background/50 border border-border/50 rounded-lg px-2 py-1 text-xs">
                                         <FileText className="w-3 h-3 text-muted-foreground" />{f}
                                     </span>

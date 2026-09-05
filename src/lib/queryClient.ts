@@ -4,15 +4,17 @@
 // =============================================================================
 
 import { QueryClient } from '@tanstack/react-query';
+import { explorerQueryPersister } from './persist';
 
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 30 * 1000,            // 30s default
+      staleTime: 60 * 1000,            // 60s default
       gcTime: 5 * 60 * 1000,           // 5min garbage collection
       retry: 2,
       retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 10_000),
-      refetchOnWindowFocus: true,
+      refetchOnWindowFocus: false,     // focus is not a data-change signal; prevents refetch storms on infinite lists
+      persister: explorerQueryPersister,
     },
     mutations: {
       retry: 1,
@@ -42,9 +44,11 @@ export const queryKeys = {
     detail:   (id: string) => ['connections', id] as const,
   },
   payments: {
-    all:      ['payments'] as const,
-    plans:    ['payments', 'plans'] as const,
-    usage:    (userId: string) => ['payments', 'usage', userId] as const,
-    history:  (userId: string) => ['payments', 'history', userId] as const,
+    all:          ['payments'] as const,
+    plans:        ['payments', 'plans'] as const,
+    subscription: ['payments', 'subscription'] as const,
+    usage:        ['payments', 'usage'] as const,
+    history:      (userId: string) => ['payments', 'history', userId] as const,
+    invoices:     ['payments', 'invoices'] as const,
   },
 } as const;

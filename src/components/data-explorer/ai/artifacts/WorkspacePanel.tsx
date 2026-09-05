@@ -8,6 +8,7 @@ import { X, RefreshCw, Download, FileText, Code, BarChart3, Table2, File, Chevro
 import { cn } from '@/lib/utils';
 import { apiRequest } from '@/lib/api/client';
 import { SlidePreviewView } from './views/SlidePreviewView';
+import { logger } from '@/lib/logger';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -104,7 +105,7 @@ export function WorkspacePanel({ connectionId, sessionId, onClose, refreshTrigge
             const data = await apiRequest<WorkspaceFile & { content: string }>(`/api/workspace/${file.id}`);
             setLoadedContents(prev => ({ ...prev, [file.id]: data.content }));
         } catch (err: any) {
-            console.error('Failed to load workspace file:', err);
+            logger.error('Failed to load workspace file:', err);
         } finally {
             setLoadingFile(null);
         }

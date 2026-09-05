@@ -20,7 +20,11 @@ export function FilterChip({ filter, onRemove }: FilterChipProps) {
       case 'gte': return '≥';
       case 'lt': return '<';
       case 'lte': return '≤';
-      case 'like': return '~';
+      case 'like': return '~ contains';
+      case 'not_like': return '!~ not contains';
+      case 'starts_with': return '^= starts with';
+      case 'ends_with': return '$= ends with';
+      case 'is_empty': return 'IS EMPTY';
       case 'is_null': return 'IS NULL';
       case 'not_null': return 'NOT NULL';
       case 'in': return 'IN';

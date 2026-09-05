@@ -1,9 +1,9 @@
-import { get, post, del } from '../client';
+import { get, post, del, patch } from '../client';
 
 export interface Team {
     id: string;
     name: string;
-    slug?: string;
+    slug?: string | null;
     owner_id?: string;
     avatar_url?: string | null;
     settings?: Record<string, unknown>;
@@ -43,6 +43,7 @@ export interface TeamInvitation {
     role: 'admin' | 'member';
     status: 'pending' | 'accepted' | 'declined' | 'expired' | 'revoked';
     token?: string;
+    link?: string;
     invited_by: string;
     expires_at: string;
     accepted_at?: string | null;
@@ -62,6 +63,7 @@ export interface InvitationInfo {
     email: string;
     status: string;
     expiresAt: string;
+    expired?: boolean;
 }
 
 export async function listTeams(): Promise<TeamListResponse> {
@@ -85,11 +87,19 @@ export async function getTeamMembers(
     return get<TeamMembersResponse>(`/api/teams/${teamId}/members`);
 }
 
+export interface InviteTeamMemberResult {
+    success: boolean;
+    message?: string;
+    invitation?: TeamInvitation;
+    /** Email delivery status from the backend. */
+    email?: { configured: boolean; sent: boolean };
+}
+
 export async function inviteTeamMember(
     teamId: string,
     params: { email: string; role: 'admin' | 'member' }
-): Promise<{ success: boolean; message: string }> {
-    return post<{ success: boolean; message: string }>(`/api/teams/${teamId}/invites`, params);
+): Promise<InviteTeamMemberResult> {
+    return post<InviteTeamMemberResult>(`/api/teams/${teamId}/invites`, params);
 }
 
 export async function removeTeamMember(
@@ -97,6 +107,44 @@ export async function removeTeamMember(
     memberUserId: string
 ): Promise<{ success: boolean }> {
     return del<{ success: boolean }>(`/api/teams/${teamId}/members/${memberUserId}`);
+}
+
+export async function updateTeamMemberRole(
+    teamId: string,
+    memberUserId: string,
+    role: 'admin' | 'member'
+): Promise<{ success: boolean; role: string }> {
+    return patch<{ success: boolean; role: string }>(
+        `/api/teams/${teamId}/members/${memberUserId}`,
+        { role }
+    );
+}
+
+export async function leaveTeam(teamId: string): Promise<{ success: boolean }> {
+    return post<{ success: boolean }>(`/api/teams/${teamId}/leave`);
+}
+
+export async function deleteTeam(teamId: string): Promise<{ success: boolean }> {
+    return del<{ success: boolean }>(`/api/teams/${teamId}`);
+}
+
+export async function renameTeam(
+    teamId: string,
+    name: string
+): Promise<{ success: boolean; team: { id: string; name: string } }> {
+    return patch<{ success: boolean; team: { id: string; name: string } }>(
+        `/api/teams/${teamId}`,
+        { name }
+    );
+}
+
+export interface TeamSeats {
+    seats: number;
+    occupied: number;
+}
+
+export async function getTeamSeats(teamId: string): Promise<TeamSeats> {
+    return get<TeamSeats>(`/api/teams/${teamId}/seats`);
 }
 
 export async function getTeamInvitations(
@@ -114,23 +162,64 @@ export async function revokeTeamInvitation(
 
 export async function acceptTeamInvitation(
     token: string
-): Promise<{ success: boolean; membership: any }> {
-    return post<{ success: boolean; membership: any }>('/api/teams/invitations/accept', { token });
+): Promise<{ success: boolean; teamId: string; role: string }> {
+    return post<{ success: boolean; teamId: string; role: string }>('/api/teams/invitations/accept', { token });
 }
 
 export async function declineTeamInvitation(
     teamId: string,
     inviteId: string
 ): Promise<{ success: boolean; message: string }> {
-    return post(`/api/teams/${teamId}/invitations/${inviteId}/decline`);
+    return post<{ success: boolean; message: string }>(`/api/teams/${teamId}/invitations/${inviteId}/decline`);
 }
 
 /**
  * Publicly fetch invitation details for review
  */
-export async function getInvitationInfo(token: string, type: 'team' | 'project'): Promise<InvitationInfo> {
+export async function getInvitationInfo(token: string, type: 'team' | 'project' = 'team'): Promise<InvitationInfo> {
     const endpoint = type === 'team'
         ? `/api/teams/invitations/info/${token}`
         : `/api/files/projects/invitations/info/${token}`;
     return get<InvitationInfo>(endpoint);
+}
+
+// ─── Team Agent Shares (SW-Agent sharing) ──────────────────────────────────
+
+export interface TeamAgentShare {
+    id: string;
+    team_id: string;
+    team_name?: string | null;
+    registration_id: string;
+    agent_id: string;
+    machine_label: string | null;
+    shared_by: string;
+    shared_by_name: string | null;
+    shared_by_email: string | null;
+    shared_at?: string;
+    created_at?: string;
+    owner_user_id?: string;
+}
+
+/** List SW-Agents currently shared with a team (any member). */
+export async function listTeamAgentShares(teamId: string): Promise<{ success: boolean; agents: TeamAgentShare[] }> {
+    return get<{ success: boolean; agents: TeamAgentShare[] }>(`/api/teams/${teamId}/shares/agents`);
+}
+
+/**
+ * Share one of my SW-Agents (and ALL of its databases) with the team.
+ * Owner/admin + paid plan required.
+ */
+export async function shareAgentWithTeam(
+    teamId: string,
+    targetId: string
+): Promise<{ success: boolean; share?: TeamAgentShare; already_shared?: boolean }> {
+    return post<{ success: boolean; share?: TeamAgentShare; already_shared?: boolean }>(
+        `/api/teams/${teamId}/shares/agents`,
+        { agentId: targetId }
+    );
+}
+
+/** Remove an agent share from the team. Owner/admin required. */
+export async function unshareAgentFromTeam(teamId: string, shareId: string): Promise<{ success: boolean }> {
+    return del<{ success: boolean }>(`/api/teams/${teamId}/shares/agents/${shareId}`);
 }

@@ -6,6 +6,7 @@ import { useGoogleLogin } from '@react-oauth/google';
 import { toast } from 'sonner';
 import {
     loginWithGoogle,
+    loginWithGithub,
     logout as apiLogout,
     refreshSession as apiRefreshSession,
     validateSession,
@@ -17,18 +18,19 @@ import {
     deleteSessionCookie,
     sessionNeedsRefresh,
     refreshSessionCookie,
-    clearRecentFiles,
-    clearUserPreferences,
 } from '@/lib/cookies';
-// Fixed import path: storage/core is self-contained (no SQL editor deps)
-import { broadcastSync, subscribeToSync, clearAllFileStates } from '@/lib/storage/core';
+import { broadcastSync, subscribeToSync } from '@/lib/storage/core';
 import { queryClient } from '@/lib/queryClient';
+import { purgeExplorerCacheDb } from '@/lib/persist';
+import { clearAllClientData } from '@/lib/clearAllClientData';
+import { logger } from '@/lib/logger';
 
 interface AuthContextType {
     user: User | null;
     loading: boolean;
     isLoggingIn: boolean;
     signInWithGoogle: () => void;
+    signInWithGithub: () => void;
     signOut: () => Promise<void>;
     refreshSession: () => void;
 }
@@ -38,6 +40,7 @@ const AuthContext = createContext<AuthContextType>({
     loading: true,
     isLoggingIn: false,
     signInWithGoogle: () => { },
+    signInWithGithub: () => { },
     signOut: async () => { },
     refreshSession: () => { },
 });
@@ -47,13 +50,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const [loading, setLoading] = useState(true);
     const [isLoggingIn, setIsLoggingIn] = useState(false);
 
-    // Shared login handler — used by both redirect flow (URL code) and popup fallback
+    // Shared login handler â€” used by Google OAuth redirect callback code
     const handleGoogleLogin = useCallback(async (code: string) => {
         setIsLoggingIn(true);
-        const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        const redirectUri = window.location.origin;
         try {
-            const response = await loginWithGoogle(code, isLocal ? undefined : window.location.origin);
-            const { user: dbUser, sessionExpiresAt } = response;
+            const response = await loginWithGoogle(code, redirectUri);
+            const { user: dbUser, sessionExpiresAt, isNewUser } = response;
 
             const mappedUser: User = {
                 id: dbUser.id,
@@ -82,26 +85,102 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 }
             });
 
-            toast.success(`Welcome back, ${dbUser.full_name}`);
+            toast.dismiss('auth-toast');
+            if (isNewUser) {
+                toast.success(`Welcome to Schema Weaver! Signed in as ${dbUser.full_name || dbUser.email}`);
+            } else {
+                toast.success(`Successfully signed in with Google as ${dbUser.full_name || dbUser.email}`);
+            }
 
         } catch (err: any) {
-            console.error('Login failed:', err);
-            toast.error(err?.message || 'Login failed');
+            toast.dismiss('auth-toast');
+            logger.error('Google login failed:', err);
+            toast.error(err?.message || 'Failed to sign in with Google. Please try again.');
         } finally {
             setIsLoggingIn(false);
         }
     }, []);
 
-    // ── Redirect flow: detect ?code= in URL after Google redirects back ──
+    const handleGithubLogin = useCallback(async (code: string) => {
+        setIsLoggingIn(true);
+        const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        const redirectUri = isLocal ? undefined : window.location.origin;
+
+        try {
+            const response = await loginWithGithub(code, redirectUri);
+            const { user: dbUser, sessionExpiresAt, isNewUser } = response;
+
+            const mappedUser: User = {
+                id: dbUser.id,
+                app_metadata: { provider: 'github' },
+                user_metadata: {
+                    full_name: dbUser.full_name,
+                    avatar_url: dbUser.avatar_url,
+                    github_username: dbUser.github_username,
+                },
+                email: dbUser.email,
+                aud: 'authenticated',
+                created_at: dbUser.created_at,
+                updated_at: dbUser.updated_at
+            };
+
+            setUser(mappedUser);
+
+            setSessionCookie({
+                userId: dbUser.id,
+                expiresAt: sessionExpiresAt,
+            });
+
+            broadcastSync({
+                type: 'session_changed',
+                payload: {
+                    userId: dbUser.id,
+                }
+            });
+
+            toast.dismiss('auth-toast');
+            if (isNewUser) {
+                toast.success(`Welcome to Schema Weaver! Account created for ${dbUser.email}`);
+            } else {
+                toast.success(`Successfully signed in with GitHub as ${dbUser.full_name || dbUser.github_username || dbUser.email}`);
+            }
+
+        } catch (err: any) {
+            toast.dismiss('auth-toast');
+            logger.error('GitHub login failed:', err);
+            toast.error(err?.message || 'Failed to sign in with GitHub. Please check your GitHub permissions and try again.');
+        } finally {
+            setIsLoggingIn(false);
+        }
+    }, []);
+
+    // â”€â”€ Redirect flow: detect ?code= or ?error= in URL after OAuth provider redirects back â”€â”€
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
         const code = params.get('code');
-        if (code) {
-            // Remove code from URL to prevent re-processing on refresh
+        const state = params.get('state');
+        const error = params.get('error');
+        const errorDescription = params.get('error_description');
+
+        if (error) {
             window.history.replaceState({}, '', window.location.pathname);
-            handleGoogleLogin(code);
+            logger.warn('[Auth] OAuth error callback:', { error, errorDescription });
+            toast.error(errorDescription || `Authentication error: ${error.replace('_', ' ')}`);
+            return;
         }
-    }, [handleGoogleLogin]);
+
+        if (code) {
+            // Remove code & state from URL to prevent re-processing on refresh
+            window.history.replaceState({}, '', window.location.pathname);
+            if (state === 'github_auth' || params.get('provider') === 'github') {
+                toast.loading('Completing GitHub sign in...', { id: 'auth-toast' });
+                handleGithubLogin(code);
+            } else {
+                toast.loading('Completing Google sign in...', { id: 'auth-toast' });
+                handleGoogleLogin(code);
+            }
+        }
+    }, [handleGoogleLogin, handleGithubLogin]);
 
     // Restore session and validate with backend
     useEffect(() => {
@@ -124,7 +203,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 try {
                     const isValid = await validateSession();
                     if (!isValid) {
-                        console.warn('Backend session invalid (likely restarted), logging out');
+                        logger.warn('Backend session invalid (likely restarted), logging out');
                         await signOut();
                         return;
                     }
@@ -134,7 +213,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                         refreshSessionCookie();
                     }
                 } catch (error) {
-                    console.error('Session validation failed:', error);
+                    logger.error('Session validation failed:', error);
                     await signOut();
                 }
             } else {
@@ -144,7 +223,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                     try {
                         const parsedUser = JSON.parse(storedUser);
 
-                        // Migrate — only store userId
+                        // Migrate â€” only store userId
                         setSessionCookie({
                             userId: parsedUser.id,
                         });
@@ -188,7 +267,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     useEffect(() => {
         const handleUnauthorized = () => {
             if (!user) return;
-            console.warn('Received global 401 event, logging out');
+            logger.warn('Received global 401 event, logging out');
             signOut();
         };
 
@@ -218,10 +297,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             } catch (err: any) {
                 if (err?.isUnauthorized) {
                     // Session expired, log out
-                    console.warn('Session expired, logging out');
+                    logger.warn('Session expired, logging out');
                     await signOut();
                 } else {
-                    console.warn('Session refresh failed:', err);
+                    logger.warn('Session refresh failed:', err);
                     // Also refresh local cookie as fallback
                     refreshSessionCookie();
                 }
@@ -229,17 +308,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
     }, [user]);
 
-    // ── Google Login: use redirect flow in production to avoid COOP popup issues ──
-    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-
+    // â”€â”€ Google Login: full page browser redirect flow â”€â”€
     const login = useGoogleLogin({
         flow: 'auth-code',
-        ux_mode: isLocalhost ? 'popup' : 'redirect',
-        redirect_uri: isLocalhost ? undefined : window.location.origin,
-        onSuccess: async (codeResponse) => {
-            // This only fires in popup mode (localhost)
-            await handleGoogleLogin(codeResponse.code);
-        },
+        ux_mode: 'redirect',
+        redirect_uri: window.location.origin,
         onError: () => {
             setIsLoggingIn(false);
             toast.error('Google Login Failed');
@@ -250,32 +323,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         login();
     };
 
+    const signInWithGithub = () => {
+        const clientId = import.meta.env.VITE_GITHUB_CLIENT_ID || '';
+        const redirectUri = window.location.origin;
+        const scope = 'repo user:email read:user';
+        const githubAuthUrl = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scope)}&state=github_auth`;
+        window.location.href = githubAuthUrl;
+    };
+
     const signOut = useCallback(async () => {
         try {
             // Call backend to clear httpOnly session cookie
             await apiLogout();
         } catch (err) {
-            console.warn('Backend logout failed, continuing with local cleanup:', err);
+            logger.warn('Backend logout failed, continuing with local cleanup:', err);
         }
 
         // Clear all React Query cached data (prevents stale data across sessions)
         queryClient.clear();
 
+        // Purge the IndexedDB persisted explorer cache (schema lists, stats)
+        try {
+            await purgeExplorerCacheDb();
+        } catch (err) {
+            logger.warn('Persisted cache purge failed:', err);
+        }
+
         setUser(null);
 
-        // Clear local cookie
-        deleteSessionCookie();
-
-        // Clear legacy localStorage if exists
-        localStorage.removeItem('schema_weaver_user');
-
-        // Clear user-related cached data
-        clearRecentFiles();
-        clearUserPreferences();
-        clearAllFileStates();
-
-        // Clear dashboard panel state (persisted connectionId)
-        localStorage.removeItem('schema-weaver:dashboard-panel');
+        // Comprehensive client-side cleanup: localStorage, sessionStorage, cookies, CSRF
+        clearAllClientData();
 
         // Broadcast logout to other tabs
         broadcastSync({ type: 'logout' });
@@ -286,7 +363,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }, [user]);
 
     return (
-        <AuthContext.Provider value={{ user, loading, isLoggingIn, signInWithGoogle, signOut, refreshSession }}>
+        <AuthContext.Provider value={{ user, loading, isLoggingIn, signInWithGoogle, signInWithGithub, signOut, refreshSession }}>
             {children}
         </AuthContext.Provider>
     );

@@ -3,6 +3,7 @@ import { AlertTriangle, Info, CheckCircle2, XCircle, X, ExternalLink } from 'luc
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { API_BASE_URL } from '@/lib/api';
+import { logger } from '@/lib/logger';
 
 export interface SystemNotification {
     id: string;
@@ -32,7 +33,7 @@ export function NotificationBanner() {
                     }
                 }
             } catch (error) {
-                console.error('Failed to fetch system notifications:', error);
+                logger.error('Failed to fetch system notifications:', error);
             }
         };
 

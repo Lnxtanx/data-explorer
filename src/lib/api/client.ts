@@ -16,11 +16,23 @@ export const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 let _csrfTokenInMemory: string | null = null;
 
 export function getCsrfToken(): string | null {
-    // Prefer in-memory token (always works cross-subdomain)
-    if (_csrfTokenInMemory) return _csrfTokenInMemory;
-    // Fallback: try reading from cookie (works same-origin / localhost)
+    // Read from cookie first if present to match the Cookie header the browser sends
     const match = document.cookie.match(/(?:^|;\s*)_csrf=([^;]*)/);
-    return match ? decodeURIComponent(match[1]) : null;
+    if (match) {
+        const token = decodeURIComponent(match[1]);
+        _csrfTokenInMemory = token;
+        return token;
+    }
+    // Fallback: in-memory token (always works cross-subdomain)
+    return _csrfTokenInMemory;
+}
+
+/**
+ * Clear the in-memory CSRF token (called on logout / session expiry).
+ * The next mutating request will fetch a fresh token via initCsrfToken().
+ */
+export function clearCsrfToken(): void {
+    _csrfTokenInMemory = null;
 }
 
 /**
@@ -106,8 +118,9 @@ export class ApiError extends Error {
         this.status = status;
         this.data = data;
         this.limitReached = (data as { limitReached?: boolean })?.limitReached;
-        this.code = (data as { code?: string })?.code;
-        this.hint = (data as { details?: { hint?: string } })?.details?.hint;
+        const payload = data as { code?: string; error?: string; hint?: string; details?: { hint?: string } } | undefined;
+        this.code = payload?.code ?? payload?.error;
+        this.hint = payload?.hint ?? payload?.details?.hint;
     }
 
     get isUnauthorized(): boolean {

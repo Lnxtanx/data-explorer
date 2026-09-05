@@ -1,10 +1,6 @@
-// =============================================================================
-// Column Header - Professional column header with type badges & FK indicator
-// =============================================================================
-
 import { ArrowUp, ArrowDown, ArrowUpDown, Key, Link2 } from 'lucide-react';
-import { cn } from '@/lib/utils';
-import type { ColumnInfo } from '@/lib/api/data/explorer';
+import { cn, formatShortType } from '@/lib/utils';
+import type { ColumnInfo, ColumnStats } from '@/lib/api/data/explorer';
 
 interface ColumnHeaderProps {
   column: ColumnInfo;
@@ -15,6 +11,8 @@ interface ColumnHeaderProps {
   width?: number;
   onResize?: (width: number) => void;
   onResetWidth?: () => void;
+  /** pg_stats-based profile used for the inline distribution bar + tooltip. */
+  profile?: ColumnStats;
 }
 
 export function ColumnHeader({
@@ -25,7 +23,8 @@ export function ColumnHeader({
   onColumnClick,
   width,
   onResize,
-  onResetWidth
+  onResetWidth,
+  profile
 }: ColumnHeaderProps) {
   const isActive = sortColumn === column.name;
 
@@ -68,16 +67,19 @@ export function ColumnHeader({
     if (onResetWidth) onResetWidth();
   };
 
+  const profileTitle = buildProfileTitle(column, profile);
+
   return (
     <th
       className={cn(
         'text-left px-3 py-1.5 text-[12px] font-medium border-b border-border border-r border-r-border/50',
         'cursor-pointer hover:bg-muted/80 transition-colors group whitespace-nowrap select-none bg-muted',
-        isActive && 'bg-primary/5',
+        isActive && 'bg-muted/90',
         'relative'
       )}
       style={{ width, minWidth: width, maxWidth: width }}
       onClick={handleHeaderClick}
+      title={profileTitle}
     >
       <div className="flex items-center gap-1.5 w-full overflow-hidden">
         {/* PK/FK icon */}
@@ -88,21 +90,17 @@ export function ColumnHeader({
           <Link2 className="w-3 h-3 text-blue-500 dark:text-blue-400 flex-shrink-0" />
         )}
 
-        {/* Column name */}
-        <span className={cn(
-          'truncate min-w-0',
-          column.isPrimaryKey && 'text-primary font-semibold',
-          column.isForeignKey && !column.isPrimaryKey && 'text-blue-600 dark:text-blue-400'
-        )}>
+        {/* Column name - Always prioritized, never squeezed, uniform foreground font */}
+        <span className="font-medium text-foreground whitespace-nowrap shrink-0">
           {column.name}
         </span>
 
-        {/* Type badge */}
+        {/* Type badge - secondary subtle indicator that yields space */}
         <span 
-          className="text-[10px] text-muted-foreground/50 font-normal font-mono truncate min-w-0"
-          style={{ flexShrink: 9999 }}
+          className="text-[10px] text-muted-foreground/40 font-normal font-mono truncate min-w-0 flex-shrink ml-0.5"
+          title={`${column.type}${column.nullable ? ' (nullable)' : ''}`}
         >
-          {column.type}{column.nullable ? '?' : ''}
+          {formatShortType(column.type)}{column.nullable ? '?' : ''}
         </span>
 
         {/* FK reference tooltip-style hint */}
@@ -139,4 +137,22 @@ export function ColumnHeader({
       />
     </th>
   );
+}
+
+function buildProfileTitle(column: ColumnInfo, profile?: ColumnStats): string | undefined {
+  if (!profile || profile.nullPercent == null) return undefined;
+  const parts = [
+    `${column.name}: ${(100 - profile.nullPercent).toFixed(1)}% filled, ${profile.distinctCount != null ? `${profile.distinctCount.toLocaleString()} distinct` : ''}`,
+  ];
+  if (profile.minValue !== null && profile.minValue !== undefined) {
+    parts.push(`Range ${String(profile.minValue)} – ${String(profile.maxValue)}`);
+  }
+  if (profile.topValues && profile.topValues.length > 0) {
+    const top = profile.topValues.slice(0, 3)
+      .map((tv) => `${tv.value === null ? 'NULL' : String(tv.value)} (${tv.percent.toFixed(1)}%)`)
+      .join(', ');
+    parts.push(`Top: ${top}`);
+  }
+  if (profile.approx) parts.push('approximate values from Postgres statistics');
+  return parts.join('\n');
 }

@@ -192,6 +192,15 @@ export function useAIAgent(): UseAIAgentResult {
                             // Drop any artifact_start placeholders that never got a
                             // matching artifact event (tool failed / ran out of iterations).
                             artifacts:   prev.artifacts.filter(a => !a.loading),
+                            // Granular usage data
+                            granularUsage: evt.usage ? {
+                                cacheCreationTokens: evt.usage.cacheCreationTokens,
+                                cacheReadTokens: evt.usage.cacheReadTokens,
+                                cacheHitRate: evt.usage.cacheReadTokens && evt.usage.outputTokens
+                                    ? (evt.usage.cacheReadTokens / (evt.usage.outputTokens + evt.usage.cacheReadTokens)) * 100
+                                    : undefined,
+                                ...(evt.usage.contextComponents || {}),
+                            } : prev.granularUsage,
                         }));
                         return true; // stop stream
                     }

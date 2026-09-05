@@ -38,19 +38,19 @@ export function FilterBar({ columns, filters, onFiltersChange }: FilterBarProps)
   const inputRef = useRef<HTMLInputElement>(null);
 
   const availableOperators = {
-    text: ['eq', 'neq', 'like'],
-    number: ['eq', 'neq', 'gt', 'gte', 'lt', 'lte'],
-    boolean: ['eq', 'neq'],
-    date: ['eq', 'neq', 'gt', 'gte', 'lt', 'lte'],
-    general: ['eq', 'neq', 'in', 'is_null', 'not_null'],
+    text: ['like', 'not_like', 'starts_with', 'ends_with', 'eq', 'neq', 'is_empty', 'is_null', 'not_null'],
+    number: ['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'is_null', 'not_null'],
+    boolean: ['eq', 'neq', 'is_null', 'not_null'],
+    date: ['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'is_null', 'not_null'],
+    general: ['eq', 'neq', 'like', 'in', 'is_null', 'not_null'],
   };
 
   const getColumnType = (column: ColumnInfo) => {
     const type = column.type.toLowerCase();
-    if (type.includes('varchar') || type.includes('text')) return 'text';
-    if (type.includes('int') || type.includes('numeric') || type.includes('decimal') || type.includes('float') || type.includes('double')) return 'number';
+    if (type.includes('varchar') || type.includes('text') || type.includes('char')) return 'text';
+    if (type.includes('int') || type.includes('numeric') || type.includes('decimal') || type.includes('float') || type.includes('double') || type.includes('serial')) return 'number';
     if (type.includes('bool')) return 'boolean';
-    if (type.includes('date') || type.includes('time')) return 'date';
+    if (type.includes('date') || type.includes('time') || type.includes('timestamp')) return 'date';
     return 'general';
   };
 
@@ -62,7 +62,7 @@ export function FilterBar({ columns, filters, onFiltersChange }: FilterBarProps)
     if (tempFilter.operator === 'in') {
       // Split by comma for IN operator
       value = tempFilter.value.split(',').map(v => v.trim()).filter(v => v);
-    } else if (tempFilter.operator === 'is_null' || tempFilter.operator === 'not_null') {
+    } else if (tempFilter.operator === 'is_null' || tempFilter.operator === 'not_null' || tempFilter.operator === 'is_empty') {
       value = undefined; // These operators don't need a value
     } else {
       // For number operators, try to convert to number
@@ -84,7 +84,7 @@ export function FilterBar({ columns, filters, onFiltersChange }: FilterBarProps)
     onFiltersChange([...filters, newFilter]);
     setTempFilter({
       column: '',
-      operator: 'eq',
+      operator: 'like',
       value: '',
     });
     setIsOpen(false);
@@ -184,24 +184,28 @@ export function FilterBar({ columns, filters, onFiltersChange }: FilterBarProps)
                   <SelectContent>
                     {getFilteredOperators().map((op) => (
                       <SelectItem key={op} value={op} className="text-sm">
-                        {op === 'eq' && '='}
-                        {op === 'neq' && '≠'}
-                        {op === 'gt' && '>'}
-                        {op === 'gte' && '≥'}
-                        {op === 'lt' && '<'}
-                        {op === 'lte' && '≤'}
+                        {op === 'eq' && '= (Equals)'}
+                        {op === 'neq' && '≠ (Not equals)'}
+                        {op === 'gt' && '> (Greater than)'}
+                        {op === 'gte' && '≥ (Greater or equal)'}
+                        {op === 'lt' && '< (Less than)'}
+                        {op === 'lte' && '≤ (Less or equal)'}
                         {op === 'like' && '~ (Contains)'}
+                        {op === 'not_like' && '!~ (Does not contain)'}
+                        {op === 'starts_with' && '^= (Starts with)'}
+                        {op === 'ends_with' && '$= (Ends with)'}
+                        {op === 'is_empty' && 'Is empty (blank or NULL)'}
                         {op === 'is_null' && 'IS NULL'}
                         {op === 'not_null' && 'NOT NULL'}
                         {op === 'in' && 'IN (Comma separated)'}
-                        {!['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'like', 'is_null', 'not_null', 'in'].includes(op) && op}
+                        {!['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'like', 'not_like', 'starts_with', 'ends_with', 'is_empty', 'is_null', 'not_null', 'in'].includes(op) && op}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
 
-              {(tempFilter.operator !== 'is_null' && tempFilter.operator !== 'not_null') && (
+              {(tempFilter.operator !== 'is_null' && tempFilter.operator !== 'not_null' && tempFilter.operator !== 'is_empty') && (
                 <div className="space-y-2">
                   <label className="text-xs font-medium text-muted-foreground">
                     Value {tempFilter.operator === 'in' && '(comma separated)'}

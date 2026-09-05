@@ -14,6 +14,9 @@ export interface User {
     email: string;
     full_name: string;
     avatar_url: string;
+    github_id?: string;
+    github_username?: string;
+    auth_provider?: string;
     created_at: string;
     updated_at: string;
 }
@@ -58,6 +61,7 @@ export interface AIQuotaStatus {
     concurrent_slots: number;
     concurrent_limit: number;
     allowed_models: string[];
+    allowed_modes?: string[];
     monthly_pct: number;
     weekly_reset_at: string;
 }
@@ -81,6 +85,13 @@ export interface AIModelInfo {
  */
 export async function loginWithGoogle(code: string, redirectUri?: string): Promise<AuthResponse> {
     return post<AuthResponse>('/api/auth/google', { code, redirect_uri: redirectUri });
+}
+
+/**
+ * Authenticate with GitHub OAuth code
+ */
+export async function loginWithGithub(code: string, redirectUri?: string): Promise<AuthResponse> {
+    return post<AuthResponse>('/api/auth/github', { code, redirect_uri: redirectUri });
 }
 
 /**

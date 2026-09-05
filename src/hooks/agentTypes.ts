@@ -300,6 +300,23 @@ export interface AgentState {
     iterations: number;
     model: string | null;
     contextMeta: ContextMeta | null;
+    // Granular token tracking
+    granularUsage?: GranularUsage;
+}
+
+export interface GranularUsage {
+    userMessageTokens?: number;
+    systemPromptTokens?: number;
+    baseSystemPromptTokens?: number;
+    connectionContextTokens?: number;
+    memoryContextTokens?: number;
+    toolDefinitionsTokens?: number;
+    conversationHistoryTokens?: number;
+    assistantHistoryTokens?: number;
+    toolResultsTokens?: number;
+    cacheCreationTokens?: number;
+    cacheReadTokens?: number;
+    cacheHitRate?: number;
 }
 
 export interface AgentRequest {
@@ -312,6 +329,10 @@ export interface AgentRequest {
     databaseName?: string;  // Name of the database from connection
     history?: Array<{ role: string; content: string }>;
     synthesisModel?: string;
+    agentMode?: 'flash' | 'deep';
+    thinking?: boolean;
+    projectId?: string | null;
+    fileIds?: string[];
 }
 
 export interface UseAIAgentResult extends AgentState {
@@ -331,7 +352,32 @@ export interface ArtifactStartEvent { toolCallId: string; type: string; title: s
 export interface ArtifactEvent   { type: string; sql?: string; rows?: Record<string, unknown>[]; columns?: Array<{ name: string }>; title?: string; streaming?: boolean }
 export interface ArtifactRowsEvent { rows: Record<string, unknown>[]; done: boolean }
 export interface DeltaEvent      { text: string; chat_id?: string }
-export interface DoneEvent       { usage?: { output_tokens?: number; outputTokens?: number; synthesisModel?: string; creditsUsed?: number; [k: string]: unknown }; iterations?: number; toolsUsed?: string[]; chat_id?: string }
+export interface DoneEvent       { 
+    usage?: { 
+        output_tokens?: number; 
+        outputTokens?: number; 
+        synthesisModel?: string; 
+        creditsUsed?: number;
+        // Granular token tracking
+        cacheCreationTokens?: number;
+        cacheReadTokens?: number;
+        contextComponents?: {
+            userMessageTokens?: number;
+            systemPromptTokens?: number;
+            baseSystemPromptTokens?: number;
+            connectionContextTokens?: number;
+            memoryContextTokens?: number;
+            toolDefinitionsTokens?: number;
+            conversationHistoryTokens?: number;
+            assistantHistoryTokens?: number;
+            toolResultsTokens?: number;
+        };
+        [k: string]: unknown 
+    }; 
+    iterations?: number; 
+    toolsUsed?: string[]; 
+    chat_id?: string 
+}
 export interface ErrorEvent      { message: string; code?: string }
 export interface ChatIdEvent     { chat_id: string }
 export interface PlanEvent       { steps: Array<{ id: number; goal: string; tool: string | null; status: string }> }

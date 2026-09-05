@@ -109,3 +109,37 @@ function manageLRUCache(newKey: string) {
     localStorage.setItem(REGISTRY_KEY, JSON.stringify(registry));
   } catch {}
 }
+
+const HIDDEN_COLS_PREFIX = 'sw-data-explorer-hidden-cols-';
+
+function getHiddenColsKey(connectionId: string, schemaName: string, tableName: string) {
+  return `${HIDDEN_COLS_PREFIX}${connectionId}-${schemaName}-${tableName}`;
+}
+
+export function loadHiddenColumns(connectionId: string, schemaName: string, tableName: string): Set<string> {
+  if (typeof window === 'undefined' || !connectionId || !tableName) return new Set();
+  const key = getHiddenColsKey(connectionId, schemaName, tableName);
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return new Set();
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      return new Set(parsed.filter((x): x is string => typeof x === 'string'));
+    }
+    return new Set();
+  } catch {
+    return new Set();
+  }
+}
+
+export function saveHiddenColumns(connectionId: string, schemaName: string, tableName: string, hiddenColumns: Set<string>): void {
+  if (typeof window === 'undefined' || !connectionId || !tableName) return;
+  const key = getHiddenColsKey(connectionId, schemaName, tableName);
+  try {
+    if (hiddenColumns.size === 0) {
+      localStorage.removeItem(key);
+    } else {
+      localStorage.setItem(key, JSON.stringify(Array.from(hiddenColumns)));
+    }
+  } catch {}
+}

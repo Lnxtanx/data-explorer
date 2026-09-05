@@ -3,17 +3,24 @@
 // =============================================================================
 
 import { memo, useState } from 'react';
-import { Table2, AlertTriangle, Search, X, Key, Link2 } from 'lucide-react';
+import { Table2, AlertTriangle, Search, X, Key, Link2, RefreshCw } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { TableInfo } from '@/lib/api/data/explorer';
+import {
+  getExplorerErrorMessage,
+  getExplorerErrorHint,
+} from '@/lib/api/data/explorer/errors';
 
 interface TableSidebarProps {
   tables: TableInfo[];
   selectedTable: TableInfo | null;
   onTableSelect: (table: TableInfo) => void;
+  onPrefetchTable?: (table: TableInfo) => void;
+  onRetry?: () => void;
   isLoading: boolean;
   error: Error | null;
   hasConnection: boolean;
@@ -24,6 +31,8 @@ export const TableSidebar = memo(function TableSidebar({
   tables,
   selectedTable,
   onTableSelect,
+  onPrefetchTable,
+  onRetry,
   isLoading,
   error,
   hasConnection,
@@ -50,11 +59,32 @@ export const TableSidebar = memo(function TableSidebar({
   }
 
   if (error) {
+    const errorHint = getExplorerErrorHint(error);
     return (
-      <div className="flex-1 flex flex-col items-center justify-center p-4 text-center">
-        <AlertTriangle className="w-6 h-6 text-destructive mb-2" />
-        <p className="text-sm text-muted-foreground">Failed to load tables</p>
-        <p className="text-xs text-muted-foreground/70 mt-1">{error.message}</p>
+      <div className="flex-1 flex flex-col items-center justify-center p-4 text-center space-y-2">
+        <AlertTriangle className="w-6 h-6 text-destructive mb-1" />
+        <div>
+          <p className="text-sm text-foreground font-medium">Failed to load tables</p>
+          <p className="text-xs text-muted-foreground mt-1 max-w-[200px] leading-relaxed">
+            {getExplorerErrorMessage(error)}
+          </p>
+        </div>
+        {errorHint && (
+          <p className="text-[11px] text-muted-foreground/70 mt-1 bg-muted/50 border border-border rounded-lg px-2.5 py-1.5 leading-normal">
+            {errorHint}
+          </p>
+        )}
+        {onRetry && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onRetry}
+            className="h-7 text-xs px-3 gap-1.5 mt-2 rounded-lg font-medium shadow-xs"
+          >
+            <RefreshCw className="w-3 h-3" />
+            <span>Try again</span>
+          </Button>
+        )}
       </div>
     );
   }
@@ -78,34 +108,31 @@ export const TableSidebar = memo(function TableSidebar({
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      {/* Search + count */}
+      {/* Search + inline count badge */}
       <div className="px-2 py-1.5 border-b border-border">
-        <div className="relative">
-          <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+        <div className="relative flex items-center">
+          <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
           <Input
             placeholder="Filter tables..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-7 pr-7 h-7 text-xs bg-transparent border-0 shadow-none focus-visible:ring-0"
+            className="pl-7 pr-16 h-7 text-xs bg-transparent border-0 shadow-none focus-visible:ring-0"
           />
-          {searchTerm && (
-            <button
-              onClick={() => setSearchTerm('')}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          )}
+          <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+            {searchTerm && (
+              <button
+                onClick={() => setSearchTerm('')}
+                className="text-muted-foreground hover:text-foreground mr-0.5"
+                title="Clear filter"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+            <span className="text-[10px] text-muted-foreground/70 font-mono tabular-nums bg-muted/60 px-1.5 py-0.5 rounded border border-border/40 select-none">
+              {searchTerm ? `${filteredTables.length}/${tables.length}` : tables.length}
+            </span>
+          </div>
         </div>
-      </div>
-
-      {/* Table count bar */}
-      <div className="px-3 py-1 text-[11px] text-muted-foreground border-b border-border/50 bg-muted/20">
-        {searchTerm ? (
-          <span>{filteredTables.length} of {tables.length} tables</span>
-        ) : (
-          <span>{tables.length} tables</span>
-        )}
       </div>
 
       {filteredTables.length === 0 && searchTerm ? (
@@ -124,6 +151,8 @@ export const TableSidebar = memo(function TableSidebar({
                 <button
                   key={`${table.schema}.${table.name}`}
                   onClick={() => onTableSelect(table)}
+                  onMouseEnter={() => onPrefetchTable?.(table)}
+                  onFocus={() => onPrefetchTable?.(table)}
                   title={`${table.name} · ${table.sizeFormatted || 'unknown size'} · ~${formatNumber(table.estimatedRows)} rows${table.hasPrimaryKey ? '' : ' · No PK'}`}
                   className={cn(
                     'w-full text-left px-3 py-1.5 flex items-center gap-2 text-[13px] transition-colors',

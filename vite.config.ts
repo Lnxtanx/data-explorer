@@ -14,7 +14,7 @@ export default defineConfig(({ mode }) => {
       VitePWA({
         registerType: 'autoUpdate',
         devOptions: {
-          enabled: true,
+          enabled: false,
         },
         workbox: {
           maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
@@ -40,12 +40,26 @@ export default defineConfig(({ mode }) => {
         }
       })
     ],
+    optimizeDeps: {
+      include: [
+        'react',
+        'react-dom',
+        'react-router-dom',
+        '@tanstack/react-query',
+        'lucide-react',
+        'clsx',
+        'tailwind-merge',
+        'sonner',
+        'next-themes',
+      ],
+    },
     resolve: {
       alias: {
         "@": path.resolve(__dirname, "./src"),
       },
     },
     server: {
+      host: true,
       port: 8000,
       proxy: {
         "/api": {

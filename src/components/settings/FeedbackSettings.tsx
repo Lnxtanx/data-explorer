@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
+import { logger } from '@/lib/logger';
 // uploadFile removed - logic moved to backend
 import { submitFeedback } from '@/lib/api';
 
@@ -94,7 +95,7 @@ export function FeedbackSettings() {
             setIsSubmitted(true);
             toast.success('Feedback submitted successfully');
         } catch (error: any) {
-            console.error('[Feedback] Submission failed:', error);
+            logger.error('[Feedback] Submission failed:', error);
             toast.error(error.message || 'Failed to submit feedback');
         } finally {
             setIsSubmitting(false);

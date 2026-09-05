@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { InvitationInfo } from '@/lib/api/projects/collaboration';
-import { User, Layers3, Users, Mail, ShieldCheck, LogIn } from 'lucide-react';
+import { User, Layers3, Users, Mail, ShieldCheck, LogIn, Clock, AlertTriangle } from 'lucide-react';
 
 interface InvitationReviewModalProps {
     isOpen: boolean;
@@ -19,9 +19,13 @@ interface InvitationReviewModalProps {
     onAccept: () => void;
     onDecline: () => void;
     isAuthenticated: boolean;
+    currentUserEmail?: string | null;
     onSignIn: () => void;
     isProcessing: boolean;
 }
+
+const normalizeEmail = (value: string | null | undefined) =>
+    (value || '').trim().toLowerCase();
 
 export function InvitationReviewModal({
     isOpen,
@@ -30,6 +34,7 @@ export function InvitationReviewModal({
     onAccept,
     onDecline,
     isAuthenticated,
+    currentUserEmail,
     onSignIn,
     isProcessing,
 }: InvitationReviewModalProps) {
@@ -37,6 +42,15 @@ export function InvitationReviewModal({
 
     const isTeam = invitation.type === 'team';
     const entityName = isTeam ? invitation.teamName : invitation.projectName;
+
+    const isExpired = invitation.expired === true;
+    const isWrongAccount =
+        !isExpired &&
+        isAuthenticated &&
+        !!currentUserEmail &&
+        normalizeEmail(currentUserEmail) !== normalizeEmail(invitation.email);
+
+    const canAccept = isAuthenticated && !isExpired && !isWrongAccount;
 
     return (
         <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -71,28 +85,66 @@ export function InvitationReviewModal({
                             <span className="ml-auto text-muted-foreground capitalize">{invitation.role}</span>
                         </div>
                         <div className="flex items-center gap-3 text-sm">
-                            <Mail className="w-4 h-4 text-muted-foreground" />
+                            <Mail className={`w-4 h-4 ${isWrongAccount ? 'text-amber-600' : 'text-muted-foreground'}`} />
                             <span className="font-medium text-foreground">For Email:</span>
-                            <span className="ml-auto text-muted-foreground">{invitation.email}</span>
+                            <span className={`ml-auto ${isWrongAccount ? 'text-amber-700 font-medium' : 'text-muted-foreground'}`}>{invitation.email}</span>
                         </div>
                     </div>
 
-                    {!isAuthenticated && (
-                        <div className="p-3 bg-amber-50 border border-amber-100 rounded-md text-sm text-amber-800 flex gap-3">
+                    {isExpired && (
+                        <div className="p-3 bg-red-50 dark:bg-red-950/40 border border-red-100 dark:border-red-900/50 rounded-md text-sm text-red-800 dark:text-red-300 flex gap-3">
+                            <Clock className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                            <p>This invitation has expired. Ask the person who invited you to send a new one.</p>
+                        </div>
+                    )}
+
+                    {!isExpired && isWrongAccount && (
+                        <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-100 dark:border-amber-900/50 rounded-md text-sm text-amber-800 dark:text-amber-300 flex gap-3">
+                            <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                            <p>
+                                You're signed in as <strong>{currentUserEmail}</strong>, but this invitation was sent to{' '}
+                                <strong>{invitation.email}</strong>. Sign out and sign in with that address to accept it.
+                            </p>
+                        </div>
+                    )}
+
+                    {!isExpired && !isAuthenticated && (
+                        <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-100 dark:border-amber-900/50 rounded-md text-sm text-amber-800 dark:text-amber-300 flex gap-3">
                             <LogIn className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                            <p>You need to sign in with your Google account to accept this invitation.</p>
+                            <p>
+                                Sign in with <strong>{invitation.email}</strong> to accept this invitation.
+                                Don't have an account? Signing up with that address will use your reserved spot.
+                            </p>
                         </div>
                     )}
                 </div>
 
                 <DialogFooter className="flex-col sm:flex-row gap-2">
-                    {isAuthenticated ? (
+                    {canAccept ? (
                         <>
                             <Button variant="ghost" onClick={onDecline} disabled={isProcessing}>
                                 Decline
                             </Button>
                             <Button onClick={onAccept} disabled={isProcessing} className="flex-1">
                                 {isProcessing ? 'Joining...' : 'Accept & Join'}
+                            </Button>
+                        </>
+                    ) : isExpired ? (
+                        <>
+                            <Button variant="ghost" onClick={onClose} disabled={isProcessing}>
+                                Close
+                            </Button>
+                            <Button variant="destructive" disabled className="flex-1 opacity-70">
+                                Expired
+                            </Button>
+                        </>
+                    ) : isWrongAccount ? (
+                        <>
+                            <Button variant="ghost" onClick={onDecline} disabled={isProcessing}>
+                                Decline
+                            </Button>
+                            <Button disabled className="flex-1 opacity-70">
+                                Wrong Account
                             </Button>
                         </>
                     ) : (

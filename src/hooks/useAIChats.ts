@@ -22,12 +22,15 @@ import {
     listChats,
     getChatMessages,
     deleteChat,
+    updateChat,
     runQuery,
     saveQuery,
     checkAIHealth,
     listArtifacts,
     type ListChatsResponse,
     type ChatMessagesResponse,
+    type UpdateChatParams,
+    type UpdateChatResponse,
     type QueryRunResult,
     type SavedQuery,
     type AIHealthResponse,
@@ -87,6 +90,26 @@ export function useAIChatMessages(
 }
 
 // =============================================================================
+// useUpdateAIChat
+// Mutation to update chat properties (title, project).
+// =============================================================================
+
+export function useUpdateAIChat() {
+    const queryClient = useQueryClient();
+
+    return useMutation<UpdateChatResponse, Error, { chatId: string; updates: UpdateChatParams }>({
+        mutationFn: ({ chatId, updates }) => updateChat(chatId, updates),
+        onSuccess: (_data, variables) => {
+            queryClient.invalidateQueries({ queryKey: ['ai', 'chats'] });
+            queryClient.invalidateQueries({ queryKey: ['ai', 'projects'] });
+            if (variables.chatId) {
+                queryClient.invalidateQueries({ queryKey: aiQueryKeys.messages(variables.chatId) });
+            }
+        },
+    });
+}
+
+// =============================================================================
 // useDeleteAIChat
 // Mutation to soft-delete a chat. Invalidates the chat list on success.
 // =============================================================================
@@ -97,8 +120,9 @@ export function useDeleteAIChat() {
     return useMutation<{ success: boolean }, Error, string>({
         mutationFn: (chatId: string) => deleteChat(chatId),
         onSuccess: () => {
-            // Invalidate all chat list variants
+            // Invalidate all chat list variants and project queries
             queryClient.invalidateQueries({ queryKey: ['ai', 'chats'] });
+            queryClient.invalidateQueries({ queryKey: ['ai', 'projects'] });
         },
     });
 }

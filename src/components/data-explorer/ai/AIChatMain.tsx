@@ -1,10 +1,11 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { ChevronRight, FolderKanban } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAIStream } from '@/hooks/useAIStream';
 import { useAIAgent } from '@/hooks/useAIAgent';
 import { useAIChatMessages } from '@/hooks/useAIChats';
-import { useAssignChatToProject, useProjects } from '@/hooks/useProjects';
+import { useProjects } from '@/hooks/useProjects';
 import { useTableList } from '@/lib/api/data/explorer';
 import { useConnections } from '@/lib/api/data/connection';
 import { useDatasetCache } from '@/hooks/useDatasetCache';
@@ -16,10 +17,11 @@ import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/componen
 import { ChatMessage } from './chat/ChatMessage';
 import { ChatInput } from './chat/ChatInput';
 import { ContextWindowBar } from './chat/ContextWindowBar';
-import { DEFAULT_MODEL_ID } from './models/modelConfig';
+import type { AgentMode } from './models/ModeSelector';
 import type { AgentArtifact } from '@/hooks/useAIAgent';
-import type { AIMessage } from '@/lib/api/ai';
+import { uploadFilesForAI, type AIMessage } from '@/lib/api/ai';
 import type { LocalMessage } from './chat/types';
+import { logger } from '@/lib/logger';
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -36,6 +38,33 @@ interface AIChatMainProps {
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+
+const MAX_FILE_SIZE_BYTES = 25 * 1024 * 1024; // 25 MB — must match backend
+const MAX_FILE_COUNT = 10;
+const ALLOWED_FILE_EXTENSIONS = new Set([
+    '.pdf', '.docx', '.xlsx', '.xls', '.csv', '.tsv', '.pptx',
+    '.txt', '.md', '.json', '.sql', '.py', '.ts', '.js', '.tsx', '.jsx',
+    '.yaml', '.yml', '.xml', '.html', '.css', '.sh', '.env', '.log',
+    '.toml', '.rs', '.go', '.java', '.dockerfile',
+]);
+
+function validateFiles(files: File[]): { valid: File[]; errors: string[] } {
+    const valid: File[] = [];
+    const errors: string[] = [];
+    for (const f of files) {
+        const ext = '.' + f.name.split('.').pop()?.toLowerCase();
+        if (!ALLOWED_FILE_EXTENSIONS.has(ext)) {
+            errors.push(`${f.name}: unsupported file type (${ext})`);
+            continue;
+        }
+        if (f.size > MAX_FILE_SIZE_BYTES) {
+            errors.push(`${f.name}: exceeds 25 MB limit (${(f.size / 1024 / 1024).toFixed(1)} MB)`);
+            continue;
+        }
+        valid.push(f);
+    }
+    return { valid, errors };
+}
 
 const colorClass: Record<string, string> = {
     slate: 'bg-slate-500', blue: 'bg-blue-500', indigo: 'bg-indigo-500',
@@ -88,6 +117,10 @@ function toLocal(m: AIMessage): LocalMessage {
         artifacts: artifacts.length > 0 ? artifacts : undefined,
         toolSteps,
         tokenCount: m.token_count,
+        userId: m.user_id ?? null,
+        isMine: m.isMine ?? true,
+        authorName: m.authorName ?? null,
+        authorEmail: m.authorEmail ?? null,
     };
 }
 
@@ -104,15 +137,18 @@ export function AIChatMain({
     const [localMessages, setLocalMessages] = useState<LocalMessage[]>([]);
     const [copiedId, setCopiedId] = useState<string | null>(null);
     const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
+    const [uploadError, setUploadError] = useState<string | null>(null);
+    const [isUploading, setIsUploading] = useState(false);
     const [mentionQuery, setMentionQuery] = useState<string | null>(null);
     const [expandedArtifact, setExpandedArtifact] = useState<AgentArtifact | null>(null);
     const [dashboardArtifacts, setDashboardArtifacts] = useState<AgentArtifact[]>([]);
     const [showDashboard, setShowDashboard] = useState(false);
     const [showWorkspace, setShowWorkspace] = useState(false);
     const [workspaceRefreshCount, setWorkspaceRefreshCount] = useState(0);
-    const [selectedModel, setSelectedModel] = useState<string>(() => {
-        try { return localStorage.getItem('resona_model') ?? DEFAULT_MODEL_ID; } catch { return DEFAULT_MODEL_ID; }
-    });
+    // Data Explorer mode + thinking — per-chat, persisted server-side on the
+    // chat_sessions row (restored below when reopening a chat). No localStorage.
+    const [mode, setMode] = useState<AgentMode>('flash');
+    const [thinking, setThinking] = useState(false);
 
     // ── Refs ─────────────────────────────────────────────────────────────────
     const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -120,8 +156,27 @@ export function AIChatMain({
     const fileInputRef = useRef<HTMLInputElement>(null);
     const justCreatedChatRef = useRef(false);
     const prevChatIdRef = useRef<string | null | undefined>(undefined);
+    const uploadErrorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    // Single auto-dismiss helper for uploadError (#22): any new error clears a
+    // pending timer so a stale validation error can't wipe out a later error,
+    // and every error path auto-dismisses after UPLOAD_ERROR_DISMISS_MS.
+    const showUploadError = useCallback((message: string | null) => {
+        if (uploadErrorTimerRef.current) {
+            clearTimeout(uploadErrorTimerRef.current);
+            uploadErrorTimerRef.current = null;
+        }
+        setUploadError(message);
+        if (message) {
+            uploadErrorTimerRef.current = setTimeout(() => {
+                setUploadError(null);
+                uploadErrorTimerRef.current = null;
+            }, 6000);
+        }
+    }, []);
 
     // ── Hooks ────────────────────────────────────────────────────────────────
+    const queryClient = useQueryClient();
     const { data: tableListData } = useTableList(connectionId ?? null, 'public');
     const availableTables = tableListData?.tables?.map(t => t.name) ?? [];
     const agentMode = !!connectionId;
@@ -145,7 +200,6 @@ export function AIChatMain({
     const { data: chatHistory } = useAIChatMessages(chatId ?? '', { enabled: !!chatId });
     const { data: projects } = useProjects();
     const { data: connections } = useConnections();
-    const assignChat = useAssignChatToProject();
 
     const activeProjectId = projectId || chatHistory?.chat?.project_id;
     const activeProject = activeProjectId ? projects?.find(p => p.id === activeProjectId) : null;
@@ -198,6 +252,8 @@ export function AIChatMain({
                 ...prev.filter(m => !m.isStreaming),
                 { id: `assistant-${Date.now()}`, role: 'assistant', content: streamedText, sql: sqlArtifacts[0]?.sql },
             ]);
+            queryClient.invalidateQueries({ queryKey: ['ai', 'chats'] });
+            queryClient.invalidateQueries({ queryKey: ['ai', 'projects'] });
         }
     }, [streamStatus]);
 
@@ -218,6 +274,9 @@ export function AIChatMain({
             }
             // Refresh workspace panel so any files written during this run appear.
             setWorkspaceRefreshCount(c => c + 1);
+            // Refresh sidebar chat list & project queries so updated count, title, and timestamp appear immediately.
+            queryClient.invalidateQueries({ queryKey: ['ai', 'chats'] });
+            queryClient.invalidateQueries({ queryKey: ['ai', 'projects'] });
         }
     }, [agentStatus]);
 
@@ -230,7 +289,6 @@ export function AIChatMain({
         if (activeChatId && !chatId) {
             justCreatedChatRef.current = true;
             onChatCreated?.(activeChatId);
-            if (projectId) assignChat.mutate({ projectId, chatId: activeChatId });
         }
     }, [activeChatId]);
 
@@ -242,10 +300,32 @@ export function AIChatMain({
         setTimeout(() => setCopiedId(null), 2000);
     };
 
-    const handleModelChange = (m: string) => {
-        setSelectedModel(m);
-        try { localStorage.setItem('resona_model', m); } catch { /* ignore */ }
+    const handleModeChange = (m: AgentMode) => {
+        // Mode persists on the chat row via upsertChat on the next send.
+        setMode(m);
+        if (m === 'deep') {
+            setThinking(true);
+        } else {
+            setThinking(false);
+        }
     };
+
+    const handleThinkingChange = (t: boolean) => {
+        setThinking(t);
+    };
+
+    // Restore per-chat mode + thinking when reopening an existing thread.
+    useEffect(() => {
+        const storedMode = chatHistory?.chat?.agent_mode;
+        if (storedMode === 'flash' || storedMode === 'deep') {
+            setMode(storedMode);
+        }
+        if (chatHistory?.chat?.thinking_enabled != null) {
+            setThinking(!!chatHistory.chat.thinking_enabled);
+        } else if (storedMode === 'deep') {
+            setThinking(true);
+        }
+    }, [chatHistory?.chat?.agent_mode, chatHistory?.chat?.thinking_enabled]);
 
     const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
         const val = e.target.value;
@@ -314,25 +394,47 @@ export function AIChatMain({
         }
     };
 
-    const handleQuickSend = useCallback(async (message: string) => {
-        if (!message.trim() || isStreaming) return;
+    const handleQuickSend = useCallback(async (message: string, files?: File[]) => {
+        if (!message.trim() && !(files && files.length > 0)) return;
+        if (isStreaming) return;
         const effectiveSchema = aiContextSchema || 'public';
         const effectiveTables = aiContextTable ? [aiContextTable] : [];
+        const filesToUpload = files ? [...files] : [];
+        const userMessageId = `user-${Date.now()}`;
         setLocalMessages(prev => [...prev,
-            { id: `user-${Date.now()}`, role: 'user', content: message },
+            { id: userMessageId, role: 'user', content: message, files: filesToUpload.length > 0 ? ['uploading…'] : [], },
             { id: 'streaming', role: 'assistant', content: '', isStreaming: true, isAgent: agentMode },
         ]);
+        let fileIds: string[] = [];
+        let uploadedFileNames: string[] = [];
+        if (filesToUpload.length > 0) {
+            try {
+                const uploadRes = await uploadFilesForAI(filesToUpload, { chatId: chatId ?? undefined });
+                if (uploadRes.ok && uploadRes.files && uploadRes.files.length > 0) {
+                    fileIds = uploadRes.files.map(f => f.file_id);
+                    uploadedFileNames = uploadRes.files.map(f => f.filename);
+                }
+            } catch (err) {
+                logger.warn('[AIChatMain] QuickSend failed to upload files:', err);
+            } finally {
+                setLocalMessages(prev => prev.map(m =>
+                    m.id === userMessageId
+                        ? { ...m, files: uploadedFileNames.length > 0 ? uploadedFileNames : undefined }
+                        : m
+                ));
+            }
+        }
         const history = localMessages.filter(m => !m.isStreaming).map(m => ({ role: m.role, content: m.content }));
         if (agentMode && connectionId) {
-            await sendAgent({ connectionId, message, chatId: chatId ?? undefined, schemaName: effectiveSchema, databaseName: dbName, history, mentionedTables: effectiveTables, synthesisModel: selectedModel });
+            await sendAgent({ connectionId, message, chatId: chatId ?? undefined, schemaName: effectiveSchema, databaseName: dbName, history, mentionedTables: effectiveTables, agentMode: mode, thinking, projectId, fileIds });
         }
-    }, [isStreaming, localMessages, connectionId, chatId, aiContextTable, aiContextSchema, agentMode, sendAgent, selectedModel, dbName]);
+    }, [isStreaming, localMessages, connectionId, chatId, aiContextTable, aiContextSchema, agentMode, sendAgent, mode, thinking, dbName, projectId]);
 
     const handleSend = useCallback(async () => {
         if ((!input.trim() && attachedFiles.length === 0) || isStreaming) return;
         // Block send if quota is exhausted (double-check, UI already disables button)
         if (quotaError) {
-            console.warn('[AIChatMain] Send blocked: quota exhausted');
+            logger.warn('[AIChatMain] Send blocked: quota exhausted');
             return;
         }
         const messageText = input.trim();
@@ -342,22 +444,52 @@ export function AIChatMain({
         const effectiveTables = mentionedTables.length > 0 ? mentionedTables : (aiContextTable ? [aiContextTable] : []);
         const effectiveSchema = aiContextSchema || 'public';
 
+        const filesToUpload = [...attachedFiles];
+        const userMessageId = `user-${Date.now()}`;
+        // Only show file badges in the bubble if the upload succeeds (#5)
         setLocalMessages(prev => [...prev,
-            { id: `user-${Date.now()}`, role: 'user', content: messageText, files: attachedFiles.map(f => f.name), mentionedTable: effectiveTables[0] },
+            { id: userMessageId, role: 'user', content: messageText, files: filesToUpload.length > 0 ? ['uploading…'] : [], mentionedTable: effectiveTables[0] },
             { id: 'streaming', role: 'assistant', content: '', isStreaming: true, isAgent: agentMode },
         ]);
         setInput('');
         setAttachedFiles([]);
+        showUploadError(null);
         if (textareaRef.current) textareaRef.current.style.height = '52px';
+
+        let fileIds: string[] = [];
+        let uploadedFileNames: string[] = [];
+        if (filesToUpload.length > 0) {
+            setIsUploading(true);
+            try {
+                const uploadRes = await uploadFilesForAI(filesToUpload, { chatId: chatId ?? undefined });
+                if (uploadRes.ok && uploadRes.files && uploadRes.files.length > 0) {
+                    fileIds = uploadRes.files.map(f => f.file_id);
+                    uploadedFileNames = uploadRes.files.map(f => f.filename);
+                } else {
+                    showUploadError('File upload failed — files were not attached to this message.');
+                }
+            } catch (err) {
+                logger.warn('[AIChatMain] Failed to upload attached files:', err);
+                showUploadError('File upload failed. Your message will be sent without file context.');
+            } finally {
+                setIsUploading(false);
+                // Update the bubble to show real uploaded filenames (or clear if failed)
+                setLocalMessages(prev => prev.map(m =>
+                    m.id === userMessageId
+                        ? { ...m, files: uploadedFileNames.length > 0 ? uploadedFileNames : undefined }
+                        : m
+                ));
+            }
+        }
 
         const history = localMessages.filter(m => !m.isStreaming).map(m => ({ role: m.role, content: m.content }));
 
         if (agentMode && connectionId) {
-            await sendAgent({ connectionId, message: messageText, chatId: chatId ?? undefined, schemaName: effectiveSchema, databaseName: dbName, history, mentionedTables: effectiveTables, synthesisModel: selectedModel });
+            await sendAgent({ connectionId, message: messageText, chatId: chatId ?? undefined, schemaName: effectiveSchema, databaseName: dbName, history, mentionedTables: effectiveTables, agentMode: mode, thinking, projectId: activeProjectId ?? undefined, fileIds });
         } else {
-            await sendStream({ connectionId, chatId: chatId ?? undefined, message: messageText, history, mentionedTables: effectiveTables, tableContext: effectiveTables.length > 0 ? { tableName: effectiveTables[0], schemaName: effectiveSchema } : undefined });
+            await sendStream({ connectionId, chatId: chatId ?? undefined, message: messageText, history, mentionedTables: effectiveTables, tableContext: effectiveTables.length > 0 ? { tableName: effectiveTables[0], schemaName: effectiveSchema } : undefined, projectId: activeProjectId ?? undefined, fileIds });
         }
-    }, [input, attachedFiles, isStreaming, localMessages, connectionId, chatId, aiContextTable, aiContextSchema, agentMode, sendAgent, sendStream, availableTables, selectedModel, quotaError]);
+    }, [input, attachedFiles, isStreaming, localMessages, connectionId, chatId, aiContextTable, aiContextSchema, agentMode, sendAgent, sendStream, availableTables, mode, thinking, quotaError, activeProjectId, showUploadError]);
 
     // ── Build display messages ────────────────────────────────────────────────
 
@@ -371,17 +503,17 @@ export function AIChatMain({
 
     const chatPanel = (
         <main className="flex-1 flex flex-col h-full bg-background relative overflow-hidden">
-            {/* Project context header */}
+            {/* Compact project button */}
             {activeProject && (
-                <div className="h-12 border-b border-border/40 shrink-0 flex items-center px-4 bg-muted/10 gap-2 z-10">
-                    <div className={cn('w-5 h-5 rounded flex items-center justify-center shrink-0 text-white', colorClass[activeProject.color] || colorClass.slate)}>
-                        <FolderKanban className="w-3 h-3" />
-                    </div>
-                    <button className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors truncate" onClick={() => onProjectClick?.(activeProject.id)}>
-                        {activeProject.title}
+                <div className="absolute top-2.5 left-4 z-20 pointer-events-auto">
+                    <button
+                        onClick={() => onProjectClick?.(activeProject.id)}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-background/90 hover:bg-muted border border-border/70 shadow-xs backdrop-blur-md text-foreground/80 hover:text-foreground transition-all duration-150 group cursor-pointer"
+                        title={`Project: ${activeProject.title} — click to view project`}
+                    >
+                        <FolderKanban className="w-3 h-3 text-primary" />
+                        <span className="truncate max-w-[150px]">{activeProject.title}</span>
                     </button>
-                    <span className="text-muted-foreground/30 px-1">/</span>
-                    <span className="text-sm font-medium text-foreground truncate max-w-[300px]">{chatHistory?.chat?.title || 'New Chat'}</span>
                 </div>
             )}
 
@@ -471,7 +603,8 @@ export function AIChatMain({
                 dbName={dbName}
                 dashboardCount={dashboardArtifacts.length}
                 showDashboard={showDashboard}
-                selectedModel={selectedModel}
+                mode={mode}
+                thinking={thinking}
                 textareaRef={textareaRef}
                 fileInputRef={fileInputRef}
                 onInput={handleInput}
@@ -479,12 +612,30 @@ export function AIChatMain({
                 onKeyDown={handleKeyDown}
                 onSend={handleSend}
                 onAbort={() => agentMode ? abortAgent() : abortStream()}
-                onFileSelect={e => { if (e.target.files) setAttachedFiles(prev => [...prev, ...Array.from(e.target.files!)]); if (fileInputRef.current) fileInputRef.current.value = ''; }}
+                onFileSelect={e => {
+                    if (!e.target.files) return;
+                    const { valid, errors } = validateFiles(Array.from(e.target.files));
+                    if (errors.length > 0) {
+                        showUploadError(errors.join('; '));
+                    }
+                    if (valid.length > 0) {
+                        setAttachedFiles(prev => {
+                            const combined = [...prev, ...valid];
+                            if (combined.length > MAX_FILE_COUNT) {
+                                showUploadError(`Maximum ${MAX_FILE_COUNT} files allowed. Only the first ${MAX_FILE_COUNT} will be attached.`);
+                                return combined.slice(0, MAX_FILE_COUNT);
+                            }
+                            return combined;
+                        });
+                    }
+                    if (fileInputRef.current) fileInputRef.current.value = '';
+                }}
                 onRemoveFile={i => setAttachedFiles(prev => prev.filter((_, j) => j !== i))}
                 onMentionSelect={handleMentionSelect}
                 onMentionClose={() => setMentionQuery(null)}
                 onMentionTrigger={handleMentionTrigger}
-                onModelChange={handleModelChange}
+                onModeChange={handleModeChange}
+                onThinkingChange={handleThinkingChange}
                 onToggleDashboard={() => { setShowDashboard(s => !s); setShowWorkspace(false); setExpandedArtifact(null); }}
                 onToggleWorkspace={() => { setShowWorkspace(s => !s); setShowDashboard(false); setExpandedArtifact(null); }}
                 showWorkspace={showWorkspace}
@@ -492,6 +643,8 @@ export function AIChatMain({
                 quotaError={quotaError}
                 quotaWarning={quotaWarning}
                 onOpenPlans={onOpenPlans}
+                uploadError={uploadError}
+                isUploading={isUploading}
             />
         </main>
     );

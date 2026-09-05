@@ -6,7 +6,6 @@ export { DataExplorerLayout } from './DataExplorerLayout';
 export { TableSidebar } from './TableSidebar';
 export { TableGrid } from './TableGrid';
 export { EmptyState } from './EmptyState';
-export { GridPagination } from './GridPagination';
 export { ColumnStatsPanel } from './ColumnStatsPanel';
 export { ExportButton } from './ExportButton';
 export { ConnectionSelector } from './ConnectionSelector';

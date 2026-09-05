@@ -1,150 +1,200 @@
 // =============================================================================
-// Connection Selector - Dropdown to pick a database connection
+// Connection Selector - Clean Discovered Database Switcher for Data Explorer
 // =============================================================================
 
-import { useState } from 'react';
-import { ChevronDown, Database, Check, Users, Plus, Settings2 } from 'lucide-react';
+import { ChevronDown, Database, Check, Plus, LayoutDashboard, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuTrigger,
   DropdownMenuSeparator,
+  DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useConnections } from '@/lib/api/data/connection';
-import type { Connection } from '@/lib/api/data/connection';
-import { ConnectionFormModal } from './ConnectionFormModal';
 import { useAuth } from '@/components/auth/AuthProvider';
-import { toast } from 'sonner';
 
 interface ConnectionSelectorProps {
   selectedConnectionId: string | null;
   onConnectionChange: (connectionId: string | null) => void;
+  onOpenConnectWizard?: () => void;
+  onOpenOverview?: () => void;
 }
 
 export function ConnectionSelector({
   selectedConnectionId,
   onConnectionChange,
+  onOpenConnectWizard,
+  onOpenOverview,
 }: ConnectionSelectorProps) {
   const { user } = useAuth();
-  const { data: connections, isLoading } = useConnections();
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const { data: connections, isLoading, isFetching, refetch } = useConnections();
 
   const selectedConnection = connections?.find(c => c.id === selectedConnectionId);
 
-  const handleAddConnection = () => {
-    if (!user) {
-      toast.error('Authentication Required', {
-        description: 'Please sign in to add your own database connections.',
-      });
-      return;
-    }
-    setEditingId(null);
-    setIsAddModalOpen(true);
-  };
-
   return (
-    <>
-      <DropdownMenu>
+    <div className="inline-flex items-center h-8 rounded-lg border border-border bg-card shadow-xs">
+      {/* Left Icon Button: Direct 1-Click to Connector Manager */}
+      <button
+        type="button"
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          onOpenOverview?.();
+        }}
+        className={cn(
+          "h-full px-2.5 flex items-center justify-center rounded-l-lg hover:bg-muted/60 transition-colors shrink-0 group border-r border-border/50",
+          onOpenOverview && "cursor-pointer"
+        )}
+        title="Open Connector Dashboard & Health Monitor"
+      >
+        <div className="relative flex items-center justify-center">
+          <Database className={cn(
+            "w-3.5 h-3.5 transition-colors",
+            selectedConnection?.is_online
+              ? "text-emerald-500 group-hover:text-emerald-600"
+              : "text-muted-foreground group-hover:text-foreground"
+          )} />
+          {selectedConnection?.is_online && (
+            <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-emerald-500 ring-1 ring-background" />
+          )}
+        </div>
+      </button>
+
+      {/* Right Dropdown Trigger: Opens Discovered Databases Switcher */}
+      <DropdownMenu onOpenChange={(isOpen) => { if (isOpen) refetch(); }}>
         <DropdownMenuTrigger asChild>
-          <Button
-            variant="outline"
-            size="sm"
-            className="w-full justify-between text-left h-8 px-2.5 text-xs font-medium"
+          <button
+            type="button"
+            className="flex items-center justify-between gap-1.5 px-2.5 h-full text-xs font-medium rounded-r-lg hover:bg-muted/40 transition-colors min-w-0 max-w-[190px] focus:outline-none"
           >
-            <div className="flex items-center gap-1.5 truncate">
-              <Database className="w-3.5 h-3.5 flex-shrink-0 text-muted-foreground" />
-              <span className="truncate">
-                {selectedConnection?.name || 'Connections'}
-              </span>
-            </div>
-            <ChevronDown className="w-3.5 h-3.5 flex-shrink-0 ml-2 text-muted-foreground" />
-          </Button>
+            <span className="truncate font-medium text-foreground text-left">
+              {selectedConnection?.name || 'Select Database'}
+            </span>
+            <ChevronDown className="w-3.5 h-3.5 shrink-0 text-muted-foreground ml-1" />
+          </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="w-64">
-          <DropdownMenuItem
-            onClick={handleAddConnection}
-            className="flex items-center gap-2 py-2 text-blue-600 dark:text-blue-400 font-medium"
-          >
-            <Plus className="w-4 h-4" />
-            Add Connection
-          </DropdownMenuItem>
-          
-          <DropdownMenuSeparator />
+        <DropdownMenuContent align="start" className="w-68 p-1">
+          {/* Header with scan & refresh button */}
+          <div className="flex items-center justify-between px-2 py-1.5 border-b border-border/40 mb-1">
+            <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+              Discovered Databases
+            </span>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                refetch();
+              }}
+              className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+              title="Check and refresh discovered databases"
+            >
+              <RefreshCw className={cn("w-3 h-3", isFetching && "animate-spin text-primary")} />
+            </button>
+          </div>
 
           {isLoading ? (
-            <DropdownMenuItem disabled>Loading...</DropdownMenuItem>
+            <div className="flex items-center justify-center py-4 gap-2 text-xs text-muted-foreground">
+              <RefreshCw className="w-3 h-3 animate-spin text-primary" />
+              <span>Scanning databases...</span>
+            </div>
           ) : connections && connections.length > 0 ? (
-            connections.map((connection) => (
-              <DropdownMenuItem
-                key={connection.id}
-                onClick={() => onConnectionChange(connection.id)}
-                className="flex items-center justify-between group"
-              >
-                <div className="flex items-center gap-2">
-                  <Database className={cn("w-4 h-4", connection.isDemo ? "text-blue-500" : "text-muted-foreground")} />
-                  <div className="flex flex-col">
-                    <div className="flex items-center gap-1.5">
-                      <span className="font-medium">{connection.name}</span>
-                      {connection.isDemo && (
-                        <div className="flex items-center gap-0.5 px-1 py-0 rounded bg-blue-500/10 text-[9px] text-blue-600 font-bold uppercase">
-                          Demo
-                        </div>
-                      )}
-                      {connection.isShared && !connection.isDemo && (
-                        <div className="flex items-center gap-0.5 px-1 py-0 rounded bg-primary/10 text-[9px] text-primary font-bold uppercase">
-                          <Users className="w-2.5 h-2.5" />
-                          Shared
-                        </div>
+            <div className="max-h-64 overflow-y-auto space-y-0.5">
+              {connections.map((connection) => (
+                <DropdownMenuItem
+                  key={connection.id}
+                  onClick={() => onConnectionChange(connection.id)}
+                  className="flex items-center justify-between group cursor-pointer py-1.5 px-2 rounded-md"
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="relative flex items-center justify-center shrink-0">
+                      <Database className={cn(
+                        "w-3.5 h-3.5",
+                        connection.is_online ? "text-emerald-500" : "text-muted-foreground"
+                      )} />
+                      {connection.is_online && (
+                        <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-emerald-500" />
                       )}
                     </div>
-                    <span className="text-xs text-muted-foreground font-mono">
-                      {connection.database}
-                    </span>
+                    <div className="flex flex-col min-w-0">
+                      <span className="font-medium text-xs truncate text-foreground">
+                        {connection.name}
+                        {connection.access_type === 'team' && (
+                          <span className="ml-1.5 text-[8px] uppercase font-black tracking-wide text-primary bg-primary/10 rounded px-1 py-px align-middle">
+                            Team
+                          </span>
+                        )}
+                      </span>
+                      {connection.machine_label && (
+                        <span className="text-[10px] text-muted-foreground truncate">
+                          via {connection.machine_label}
+                          {connection.access_type === 'team' && connection.shared_by_name
+                            ? ` · shared by ${connection.shared_by_name}`
+                            : ''}
+                        </span>
+                      )}
+                    </div>
                   </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setEditingId(connection.id);
-                      setIsAddModalOpen(true);
-                    }}
-                    className="opacity-0 group-hover:opacity-100 p-1 hover:bg-muted rounded-md transition-opacity"
-                  >
-                    <Settings2 className="w-3.5 h-3.5 text-muted-foreground" />
-                  </button>
-                  {selectedConnectionId === connection.id && (
-                    <Check className="w-4 h-4 text-primary" />
-                  )}
-                </div>
-              </DropdownMenuItem>
-            ))
-          ) : (
-            <div className="px-2 py-6 text-center space-y-2">
-              <Database className="w-8 h-8 mx-auto text-muted-foreground/20" />
-              <p className="text-xs text-muted-foreground font-medium">No connections found</p>
-              {!user && (
-                <p className="text-[10px] text-muted-foreground/60 px-2 leading-relaxed text-balance">
-                  Sign in to see your databases or add a new one.
-                </p>
-              )}
+                  <div className="flex items-center gap-1 shrink-0 ml-2">
+                    {selectedConnectionId === connection.id && (
+                      <Check className="w-3.5 h-3.5 text-primary" />
+                    )}
+                  </div>
+                </DropdownMenuItem>
+              ))}
             </div>
+          ) : (
+            <div className="px-3 py-4 text-center space-y-2">
+              <Database className="w-6 h-6 mx-auto text-muted-foreground/30" />
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">No active databases</p>
+                <p className="text-[10px] text-muted-foreground/70 mt-0.5 leading-relaxed">
+                  Start your connector agent in terminal (<code className="font-mono text-[10px] bg-muted px-1 py-0.5 rounded">sw-agent start</code>)
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-6 text-[11px] px-2.5 gap-1.5 mt-1"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  refetch();
+                }}
+              >
+                <RefreshCw className={cn("w-2.5 h-2.5", isFetching && "animate-spin text-primary")} />
+                <span>Scan again</span>
+              </Button>
+            </div>
+          )}
+
+          <DropdownMenuSeparator className="my-1" />
+          
+          {onOpenOverview && (
+            <DropdownMenuItem
+              onClick={onOpenOverview}
+              className="flex items-center gap-2 text-xs font-medium cursor-pointer py-1.5"
+            >
+              <LayoutDashboard className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+              <span className="truncate">Connector Dashboard</span>
+            </DropdownMenuItem>
+          )}
+
+          {onOpenConnectWizard && (
+            <DropdownMenuItem
+              onClick={onOpenConnectWizard}
+              className="flex items-center gap-2 text-xs font-medium cursor-pointer py-1.5"
+            >
+              <Plus className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+              <span className="truncate">Connect database</span>
+            </DropdownMenuItem>
           )}
         </DropdownMenuContent>
       </DropdownMenu>
-
-      <ConnectionFormModal
-        isOpen={isAddModalOpen}
-        onClose={() => {
-          setIsAddModalOpen(false);
-          setEditingId(null);
-        }}
-        editingId={editingId}
-      />
-    </>
+    </div>
   );
 }
+
+
