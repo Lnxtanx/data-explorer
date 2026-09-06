@@ -15,6 +15,9 @@ import {
   Search,
   X,
   XCircle,
+  ExternalLink,
+  Copy,
+  Clock,
 } from 'lucide-react';
 import { useMemo, useRef, useState, useEffect, useCallback } from 'react';
 import { cn } from '@/lib/utils';
@@ -34,6 +37,19 @@ import {
 import { toast } from 'sonner';
 import type { ExportFormat, ExportScope, ExportGridContext } from '@/lib/api/data/explorer/types';
 import { ExportFormatIcon } from './export/ExportFormatIcon';
+import { useGoogleLogin } from '@react-oauth/google';
+import {
+  getStoredDriveToken,
+  setStoredDriveToken,
+  clearStoredDriveToken,
+  uploadCsvToGoogleSheets,
+  getRecentGoogleSheets,
+  saveRecentGoogleSheet,
+  clearRecentGoogleSheets,
+  type RecentSheetExport,
+} from '@/lib/api/google-sheets';
+import { useAuth } from '@/components/auth/AuthProvider';
+import { trackEvent } from '@/lib/activity';
 
 const EXPORT_MAX_ROWS = 10000;
 const ROW_PRESETS = [1000, 5000, 10000, 25000, 50000];
@@ -63,6 +79,13 @@ const EXPORT_OPTIONS: ExportOption[] = [
     activeRingClass: 'ring-1 ring-emerald-500/30',
   },
   {
+    format: 'google_sheets',
+    label: 'Sheets',
+    ext: 'Google Sheets',
+    activeColorClass: 'border-blue-500 bg-blue-500/10 text-blue-700 dark:text-blue-300',
+    activeRingClass: 'ring-1 ring-blue-500/30',
+  },
+  {
     format: 'excel',
     label: 'Excel',
     ext: '.xlsx',
@@ -75,13 +98,6 @@ const EXPORT_OPTIONS: ExportOption[] = [
     ext: '.json',
     activeColorClass: 'border-amber-500 bg-amber-500/10 text-amber-800 dark:text-amber-300',
     activeRingClass: 'ring-1 ring-amber-500/30',
-  },
-  {
-    format: 'ndjson',
-    label: 'NDJSON',
-    ext: '.ndjson',
-    activeColorClass: 'border-purple-500 bg-purple-500/10 text-purple-800 dark:text-purple-300',
-    activeRingClass: 'ring-1 ring-purple-500/30',
   },
   {
     format: 'sql',
@@ -98,6 +114,7 @@ export function ExportButton({
   schemaName,
   gridContext,
 }: ExportButtonProps) {
+  const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState<{ done: number; total: number } | null>(null);
@@ -111,6 +128,10 @@ export function ExportButton({
   const [selectedTables, setSelectedTables] = useState<string[]>([]);
   const [tableSearchTerm, setTableSearchTerm] = useState('');
   
+  /** Recent Google Sheets export history & last exported result */
+  const [recentSheets, setRecentSheets] = useState<RecentSheetExport[]>(() => getRecentGoogleSheets());
+  const [lastExportedSheet, setLastExportedSheet] = useState<RecentSheetExport | null>(null);
+
   const mountedRef = useRef(true);
   const abortControllerRef = useRef<AbortController | null>(null);
   const activeJobIdRef = useRef<string | null>(null);
@@ -123,6 +144,13 @@ export function ExportButton({
       if (pollTimerRef.current) clearInterval(pollTimerRef.current);
     };
   }, []);
+
+  // Sync recent sheets from localStorage whenever popover opens
+  useEffect(() => {
+    if (open) {
+      setRecentSheets(getRecentGoogleSheets());
+    }
+  }, [open]);
 
   // Synchronize default table selection when active table prop changes
   useEffect(() => {
@@ -200,9 +228,274 @@ export function ExportButton({
     setExportProgress(null);
   }, [connectionId]);
 
+  const exportToGoogleDrive = useCallback(
+    async (accessToken: string, pendingTab?: Window | null) => {
+      if (!connectionId) return;
+      setIsExporting(true);
+      setLastExportedSheet(null);
+      const toastId = toast.loading('Exporting to Google Sheets…', { duration: Infinity });
+
+      try {
+        if (effectiveScope === 'view') {
+          if (!tableName) {
+            if (pendingTab && !pendingTab.closed) pendingTab.close();
+            toast.error('Please select a table to export', { id: toastId });
+            setIsExporting(false);
+            return;
+          }
+
+          const result = await fetchTableExport(connectionId, tableName, schemaName, {
+            format: 'csv',
+            maxRows,
+            filters: gridContext && gridContext.filters.length > 0 ? gridContext.filters : undefined,
+            orderBy: gridContext ? gridContext.orderBy || undefined : undefined,
+            orderDirection: gridContext ? gridContext.orderDirection : undefined,
+            columns: gridContext && gridContext.visibleColumns.length > 0 ? gridContext.visibleColumns : undefined,
+          });
+
+          toast.loading('Creating Google Sheet in your Drive…', { id: toastId });
+          const dateStr = new Date().toISOString().split('T')[0];
+          const sheetTitle = `${schemaName}.${tableName} (${dateStr})`;
+
+          const uploadResult = await uploadCsvToGoogleSheets({
+            accessToken,
+            title: sheetTitle,
+            csvBlob: result.blob,
+          });
+
+          if (pendingTab && !pendingTab.closed) {
+            pendingTab.location.href = uploadResult.url;
+          } else {
+            window.open(uploadResult.url, '_blank', 'noopener,noreferrer');
+          }
+
+          const newItem: RecentSheetExport = {
+            id: uploadResult.spreadsheetId,
+            title: sheetTitle,
+            url: uploadResult.url,
+            tableName,
+            schemaName,
+            rowCount: result.rowCount,
+            timestamp: Date.now(),
+          };
+          const updated = saveRecentGoogleSheet(newItem);
+          setRecentSheets(updated);
+          setLastExportedSheet(newItem);
+
+          toast.success(
+            result.rowCount > 0
+              ? `Exported ${result.rowCount.toLocaleString()} rows to Google Sheets`
+              : 'Exported to Google Sheets',
+            {
+              id: toastId,
+              duration: 30000,
+              description: sheetTitle,
+              action: {
+                label: 'Open Sheet ↗',
+                onClick: () => window.open(uploadResult.url, '_blank', 'noopener,noreferrer'),
+              },
+              cancel: {
+                label: 'Copy Link',
+                onClick: () => {
+                  navigator.clipboard.writeText(uploadResult.url);
+                  toast.success('Google Sheet link copied to clipboard!');
+                },
+              },
+            }
+          );
+          return;
+        }
+
+        if (effectiveScope === 'table') {
+          if (selectedTables.length === 0) {
+            if (pendingTab && !pendingTab.closed) pendingTab.close();
+            toast.error('Please select at least one table to export', { id: toastId });
+            setIsExporting(false);
+            return;
+          }
+
+          const targetTable = selectedTables[0];
+          const result = await fetchTableExport(connectionId, targetTable, schemaName, {
+            format: 'csv',
+            maxRows,
+          });
+
+          toast.loading(`Creating Google Sheet for ${targetTable}…`, { id: toastId });
+          const dateStr = new Date().toISOString().split('T')[0];
+          const sheetTitle = `${schemaName}.${targetTable} (${dateStr})`;
+
+          const uploadResult = await uploadCsvToGoogleSheets({
+            accessToken,
+            title: sheetTitle,
+            csvBlob: result.blob,
+          });
+
+          if (pendingTab && !pendingTab.closed) {
+            pendingTab.location.href = uploadResult.url;
+          } else {
+            window.open(uploadResult.url, '_blank', 'noopener,noreferrer');
+          }
+
+          const newItem: RecentSheetExport = {
+            id: uploadResult.spreadsheetId,
+            title: sheetTitle,
+            url: uploadResult.url,
+            tableName: targetTable,
+            schemaName,
+            rowCount: result.rowCount,
+            timestamp: Date.now(),
+          };
+          let currentRecent = saveRecentGoogleSheet(newItem);
+          setRecentSheets(currentRecent);
+          setLastExportedSheet(newItem);
+
+          toast.success(
+            result.rowCount > 0
+              ? `Exported ${result.rowCount.toLocaleString()} rows from ${targetTable} to Google Sheets`
+              : `Exported ${targetTable} to Google Sheets`,
+            {
+              id: toastId,
+              duration: 30000,
+              description: sheetTitle,
+              action: {
+                label: 'Open Sheet ↗',
+                onClick: () => window.open(uploadResult.url, '_blank', 'noopener,noreferrer'),
+              },
+              cancel: {
+                label: 'Copy Link',
+                onClick: () => {
+                  navigator.clipboard.writeText(uploadResult.url);
+                  toast.success('Google Sheet link copied to clipboard!');
+                },
+              },
+            }
+          );
+
+          // Export any additional tables selected sequentially
+          if (selectedTables.length > 1) {
+            for (let i = 1; i < selectedTables.length; i++) {
+              const extraTable = selectedTables[i];
+              try {
+                const res = await fetchTableExport(connectionId, extraTable, schemaName, {
+                  format: 'csv',
+                  maxRows,
+                });
+                const extraTitle = `${schemaName}.${extraTable} (${dateStr})`;
+                const extraUpload = await uploadCsvToGoogleSheets({
+                  accessToken,
+                  title: extraTitle,
+                  csvBlob: res.blob,
+                });
+                const extraItem: RecentSheetExport = {
+                  id: extraUpload.spreadsheetId,
+                  title: extraTitle,
+                  url: extraUpload.url,
+                  tableName: extraTable,
+                  schemaName,
+                  rowCount: res.rowCount,
+                  timestamp: Date.now(),
+                };
+                currentRecent = saveRecentGoogleSheet(extraItem);
+                setRecentSheets(currentRecent);
+              } catch (extraErr) {
+                console.error(`Failed to export ${extraTable} to Google Sheets:`, extraErr);
+              }
+            }
+          }
+
+          return;
+        }
+
+        if (effectiveScope === 'database') {
+          if (pendingTab && !pendingTab.closed) pendingTab.close();
+          toast.info('Google Sheets export is available for View and Table scopes.', { id: toastId });
+          setIsExporting(false);
+          return;
+        }
+      } catch (err: any) {
+        if (pendingTab && !pendingTab.closed) {
+          pendingTab.close();
+        }
+
+        if (err?.message?.includes('expired') || err?.message?.includes('401')) {
+          clearStoredDriveToken(user?.email);
+          toast.info('Google authorization expired. Refreshing permission…', { id: toastId });
+          requestDriveToken();
+          return;
+        }
+
+        if (err?.message?.includes('Google Sheets API') || err?.message?.includes('sheets.googleapis.com')) {
+          toast.error('Google Sheets API is disabled in your Google Cloud project', {
+            id: toastId,
+            duration: 15000,
+            description: 'Click "Enable in Google Cloud" to turn on Google Sheets API for project 1013066723615, then retry.',
+            action: {
+              label: 'Enable API',
+              onClick: () =>
+                window.open(
+                  'https://console.developers.google.com/apis/api/sheets.googleapis.com/overview?project=1013066723615',
+                  '_blank',
+                  'noopener,noreferrer'
+                ),
+            },
+          });
+          return;
+        }
+
+        toast.error('Google Sheets export failed', {
+          id: toastId,
+          duration: 10000,
+          description: err instanceof Error ? err.message : 'Could not create Google Sheet.',
+        });
+      } finally {
+        setIsExporting(false);
+      }
+    },
+    [connectionId, tableName, schemaName, effectiveScope, gridContext, maxRows, selectedTables, user?.email]
+  );
+
+  const requestDriveToken = useGoogleLogin({
+    scope: 'https://www.googleapis.com/auth/drive.file',
+    hint: user?.email || undefined,
+    prompt: '',
+    onSuccess: (tokenResponse) => {
+      if (tokenResponse.access_token) {
+        setStoredDriveToken(tokenResponse.access_token, tokenResponse.expires_in || 3600, user?.email);
+        exportToGoogleDrive(tokenResponse.access_token);
+      }
+    },
+    onError: () => {
+      setIsExporting(false);
+      toast.error('Google authorization was cancelled or failed.');
+    },
+  });
+
   const handleExport = async () => {
     if (!connectionId) {
       toast.error('Select a connection to export data');
+      return;
+    }
+
+    if (format === 'google_sheets') {
+      if (effectiveScope === 'database') {
+        toast.info('Google Sheets export is available for View and Table scopes.');
+        return;
+      }
+      const existingToken = getStoredDriveToken(user?.email);
+      if (existingToken) {
+        let pendingTab: Window | null = null;
+        try {
+          pendingTab = window.open('about:blank', '_blank');
+          if (pendingTab) {
+            pendingTab.document.title = 'Preparing Google Sheet…';
+          }
+        } catch {
+          // Popup blocker fallback
+        }
+        exportToGoogleDrive(existingToken, pendingTab);
+      } else {
+        requestDriveToken();
+      }
       return;
     }
 
@@ -421,6 +714,9 @@ export function ExportButton({
         description: err instanceof Error ? err.message : 'Something went wrong while exporting.',
       });
     } finally {
+      if (tableName) {
+        trackEvent('export', { scope: effectiveScope, format, table: tableName });
+      }
       setIsExporting(false);
       setExportProgress(null);
       abortControllerRef.current = null;
@@ -440,6 +736,21 @@ export function ExportButton({
       }
       return 'Exporting…';
     }
+    if (format === 'google_sheets') {
+      if (effectiveScope === 'database') {
+        return 'Select View or Table for Sheets';
+      }
+      if (effectiveScope === 'view') {
+        return 'Export View to Google Sheets';
+      }
+      if (selectedTables.length === 0) {
+        return 'Select a table';
+      }
+      if (selectedTables.length === 1) {
+        return `Export ${selectedTables[0]} to Google Sheets`;
+      }
+      return `Export ${selectedTables.length} Tables to Google Sheets`;
+    }
     if (effectiveScope === 'database') {
       return `Export Database as ZIP (${selectedFormatOption.label})`;
     }
@@ -453,7 +764,7 @@ export function ExportButton({
       return `Export ${selectedTables[0]} (${selectedFormatOption.label})`;
     }
     return `Export ${selectedTables.length} Tables (${selectedFormatOption.label})`;
-  }, [isExporting, exportProgress, effectiveScope, selectedTables, selectedFormatOption]);
+  }, [isExporting, exportProgress, effectiveScope, selectedTables, selectedFormatOption, format]);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -473,7 +784,7 @@ export function ExportButton({
         </Button>
       </PopoverTrigger>
 
-      <PopoverContent align="end" className="w-80 p-0 shadow-xl border border-border/80 rounded-xl overflow-hidden bg-popover">
+      <PopoverContent align="end" className="w-[340px] p-0 shadow-xl border border-border/80 rounded-xl overflow-hidden bg-popover">
         <div className="p-3.5 space-y-3">
           {/* Scope Selector Tabs */}
           <div className="grid grid-cols-3 gap-1 bg-muted/60 p-1 rounded-lg">
@@ -661,6 +972,11 @@ export function ExportButton({
           {/* ============================================================= */}
           {effectiveScope === 'database' && (
             <div className="space-y-2">
+              {format === 'google_sheets' && (
+                <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-700 dark:text-amber-300">
+                  Google Sheets export is available for <strong>View</strong> and <strong>Table</strong> scopes. Select CSV, Excel, JSON, or SQL to export all schemas as a ZIP.
+                </div>
+              )}
               {/* Schema Checkboxes */}
               {schemas.length > 0 && (
                 <div className="space-y-1">
@@ -784,6 +1100,124 @@ export function ExportButton({
               </Select>
             </div>
           )}
+
+          {/* ============================================================= */}
+          {/* GOOGLE SHEETS: SUCCESS BANNER & RECENT EXPORT LINKS */}
+          {/* ============================================================= */}
+          {lastExportedSheet && (
+            <div className="p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/25 space-y-2 animate-in fade-in duration-200">
+              <div className="flex items-start justify-between gap-1.5">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <div className="w-4 h-4 rounded-full bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                    <Check className="w-2.5 h-2.5 stroke-[3]" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-xs font-semibold text-foreground">Google Sheet Ready</div>
+                    <div className="text-[10.5px] text-muted-foreground truncate max-w-[230px]" title={lastExportedSheet.title}>
+                      {lastExportedSheet.title}
+                    </div>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setLastExportedSheet(null)}
+                  className="text-muted-foreground hover:text-foreground p-0.5 rounded transition-colors shrink-0"
+                  title="Dismiss"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+              <div className="flex items-center gap-2 pt-0.5">
+                <Button
+                  size="sm"
+                  className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-medium flex-1 gap-1.5 shadow-xs"
+                  onClick={() => window.open(lastExportedSheet.url, '_blank', 'noopener,noreferrer')}
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span>Open Sheet</span>
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs px-2.5 gap-1 border-emerald-500/30 hover:bg-emerald-500/10 text-foreground"
+                  onClick={() => {
+                    navigator.clipboard.writeText(lastExportedSheet.url);
+                    toast.success('Link copied to clipboard!');
+                  }}
+                  title="Copy Sheet URL"
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                  <span>Copy</span>
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {format === 'google_sheets' && recentSheets.length > 0 && (
+            <div className="space-y-1.5 pt-1.5 border-t border-border/50">
+              <div className="flex items-center justify-between text-[11px]">
+                <span className="font-medium text-muted-foreground flex items-center gap-1">
+                  <Clock className="w-3 h-3" />
+                  <span>Recent Sheets ({recentSheets.length})</span>
+                </span>
+                <button
+                  onClick={() => {
+                    clearRecentGoogleSheets();
+                    setRecentSheets([]);
+                    setLastExportedSheet(null);
+                  }}
+                  className="text-[10px] text-muted-foreground/80 hover:text-destructive transition-colors"
+                >
+                  Clear
+                </button>
+              </div>
+              <div className="max-h-32 overflow-y-auto space-y-1 pr-0.5 scrollbar-thin">
+                {recentSheets.map((item) => (
+                  <div
+                    key={item.id}
+                    className="flex items-center justify-between gap-1.5 p-1.5 rounded-md bg-muted/40 hover:bg-muted/70 border border-border/40 text-xs transition-colors group"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="font-medium text-foreground truncate text-[11px]" title={item.title}>
+                        {item.title}
+                      </div>
+                      <div className="text-[10px] text-muted-foreground flex items-center gap-1">
+                        <span>{formatTimeAgo(item.timestamp)}</span>
+                        {item.rowCount !== undefined && item.rowCount > 0 && (
+                          <>
+                            <span>•</span>
+                            <span>{item.rowCount.toLocaleString()} rows</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-0.5 shrink-0">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                        onClick={() => {
+                          navigator.clipboard.writeText(item.url);
+                          toast.success('Link copied to clipboard!');
+                        }}
+                        title="Copy Link"
+                      >
+                        <Copy className="w-3 h-3" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6 text-blue-600 hover:text-blue-700 hover:bg-blue-500/10"
+                        onClick={() => window.open(item.url, '_blank', 'noopener,noreferrer')}
+                        title="Open Google Sheet ↗"
+                      >
+                        <ExternalLink className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* ============================================================= */}
@@ -813,7 +1247,7 @@ export function ExportButton({
               className="w-full h-8 text-xs font-medium gap-1.5 shadow-sm"
               disabled={
                 !connectionId ||
-                (effectiveScope === 'database' && effectiveSchemas.length === 0) ||
+                (effectiveScope === 'database' && (effectiveSchemas.length === 0 || format === 'google_sheets')) ||
                 (effectiveScope === 'table' && selectedTables.length === 0)
               }
               onClick={handleExport}
@@ -861,4 +1295,15 @@ function ScopeTab({
       <span>{label}</span>
     </button>
   );
+}
+
+function formatTimeAgo(timestamp: number): string {
+  const diffSec = Math.max(0, Math.floor((Date.now() - timestamp) / 1000));
+  if (diffSec < 60) return 'Just now';
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const diffHours = Math.floor(diffMin / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+  const diffDays = Math.floor(diffHours / 24);
+  return `${diffDays}d ago`;
 }

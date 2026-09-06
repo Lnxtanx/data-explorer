@@ -170,7 +170,7 @@ export interface TableSchema {
 // ─── Export ──────────────────────────────────────────────────────────────────
 
 export type ExportScope = 'view' | 'table' | 'database';
-export type ExportFormat = 'csv' | 'excel' | 'json' | 'ndjson' | 'sql';
+export type ExportFormat = 'csv' | 'google_sheets' | 'excel' | 'json' | 'sql' | 'ndjson';
 export type SchemaExportStatus = 'running' | 'done' | 'error' | 'cancelled';
 
 export interface ExportParams {

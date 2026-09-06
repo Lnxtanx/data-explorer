@@ -13,5 +13,4 @@ export { ConnectionSelector } from './ConnectionSelector';
 // Sub-components
 export { SchemaSelector } from './sidebar/SchemaSelector';
 export { ColumnHeader } from './grid/ColumnHeader';
-export { FilterBar } from './grid/FilterBar';
-export { FilterChip } from './grid/FilterChip';
+export { GridRow } from './grid/GridRow';

@@ -24,6 +24,7 @@ import { queryClient } from '@/lib/queryClient';
 import { purgeExplorerCacheDb } from '@/lib/persist';
 import { clearAllClientData } from '@/lib/clearAllClientData';
 import { logger } from '@/lib/logger';
+import { trackEvent, startActivityTracking, stopActivityTracking } from '@/lib/activity';
 
 interface AuthContextType {
     user: User | null;
@@ -72,6 +73,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             };
 
             setUser(mappedUser);
+
+            trackEvent('login', { provider: 'google' });
 
             setSessionCookie({
                 userId: dbUser.id,
@@ -125,6 +128,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             };
 
             setUser(mappedUser);
+
+            trackEvent('login', { provider: 'github' });
 
             setSessionCookie({
                 userId: dbUser.id,
@@ -286,6 +291,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return () => clearInterval(interval);
     }, [user]);
 
+    // Start/stop engagement heartbeats while a user is signed in.
+    useEffect(() => {
+        if (user) {
+            startActivityTracking();
+        } else {
+            stopActivityTracking();
+        }
+        return () => stopActivityTracking();
+    }, [user]);
+
     const refreshSession = useCallback(async () => {
         if (user) {
             try {
@@ -332,6 +347,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
 
     const signOut = useCallback(async () => {
+        // Record the logout before backend clears the session cookie.
+        trackEvent('logout');
+
         try {
             // Call backend to clear httpOnly session cookie
             await apiLogout();

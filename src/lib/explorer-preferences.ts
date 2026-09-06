@@ -80,7 +80,7 @@ export function clearLastViewedTable() {
 // Page size preference (rows per page)
 // =============================================================================
 
-export const EXPLORER_PAGE_SIZES = [500, 1000, 2000] as const;
+export const EXPLORER_PAGE_SIZES = [100, 250, 500, 1000, 2000] as const;
 export const DEFAULT_PAGE_SIZE = 500;
 const PAGE_SIZE_KEY = 'sw-explorer-page-size';
 
