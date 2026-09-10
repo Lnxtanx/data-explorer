@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useConnections } from '@/lib/api/data/connection';
 import { useAuth } from '@/components/auth/AuthProvider';
+import { DatabaseEngineIcon, PostgresIcon } from './shared/DatabaseEngineIcon';
 
 interface ConnectionSelectorProps {
   selectedConnectionId: string | null;
@@ -47,19 +48,14 @@ export function ConnectionSelector({
           "h-full px-2.5 flex items-center justify-center rounded-l-lg hover:bg-muted/60 transition-colors shrink-0 group border-r border-border/50",
           onOpenOverview && "cursor-pointer"
         )}
-        title="Open Connector Dashboard & Health Monitor"
+        title={selectedConnection ? `Connected to ${selectedConnection.name}` : 'Open Connector Dashboard'}
       >
-        <div className="relative flex items-center justify-center">
-          <Database className={cn(
-            "w-3.5 h-3.5 transition-colors",
-            selectedConnection?.is_online
-              ? "text-emerald-500 group-hover:text-emerald-600"
-              : "text-muted-foreground group-hover:text-foreground"
-          )} />
-          {selectedConnection?.is_online && (
-            <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-emerald-500 ring-1 ring-background" />
-          )}
-        </div>
+        <DatabaseEngineIcon
+          connection={selectedConnection}
+          className="w-4 h-4"
+          isOnline={selectedConnection?.is_online}
+          showStatusDot={true}
+        />
       </button>
 
       {/* Right Dropdown Trigger: Opens Discovered Databases Switcher */}
@@ -109,45 +105,44 @@ export function ConnectionSelector({
                   className="flex items-center justify-between group cursor-pointer py-1.5 px-2 rounded-md"
                 >
                   <div className="flex items-center gap-2 min-w-0">
-                    <div className="relative flex items-center justify-center shrink-0">
-                      <Database className={cn(
-                        "w-3.5 h-3.5",
-                        connection.is_online ? "text-emerald-500" : "text-muted-foreground"
-                      )} />
-                      {connection.is_online && (
-                        <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                      )}
-                    </div>
+                    <DatabaseEngineIcon
+                      connection={connection}
+                      className="w-4 h-4"
+                      isOnline={connection.is_online}
+                      showStatusDot={true}
+                    />
                     <div className="flex flex-col min-w-0">
-                      <span className="font-medium text-xs truncate text-foreground">
-                        {connection.name}
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-medium text-xs truncate text-foreground">
+                          {connection.name}
+                        </span>
                         {connection.access_type === 'team' && (
-                          <span className="ml-1.5 text-[8px] uppercase font-black tracking-wide text-primary bg-primary/10 rounded px-1 py-px align-middle">
+                          <span className="text-[8px] uppercase font-black tracking-wide text-primary bg-primary/10 rounded px-1 py-px align-middle">
                             Team
                           </span>
                         )}
-                      </span>
-                      {connection.machine_label && (
-                        <span className="text-[10px] text-muted-foreground truncate">
-                          via {connection.machine_label}
-                          {connection.access_type === 'team' && connection.shared_by_name
-                            ? ` · shared by ${connection.shared_by_name}`
-                            : ''}
-                        </span>
+                      </div>
+                        {connection.machine_label && (
+                          <span className="text-[10px] text-muted-foreground truncate">
+                            via {connection.machine_label}
+                            {connection.access_type === 'team' && connection.shared_by_name
+                              ? ` · shared by ${connection.shared_by_name}`
+                              : ''}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0 ml-2">
+                      {selectedConnectionId === connection.id && (
+                        <Check className="w-3.5 h-3.5 text-primary" />
                       )}
                     </div>
-                  </div>
-                  <div className="flex items-center gap-1 shrink-0 ml-2">
-                    {selectedConnectionId === connection.id && (
-                      <Check className="w-3.5 h-3.5 text-primary" />
-                    )}
-                  </div>
-                </DropdownMenuItem>
-              ))}
+                  </DropdownMenuItem>
+                ))}
             </div>
           ) : (
             <div className="px-3 py-4 text-center space-y-2">
-              <Database className="w-6 h-6 mx-auto text-muted-foreground/30" />
+              <PostgresIcon className="w-6 h-6 mx-auto opacity-30 grayscale" />
               <div>
                 <p className="text-xs text-muted-foreground font-medium">No active databases</p>
                 <p className="text-[10px] text-muted-foreground/70 mt-0.5 leading-relaxed">

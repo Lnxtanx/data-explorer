@@ -27,8 +27,13 @@ export interface Plan {
     max_tokens_per_run: number;
     max_agent_duration_secs?: number;
     allowed_models: string[];
+    allowed_modes?: string[];
     features: string[];
     is_active: boolean;
+    is_seat_based?: boolean;
+    seat_base_count?: number;
+    seat_price_inr?: number;
+    seat_price_usd?: number;
 }
 
 export interface Subscription {

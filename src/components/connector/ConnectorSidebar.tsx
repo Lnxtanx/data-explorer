@@ -1,4 +1,5 @@
-import { Database, Settings, Activity, Plus, BarChart3, Heart, Server } from 'lucide-react';
+import { Settings, Activity, Plus, BarChart3, Heart, Server } from 'lucide-react';
+import { PostgresIcon } from '@/components/data-explorer/shared/DatabaseEngineIcon';
 import { cn } from '@/lib/utils';
 
 interface ConnectorSidebarProps {
@@ -9,7 +10,7 @@ interface ConnectorSidebarProps {
 const SECTIONS = [
     { id: 'overview', label: 'Overview', icon: BarChart3 },
     { id: 'connectors', label: 'Connectors', icon: Server },
-    { id: 'databases', label: 'Databases', icon: Database },
+    { id: 'databases', label: 'Databases', icon: PostgresIcon },
     { id: 'logs', label: 'Execution Logs', icon: Activity },
     { id: 'health', label: 'Health', icon: Heart },
     { id: 'settings', label: 'Settings', icon: Settings },
@@ -19,7 +20,8 @@ const SECTIONS = [
 export function ConnectorSidebar({ activeSection, onSelect }: ConnectorSidebarProps) {
     return (
         <div className="w-48 border-r border-border bg-muted/30 flex flex-col h-full">
-            <div className="px-4 py-3 border-b border-border">
+            <div className="px-4 py-3 border-b border-border flex items-center gap-2">
+                <PostgresIcon className="w-4 h-4" />
                 <h2 className="text-sm font-semibold text-foreground">Connector</h2>
             </div>
             <nav className="flex-1 p-2 space-y-1 overflow-y-auto">
@@ -45,7 +47,8 @@ export function ConnectorSidebar({ activeSection, onSelect }: ConnectorSidebarPr
                 })}
             </nav>
 
-            <div className="p-3 border-t border-border">
+            <div className="p-3 border-t border-border flex items-center justify-center gap-1.5">
+                <PostgresIcon className="w-3 h-3 opacity-70" />
                 <p className="text-[10px] text-muted-foreground text-center">
                     PostgreSQL Proxy v1.0
                 </p>

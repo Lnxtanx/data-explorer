@@ -49,7 +49,9 @@ export function PlanSteps({ steps, isLive }: PlanStepsProps) {
                         <div className="flex flex-col items-center pt-0.5">
                             <span className={cn(
                                 'w-2 h-2 rounded-full border shrink-0 transition-all duration-300',
-                                STATUS_STYLES[step.status],
+                                step.status === 'running' && !isLive
+                                    ? 'border-muted-foreground/40 bg-muted-foreground/20'
+                                    : STATUS_STYLES[step.status],
                             )} />
                             {idx < steps.length - 1 && (
                                 <span className={cn(

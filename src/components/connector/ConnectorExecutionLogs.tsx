@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
-import { Search, CheckCircle2, XCircle, FileText, Loader2, Copy, Check, Clock, Rows, RefreshCw, Database, Terminal } from 'lucide-react';
+import { Search, CheckCircle2, XCircle, FileText, Loader2, Copy, Check, Clock, Rows, RefreshCw, Terminal } from 'lucide-react';
+import { PostgresIcon } from '@/components/data-explorer/shared/DatabaseEngineIcon';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -183,7 +184,7 @@ export function ConnectorExecutionLogs({ connectionId = null }: ConnectorExecuti
             <Card className="border rounded-xl shadow-none overflow-hidden flex-1 flex flex-col min-h-0 w-full">
                 <CardHeader className="py-2.5 px-4 border-b bg-muted/10 shrink-0 flex flex-row items-center justify-between">
                     <div className="flex items-center gap-2 text-xs font-semibold text-foreground">
-                        <Database className="w-3.5 h-3.5 text-primary" />
+                        <PostgresIcon className="w-3.5 h-3.5" />
                         <span>Recorded Query Executions</span>
                     </div>
                     <span className="text-[11px] font-mono text-muted-foreground">
@@ -238,7 +239,7 @@ export function ConnectorExecutionLogs({ connectionId = null }: ConnectorExecuti
 
                                                 {parsed.table && (
                                                     <span className="hidden md:inline-flex items-center gap-1 px-1.5 py-0.2 rounded bg-muted/60 text-[10px] text-muted-foreground shrink-0">
-                                                        <Database className="w-2.5 h-2.5" />
+                                                        <PostgresIcon className="w-2.5 h-2.5" />
                                                         {parsed.table}
                                                     </span>
                                                 )}

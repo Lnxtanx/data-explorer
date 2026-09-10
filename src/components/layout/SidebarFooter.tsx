@@ -33,10 +33,7 @@ export function SidebarFooter({ onOpenSettings, onOpenAI, isAiMode, isCollapsed 
                         variant="ghost"
                         size="sm"
                         className={cn(
-                            "px-2 text-xs font-semibold transition-all duration-300 shrink-0",
-                            isAiMode 
-                                ? "bg-primary/10 text-primary border border-primary/30 backdrop-blur-md shadow-[0_0_15px_rgba(var(--primary),0.1)]"
-                                : "text-muted-foreground hover:text-foreground hover:bg-muted/40 border border-transparent hover:border-border/30 hover:shadow-sm",
+                            "px-2 text-xs font-semibold transition-all duration-300 shrink-0 text-muted-foreground hover:text-foreground hover:bg-muted/40 border border-transparent hover:border-border/30 hover:shadow-sm",
                             isCollapsed ? "h-8 w-8 p-0 rounded-lg justify-center" : "h-8 gap-2"
                         )}
                         onClick={onOpenAI}

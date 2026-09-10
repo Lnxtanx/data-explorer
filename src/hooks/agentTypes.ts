@@ -12,6 +12,13 @@ export interface AgentToolStep {
     status: 'calling' | 'done' | 'error';
     type?: 'tool' | 'thinking';
     label?: string;
+    /** Epoch ms when the tool call was announced (from backend startedAt) */
+    startedAt?: number;
+    /** Measured execution time in ms (from backend tool_result latency_ms) */
+    latencyMs?: number;
+    /** Export file download URL (structured, not scraped from a summary) */
+    downloadUrl?: string;
+    filename?: string;
 }
 
 export interface ColumnStat {
@@ -226,6 +233,7 @@ export interface AgentArtifact {
     totalAnomalies?: number;
     anomalies?: AnomalyEntry[];
     score?: number;
+    qualityScore?: number;
     summary?: string;
     issues?: QualityIssue[];
 
@@ -251,10 +259,16 @@ export interface AgentArtifact {
 
     // ─── File artifact (type === 'file') ──────────────────────────────────
     downloadUrl?: string;
+    /** S3 object key — lets FileView re-sign an expired pre-signed URL */
+    key?: string;
     fileName?: string;
     fileType?: string;
     sizeBytes?: number;
     slideCount?: number;
+    /** Backend preview classifier (table / chart / stat_block / file) */
+    previewType?: 'table' | 'chart' | 'stat_block' | 'file' | string;
+    /** Number of rows in the artifact (file + table artifacts) */
+    rowCount?: number;
 
     // ─── Suggestions artifact (type === 'suggestions') ────────────────────
     suggestions?: AnalysisSuggestion[];
@@ -262,6 +276,18 @@ export interface AgentArtifact {
 
     // ─── Analysis plan artifact (type === 'analysis_plan') ────────────────
     planStepsData?: PlanStep[];
+
+    // ─── Clarification artifact (type === 'clarification') ──────────────
+    question?: string;
+    options?: string[];
+    /** Recommended option the agent will assume — pre-highlighted, accept with Enter. */
+    default?: string;
+    /** Short reason the agent recommends `default`. */
+    reason?: string;
+    /** Whether the user has answered this clarification. */
+    answered?: boolean;
+    /** The answer chosen or submitted by the user. */
+    answer?: string;
 
     // ─── Slide deck artifact (type === 'slide_deck') ──────────────────────
     /** Raw JSON string content (for slide_deck or html_report from workspace) */
@@ -274,13 +300,29 @@ export interface AgentArtifact {
 
 // ─── Hook-level types ─────────────────────────────────────────────────────────
 
-export type AgentStatus = 'idle' | 'running' | 'done' | 'error' | 'aborted';
+export type AgentStatus = 'idle' | 'running' | 'done' | 'awaiting_clarification' | 'error' | 'aborted';
 export type AgentPhase = 'idle' | 'planning' | 'executing' | 'synthesizing' | 'done';
 
 export interface ContextMeta {
     messages_in_window: number;
     session_id: string;
     has_history: boolean;
+    tokens_estimated?: number;
+    context_limit?: number;
+    context_pct?: number;
+    iteration?: number;
+    before_tokens?: number;
+    after_tokens?: number;
+    saved_tokens?: number;
+    compacted?: boolean;
+}
+
+export interface ContextCompactedEvent {
+    before_tokens: number;
+    after_tokens: number;
+    saved_tokens: number;
+    reason?: string;
+    context_limit?: number;
 }
 
 export interface AgentState {
@@ -300,9 +342,55 @@ export interface AgentState {
     iterations: number;
     model: string | null;
     contextMeta: ContextMeta | null;
+    // Durable run (POST /api/ai/runs) — the stable identifier used to
+    // reconnect/replay after a network drop or page refresh.
+    runId?: string | null;
+    isReconnecting?: boolean;
     // Granular token tracking
     granularUsage?: GranularUsage;
+    // Non-fatal advisory feedback (loop warnings, budget warnings, timeout):
+    // surfaced as dismissible banners instead of being silently dropped.
+    warnings?: AgentWarning[];
+    // Unified, ordered record of everything that happened this run
+    // (tool calls/results, artifacts, thinking, decisions, warnings). The
+    // parallel arrays above stay for backward compat; this is the single
+    // source of truth for future timeline rendering + reload rebuilds.
+    timeline?: TimelineItem[];
 }
+
+export interface AgentWarning {
+    id: string;
+    kind: 'warning' | 'budget_warning' | 'budget_exhausted' | 'timeout' | 'cancelled' | 'oscillation' | 'circuit_breaker';
+    message: string;
+    code?: string;
+    dimension?: string;
+    pct?: number;
+    at: number;
+}
+
+export type TimelineItem =
+    | { kind: 'status'; phase: AgentPhase; detail: string; iteration: number; at: number }
+    | { kind: 'thinking'; text: string; at: number }
+    | { kind: 'plan'; at: number }
+    | { kind: 'plan_update'; id: number; status: string; at: number }
+    | { kind: 'tool_call'; id: string; name: string; at: number }
+    | { kind: 'tool_result'; id: string; name: string; success: boolean; summary: string; latencyMs?: number; at: number }
+    | { kind: 'artifact'; type: string; title?: string; at: number }
+    | { kind: 'warning'; message: string; code?: string; at: number }
+    | { kind: 'budget_warning'; dimension: string; pct: number; message: string; at: number }
+    | { kind: 'decision'; iteration: number; tools: string[]; reasoning?: string | null; at: number };
+
+export type TimelineItemInput =
+    | { kind: 'status'; phase: AgentPhase; detail: string; iteration: number; at?: number }
+    | { kind: 'thinking'; text: string; at?: number }
+    | { kind: 'plan'; at?: number }
+    | { kind: 'plan_update'; id: number; status: string; at?: number }
+    | { kind: 'tool_call'; id: string; name: string; at?: number }
+    | { kind: 'tool_result'; id: string; name: string; success: boolean; summary: string; latencyMs?: number; at?: number }
+    | { kind: 'artifact'; type: string; title?: string; at?: number }
+    | { kind: 'warning'; message: string; code?: string; at?: number }
+    | { kind: 'budget_warning'; dimension: string; pct: number; message: string; at?: number }
+    | { kind: 'decision'; iteration: number; tools: string[]; reasoning?: string | null; at?: number };
 
 export interface GranularUsage {
     userMessageTokens?: number;
@@ -335,28 +423,47 @@ export interface AgentRequest {
     fileIds?: string[];
 }
 
+export interface DurableRunCreated {
+    run_id: string;
+    status: string;
+    chat_id?: string | null;
+}
+
 export interface UseAIAgentResult extends AgentState {
     send: (request: AgentRequest) => Promise<void>;
     abort: () => void;
     reset: () => void;
+    /** Id of the clarification-paused run, mirrored in state + session-persisted
+     * so a resume survives a reset/remount between the pause and the answer. */
+    pausedRunId: string | null;
+    /** Answer a paused clarification — resumes the SAME durable run with the
+     * answer appended to its conversation (backend rebuilds everything else
+     * from request_payload). Requires status === 'awaiting_clarification'. */
+    resume: (answer: string) => Promise<boolean>;
 }
 
 // ─── SSE payload shapes (internal to stream layer) ────────────────────────────
 
-export interface ThinkingEvent   { text: string }
+export interface ThinkingEvent { text: string }
 export interface ThinkingChunkEvent { text: string }
-export interface ThinkingClearEvent {}
-export interface ToolCallEvent   { id: string; name: string; input: Record<string, unknown> }
-export interface ToolResultEvent { id: string; name: string; success: boolean; summary: string }
+export interface ThinkingClearEvent { }
+export interface ToolCallEvent { id: string; name: string; input: Record<string, unknown>; startedAt?: number }
+export interface ToolResultEvent { id: string; name: string; success: boolean; summary: string; latency_ms?: number; downloadUrl?: string; filename?: string }
+export interface WarningEvent { message: string; code?: string; tool?: string }
+export interface BudgetWarningEvent { dimension: string; pct: number; message: string }
+export interface BudgetExhaustedEvent { reason: string; message: string; usage?: Record<string, unknown> }
+export interface CancelledEvent { message?: string }
+export interface AgentTimeoutEvent { duration_secs: number; message: string }
+export interface DecisionEvent { iteration: number; tools_chosen: string[]; reasoning?: string | null; context_tokens?: number }
 export interface ArtifactStartEvent { toolCallId: string; type: string; title: string }
-export interface ArtifactEvent   { type: string; sql?: string; rows?: Record<string, unknown>[]; columns?: Array<{ name: string }>; title?: string; streaming?: boolean }
+export interface ArtifactEvent { type: string; sql?: string; rows?: Record<string, unknown>[]; columns?: Array<{ name: string }>; title?: string; streaming?: boolean; previewType?: string;[k: string]: unknown }
 export interface ArtifactRowsEvent { rows: Record<string, unknown>[]; done: boolean }
-export interface DeltaEvent      { text: string; chat_id?: string }
-export interface DoneEvent       { 
-    usage?: { 
-        output_tokens?: number; 
-        outputTokens?: number; 
-        synthesisModel?: string; 
+export interface DeltaEvent { text: string; chat_id?: string }
+export interface DoneEvent {
+    usage?: {
+        output_tokens?: number;
+        outputTokens?: number;
+        synthesisModel?: string;
         creditsUsed?: number;
         // Granular token tracking
         cacheCreationTokens?: number;
@@ -372,17 +479,27 @@ export interface DoneEvent       {
             assistantHistoryTokens?: number;
             toolResultsTokens?: number;
         };
-        [k: string]: unknown 
-    }; 
-    iterations?: number; 
-    toolsUsed?: string[]; 
-    chat_id?: string 
+        [k: string]: unknown
+    };
+    iterations?: number;
+    toolsUsed?: string[];
+    chat_id?: string
+    // Clarification pause: completionReason === 'clarification' means the run
+    // PAUSED (status → awaiting_clarification) instead of completing. The done
+    // frame then carries `event_index` — the buffer offset where the next
+    // (resumed) leg's frames will start — so answering the question resumes the
+    // stream from `since=event_index` and skips this stale done frame entirely.
+    completionReason?: string;
+    event_index?: number;
+    /** Durable run id echoed on the paused done frame (agent.py
+     * `_with_event_index`) so a resume survives a reset of live agent state. */
+    run_id?: string;
 }
-export interface ErrorEvent      { message: string; code?: string }
-export interface ChatIdEvent     { chat_id: string }
-export interface PlanEvent       { steps: Array<{ id: number; goal: string; tool: string | null; status: string }> }
+export interface ErrorEvent { message: string; code?: string }
+export interface ChatIdEvent { chat_id: string }
+export interface PlanEvent { steps: Array<{ id: number; goal: string; tool: string | null; status: string }> }
 export interface PlanUpdateEvent { id: number; status: string }
-export interface StatusEvent     { phase: AgentPhase; detail: string; iteration: number }
-export interface ContextMetaEvent extends ContextMeta {}
+export interface StatusEvent { phase: AgentPhase; detail: string; iteration: number }
+export interface ContextMetaEvent extends ContextMeta { }
 export interface QuotaExceededEvent { reason: string; message: string; credits_used: number }
-export interface QuotaUpdateEvent   { credits_used: number; credits_remaining: number; daily_remaining: number; monthly_pct: number }
+export interface QuotaUpdateEvent { credits_used: number; credits_remaining: number; daily_remaining: number; monthly_pct: number }

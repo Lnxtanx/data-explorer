@@ -48,9 +48,9 @@ export function SettingsModal({ isOpen, onClose, user, signOut, signInWithGoogle
             case 'profile':
                 return <ProfileSettings user={user as User | null} signOut={signOut} signInWithGoogle={signInWithGoogle} signInWithGithub={signInWithGithub} />;
             case 'usage':
-                return <UsageSettings onNavigate={setActiveSection} />;
+                return <UsageSettings />;
             case 'plans':
-                return <PlansSettings user={user} />;
+                return <PlansSettings user={user} onOpenCollaboration={() => setActiveSection('collaboration')} />;
             case 'appearance':
                 return <AppearanceSettings />;
             case 'shortcuts':

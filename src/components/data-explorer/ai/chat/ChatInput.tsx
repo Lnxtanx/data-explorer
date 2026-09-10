@@ -2,14 +2,14 @@ import { useState } from 'react';
 import { Plus, Send, Database, LayoutDashboard, FolderOpen, AtSign, X, FileText, Square, Loader2, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { useTableSchema, useTableRowsSimple } from '@/lib/api/data/explorer';
 import { MentionPicker } from '../input/MentionPicker';
 import { MicButton } from '../MicButton';
 import { ModeSelector } from '../models/ModeSelector';
 import type { AgentMode } from '../models/ModeSelector';
+import type { AgentWarning, ContextMeta } from '@/hooks/agentTypes';
 
 import { TablePreview } from '../messages/TablePreview';
+import { ContextWindowBar } from './ContextWindowBar';
 
 // ─── Mention Overlay ──────────────────────────────────────────────────────────
 
@@ -104,6 +104,11 @@ export interface ChatInputProps {
     onOpenPlans?: () => void;
     uploadError?: string | null;
     isUploading?: boolean;
+    agentWarnings?: AgentWarning[];
+    onDismissWarning?: (id: string) => void;
+    contextMeta?: ContextMeta | null;
+    localMessageCount?: number;
+    tokenCount?: number | null;
 }
 
 export function ChatInput({
@@ -114,6 +119,8 @@ export function ChatInput({
     onMentionSelect, onMentionClose, onMentionTrigger, onModeChange, onThinkingChange,
     onToggleDashboard, onToggleWorkspace, showWorkspace, onTranscript,
     quotaError, quotaWarning, onOpenPlans, uploadError, isUploading,
+    agentWarnings, onDismissWarning,
+    contextMeta, localMessageCount, tokenCount,
 }: ChatInputProps) {
     let leftPadOffset = 44;
     if (connectionId) leftPadOffset += 34;
@@ -193,6 +200,40 @@ export function ChatInput({
                         <span className="flex-1 leading-relaxed">{uploadError}</span>
                     </div>
                 )}
+                {/* Agent warnings (e.g. oscillation, circuit breaker, quota) - Claude-style input banner */}
+                {agentWarnings && agentWarnings.length > 0 && (
+                    <div className="space-y-1.5 mb-2">
+                        {agentWarnings.map((warning) => {
+                            const isCritical = warning.kind === 'circuit_breaker' || warning.code === 'circuit_breaker' || warning.kind === 'budget_exhausted';
+                            const isOscillation = warning.kind === 'oscillation' || warning.code === 'oscillation' || warning.code === 'loop_oscillation';
+                            return (
+                                <div
+                                    key={warning.id}
+                                    className={cn(
+                                        'flex items-start gap-2 rounded-xl px-3 py-2 text-xs border',
+                                        isCritical
+                                            ? 'bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800/50 text-red-800 dark:text-red-200'
+                                            : isOscillation
+                                            ? 'bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800/50 text-amber-800 dark:text-amber-200'
+                                            : 'bg-yellow-50 dark:bg-yellow-950/30 border-yellow-200 dark:border-yellow-800/40 text-yellow-800 dark:text-yellow-200'
+                                    )}
+                                >
+                                    <AlertTriangle className={cn('w-3.5 h-3.5 shrink-0 mt-0.5', isCritical ? 'text-red-500' : 'text-amber-500')} />
+                                    <span className="flex-1 leading-relaxed">{warning.message}</span>
+                                    {onDismissWarning && (
+                                        <button
+                                            onClick={() => onDismissWarning(warning.id)}
+                                            className="shrink-0 ml-0.5 opacity-40 hover:opacity-80 transition-opacity"
+                                            title="Dismiss"
+                                        >
+                                            <X className="w-3 h-3" />
+                                        </button>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
                 <div className="relative flex flex-col w-full bg-background border border-border rounded-xl shadow-sm focus-within:border-border/70 transition-colors">
 
                     {/* Attached files */}
@@ -237,7 +278,7 @@ export function ChatInput({
                             {dashboardCount > 0 && (
                                 <button
                                     className={cn('h-8 flex items-center gap-1 px-2 rounded-lg transition-colors text-xs',
-                                        showDashboard ? 'text-primary bg-primary/10' : 'text-muted-foreground/40 hover:text-muted-foreground')}
+                                        showDashboard ? 'text-primary bg-primary/10' : 'text-muted-foreground hover:text-foreground')}
                                     onClick={onToggleDashboard}
                                 >
                                     <LayoutDashboard className="w-3.5 h-3.5" />
@@ -247,7 +288,7 @@ export function ChatInput({
                             {onToggleWorkspace && (
                                 <button
                                     className={cn('h-8 flex items-center gap-1 px-2 rounded-lg transition-colors text-xs',
-                                        showWorkspace ? 'text-primary bg-primary/10' : 'text-muted-foreground/40 hover:text-muted-foreground')}
+                                        showWorkspace ? 'text-primary bg-primary/10' : 'text-muted-foreground hover:text-foreground')}
                                     onClick={onToggleWorkspace}
                                     title="Workspace"
                                 >
@@ -274,7 +315,7 @@ export function ChatInput({
                                 onKeyDown={onKeyDown}
                                 onScroll={onScroll}
                                 placeholder={quotaError ? 'Credit limit reached — upgrade to continue' : 'Ask about your data… (use @ to reference tables)'}
-                                className="w-full min-h-[52px] resize-none border-0 focus-visible:outline-none focus:ring-0 py-3.5 pr-[180px] bg-transparent text-transparent text-[15px] leading-[24px] font-sans antialiased font-normal shadow-none placeholder:text-muted-foreground/35 caret-foreground break-words scrollbar-none [&::-webkit-scrollbar]:hidden selection:bg-blue-500/30 selection:text-transparent"
+                                className="w-full min-h-[52px] resize-none border-0 focus-visible:outline-none focus:ring-0 py-3.5 pr-[180px] bg-transparent text-transparent text-[15px] leading-[24px] font-sans antialiased font-normal shadow-none placeholder:text-muted-foreground/70 caret-foreground break-words scrollbar-none [&::-webkit-scrollbar]:hidden selection:bg-blue-500/30 selection:text-transparent"
                                 rows={1}
                                 style={{ paddingLeft: leftPadOffset }}
                             />
@@ -309,7 +350,7 @@ export function ChatInput({
                                     className={cn('h-8 w-8 flex items-center justify-center rounded-lg transition-colors',
                                         (input.trim() || attachedFiles.length > 0) && !quotaError
                                             ? 'bg-foreground text-background hover:bg-foreground/90'
-                                            : 'text-muted-foreground/30 cursor-default')}
+                                            : 'text-muted-foreground/50 cursor-default')}
                                 >
                                     <Send className="w-3.5 h-3.5" />
                                 </button>
@@ -330,9 +371,20 @@ export function ChatInput({
 
                     </div>
 
-                <p className="text-center mt-2 text-[11px] text-muted-foreground/40">
-                    Resona AI can make mistakes. Verify important results.
-                </p>
+                <div className="relative flex items-center justify-center mt-2 min-h-[18px] text-[11px] text-muted-foreground px-1 select-none">
+                    {agentMode && (
+                        <div className="absolute left-1">
+                            <ContextWindowBar
+                                contextMeta={contextMeta ?? null}
+                                localMessageCount={localMessageCount}
+                                tokenCount={tokenCount}
+                            />
+                        </div>
+                    )}
+                    <p>
+                        Resona AI can make mistakes. Verify important results.
+                    </p>
+                </div>
             </div>
         </div>
     );

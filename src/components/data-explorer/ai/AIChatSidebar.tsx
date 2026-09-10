@@ -23,8 +23,9 @@ import {
     DropdownMenuSubTrigger,
     DropdownMenuSubContent,
 } from '@/components/ui/dropdown-menu';
+import { useQueryClient } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
-import { useAIChatList, useDeleteAIChat, useUpdateAIChat } from '@/hooks/useAIChats';
+import { useAIChatList, useDeleteAIChat, useUpdateAIChat, aiQueryKeys } from '@/hooks/useAIChats';
 import { useProjects, useDeleteProject } from '@/hooks/useProjects';
 import { getChatMessages, type AIMessage } from '@/lib/api/ai';
 
@@ -103,14 +104,23 @@ export function AIChatSidebar({
     onNewProjectChat,
     onOpenProject,
 }: AIChatSidebarProps) {
+    const queryClient = useQueryClient();
     const { data, isLoading } = useAIChatList({ limit: 50 });
     const { data: projects } = useProjects();
     const deleteChat = useDeleteAIChat();
     const updateChat = useUpdateAIChat();
     const deleteProject = useDeleteProject();
 
-    // Section-level collapse state
-    const [isProjectsSectionExpanded, setIsProjectsSectionExpanded] = useState<boolean>(true);
+    const handlePrefetchChat = (chatId: string) => {
+        queryClient.prefetchQuery({
+            queryKey: aiQueryKeys.messages(chatId),
+            queryFn: () => getChatMessages(chatId),
+            staleTime: 60_000,
+        });
+    };
+
+    // Section-level collapse state (default closed per user request)
+    const [isProjectsSectionExpanded, setIsProjectsSectionExpanded] = useState<boolean>(false);
     const [isYourChatsSectionExpanded, setIsYourChatsSectionExpanded] = useState<boolean>(true);
 
     // Individual project folder collapse state
@@ -121,13 +131,6 @@ export function AIChatSidebar({
     const editInputRef = useRef<HTMLInputElement | null>(null);
 
     const chats = data?.chats ?? [];
-
-    // Auto-expand projects by default
-    useEffect(() => {
-        if (projects && projects.length > 0 && expandedProjects.size === 0) {
-            setExpandedProjects(new Set(projects.map(p => p.id)));
-        }
-    }, [projects]);
 
     useEffect(() => {
         if (activeChatId && chats.length > 0) {
@@ -233,18 +236,18 @@ export function AIChatSidebar({
                         <div className="flex items-center justify-between px-1 mb-1">
                             <button
                                 onClick={() => setIsProjectsSectionExpanded(prev => !prev)}
-                                className="flex items-center gap-1 text-[11px] font-medium text-muted-foreground/60 hover:text-foreground tracking-wider uppercase cursor-pointer"
+                                className="flex items-center gap-1 text-[11px] font-medium text-muted-foreground hover:text-foreground tracking-wider uppercase cursor-pointer"
                             >
                                 {isProjectsSectionExpanded ? (
-                                    <ChevronDown className="w-3 h-3 opacity-60" />
+                                    <ChevronDown className="w-3 h-3 opacity-75" />
                                 ) : (
-                                    <ChevronRight className="w-3 h-3 opacity-60" />
+                                    <ChevronRight className="w-3 h-3 opacity-75" />
                                 )}
                                 <span>Projects</span>
                             </button>
                             <button
                                 onClick={() => onViewChange('projects')}
-                                className="text-[11px] text-muted-foreground/60 hover:text-foreground transition-colors cursor-pointer font-normal"
+                                className="text-[11px] text-muted-foreground hover:text-foreground transition-colors cursor-pointer font-normal"
                                 title="Open Projects overview"
                             >
                                 View all
@@ -355,8 +358,9 @@ export function AIChatSidebar({
                                                                         'group flex items-center justify-between px-2 py-1.5 rounded-md cursor-pointer transition-colors text-[13px]',
                                                                         isActive
                                                                             ? 'bg-muted text-foreground font-normal'
-                                                                            : 'text-foreground/75 hover:text-foreground hover:bg-muted/40 font-normal'
+                                                                            : 'text-foreground/90 hover:text-foreground hover:bg-muted/50 font-normal'
                                                                     )}
+                                                                    onMouseEnter={() => handlePrefetchChat(chat.id)}
                                                                     onClick={() => {
                                                                         if (!isEditing) {
                                                                             onChatSelect?.(chat.id, project.id);
@@ -479,12 +483,12 @@ export function AIChatSidebar({
                     <div className="flex items-center justify-between px-1 mb-1">
                         <button
                             onClick={() => setIsYourChatsSectionExpanded(prev => !prev)}
-                            className="flex items-center gap-1 text-[11px] font-medium text-muted-foreground/60 hover:text-foreground tracking-wider uppercase cursor-pointer"
+                            className="flex items-center gap-1 text-[11px] font-medium text-muted-foreground hover:text-foreground tracking-wider uppercase cursor-pointer"
                         >
                             {isYourChatsSectionExpanded ? (
-                                <ChevronDown className="w-3 h-3 opacity-60" />
+                                <ChevronDown className="w-3 h-3 opacity-75" />
                             ) : (
-                                <ChevronRight className="w-3 h-3 opacity-60" />
+                                <ChevronRight className="w-3 h-3 opacity-75" />
                             )}
                             <span>Your chats</span>
                         </button>
@@ -499,7 +503,7 @@ export function AIChatSidebar({
                                     ))}
                                 </div>
                             ) : standaloneChats.length === 0 ? (
-                                <div className="text-xs text-muted-foreground/60 italic px-2 py-1 font-normal">
+                                <div className="text-xs text-muted-foreground italic px-2 py-1 font-normal">
                                     No standalone chats.
                                 </div>
                             ) : (
@@ -515,8 +519,9 @@ export function AIChatSidebar({
                                                     'group flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer transition-colors text-[13px]',
                                                     isActive
                                                         ? 'bg-muted text-foreground font-normal'
-                                                        : 'text-foreground/75 hover:text-foreground hover:bg-muted/40 font-normal'
+                                                        : 'text-foreground/90 hover:text-foreground hover:bg-muted/50 font-normal'
                                                 )}
+                                                onMouseEnter={() => handlePrefetchChat(chat.id)}
                                                 onClick={() => {
                                                     if (!isEditing) {
                                                         onChatSelect?.(chat.id, null);
@@ -528,7 +533,7 @@ export function AIChatSidebar({
                                                     startRename(chat.id, chat.title || 'New chat');
                                                 }}
                                             >
-                                                <MessageSquare className="w-3.5 h-3.5 shrink-0 opacity-50" />
+                                                <MessageSquare className="w-3.5 h-3.5 shrink-0 text-muted-foreground/80 group-hover:text-foreground transition-colors" />
 
                                                 <div className="flex-1 min-w-0">
                                                     {isEditing ? (
@@ -549,7 +554,7 @@ export function AIChatSidebar({
                                                     ) : (
                                                         <>
                                                             <div className="text-[13px] truncate font-normal">{chat.title || 'New chat'}</div>
-                                                            <div className="text-[10px] text-muted-foreground/50 flex items-center gap-1 truncate font-normal">
+                                                            <div className="text-[10px] text-muted-foreground/75 flex items-center gap-1 truncate font-normal">
                                                                 {timeAgo(chat.updatedAt)}
                                                             </div>
                                                         </>

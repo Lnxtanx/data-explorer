@@ -42,7 +42,8 @@ import {
 export const aiQueryKeys = {
     all: ['ai'] as const,
     chats: (connectionId?: string) => ['ai', 'chats', connectionId ?? 'all'] as const,
-    messages: (chatId: string) => ['ai', 'chats', chatId, 'messages'] as const,
+    messages: (chatId: string, before?: string | null) =>
+        before ? (['ai', 'chats', chatId, 'messages', before] as const) : (['ai', 'chats', chatId, 'messages'] as const),
     artifacts: (connectionId?: string, type?: string) => ['ai', 'artifacts', connectionId ?? 'all', type ?? 'all'] as const,
     health: () => ['ai', 'health'] as const,
 };
@@ -78,11 +79,20 @@ export function useAIChatList(params?: {
 
 export function useAIChatMessages(
     chatId: string | null,
-    options?: Pick<UseQueryOptions<ChatMessagesResponse, Error>, 'enabled'>
+    options?: {
+        limit?: number;
+        before?: string | null;
+        slim?: boolean;
+        enabled?: boolean;
+    }
 ) {
     return useQuery<ChatMessagesResponse, Error>({
-        queryKey: aiQueryKeys.messages(chatId ?? ''),
-        queryFn: () => getChatMessages(chatId!),
+        queryKey: aiQueryKeys.messages(chatId ?? '', options?.before),
+        queryFn: () => getChatMessages(chatId!, {
+            limit: options?.limit,
+            before: options?.before,
+            slim: options?.slim,
+        }),
         enabled: Boolean(chatId) && options?.enabled !== false,
         staleTime: 60_000,   // Messages are immutable once saved
         gcTime: 10 * 60_000,

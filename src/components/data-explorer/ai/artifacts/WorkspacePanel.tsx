@@ -4,10 +4,9 @@
 // =============================================================================
 
 import { useState, useEffect } from 'react';
-import { X, RefreshCw, Download, FileText, Code, BarChart3, Table2, File, ChevronDown, ChevronRight, FolderOpen, Presentation } from 'lucide-react';
+import { X, RefreshCw, Download, FileText, Code, Table2, File, ChevronDown, ChevronRight, FolderOpen } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { apiRequest } from '@/lib/api/client';
-import { SlidePreviewView } from './views/SlidePreviewView';
 import { logger } from '@/lib/logger';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -39,26 +38,22 @@ interface WorkspacePanelProps {
 // ─── Content-type icons ───────────────────────────────────────────────────────
 
 const TYPE_ICONS: Record<string, typeof FileText> = {
-    slide_deck: BarChart3,
     html_report: Code,
     markdown: FileText,
     csv: Table2,
     json: Code,
     sql: Code,
     text: File,
-    pptx: Presentation,
     pdf: FileText,
 };
 
 const TYPE_LABELS: Record<string, string> = {
-    slide_deck: 'Slide Deck',
     html_report: 'HTML Report',
     markdown: 'Markdown',
     csv: 'CSV',
     json: 'JSON',
     sql: 'SQL',
     text: 'Text',
-    pptx: 'PowerPoint',
     pdf: 'PDF',
 };
 
@@ -149,8 +144,6 @@ export function WorkspacePanel({ connectionId, sessionId, onClose, refreshTrigge
         }
 
         switch (file.content_type) {
-            case 'slide_deck':
-                return <SlidePreviewView content={content} height={320} />;
             case 'html_report':
                 return (
                     <iframe
@@ -167,7 +160,6 @@ export function WorkspacePanel({ connectionId, sessionId, onClose, refreshTrigge
                         {content}
                     </pre>
                 );
-            case 'pptx':
             case 'pdf':
                 return (
                     <div className="flex flex-col items-center justify-center py-8 bg-muted/5 rounded-lg border border-dashed border-border/40">
@@ -278,7 +270,7 @@ export function WorkspacePanel({ connectionId, sessionId, onClose, refreshTrigge
                         <div>
                             <p className="text-sm font-medium text-muted-foreground/60">Your workspace is empty</p>
                             <p className="text-xs text-muted-foreground/40 mt-1 max-w-[200px]">
-                                Ask the agent to build a report or slide deck and it will appear here automatically.
+                                Ask the agent to build a report, export data, or save notes and it will appear here automatically.
                             </p>
                         </div>
                     </div>

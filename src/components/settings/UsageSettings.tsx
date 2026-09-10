@@ -1,19 +1,11 @@
 /**
- * Usage Settings — Redesigned, clean & unified AI credit quota dashboard
- * Matches the graphic typography and premium design language of Schema Weaver.
+ * Usage Settings — clean, minimal AI credit usage view.
+ * Typography intentionally matches the Plans & Billing page (text-lg title,
+ * rounded-xl border bg-card panels, text-[11px] labels, tabular numbers).
  */
 
 import { useEffect, useState, useCallback } from 'react';
-import {
-    RefreshCw,
-    Loader2,
-    Zap,
-    Clock,
-    BarChart3,
-    Cpu,
-    Sparkles,
-    ArrowUpRight,
-} from 'lucide-react';
+import { RefreshCw, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { getAIUsage, type AIQuotaStatus } from '@/lib/api/auth';
@@ -33,7 +25,7 @@ function fmtNum(n: number): string {
 
 function timeUntil(target: Date): string {
     const diff = target.getTime() - Date.now();
-    if (diff <= 0) return 'Resets soon';
+    if (diff <= 0) return 'soon';
     const totalMins = Math.floor(diff / 60_000);
     const hours     = Math.floor(totalMins / 60);
     const mins      = totalMins % 60;
@@ -45,24 +37,18 @@ function timeUntil(target: Date): string {
     return `${mins}m`;
 }
 
-function formatMonthReset(): string {
-    const d = new Date();
-    d.setMonth(d.getMonth() + 1, 1);
-    d.setHours(0, 0, 0, 0);
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-}
-
 const PLAN_META: Record<string, { label: string; badgeClass: string }> = {
     free:          { label: 'Free',    badgeClass: 'bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-500/25' },
     starter:       { label: 'Starter', badgeClass: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/25' },
     pro_monthly:   { label: 'Pro',     badgeClass: 'bg-primary/10 text-primary border-primary/25' },
     power_monthly: { label: 'Power',   badgeClass: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/25' },
+    team_monthly:  { label: 'Team',    badgeClass: 'bg-violet-500/10 text-violet-600 dark:text-violet-400 border-violet-500/25' },
 };
 
 function getBarColor(pct: number): string {
     if (pct >= 90) return 'bg-rose-500';
     if (pct >= 75) return 'bg-amber-500';
-    return 'bg-blue-500 dark:bg-blue-400';
+    return 'bg-primary';
 }
 
 function getPctColor(pct: number): string {
@@ -71,105 +57,15 @@ function getPctColor(pct: number): string {
     return 'text-muted-foreground';
 }
 
-// ─── Sub-Components ─────────────────────────────────────────────────────────
-
-interface QuotaCardProps {
-    title: string;
-    icon: React.ReactNode;
-    used: number;
-    limit: number;
-    remaining: number;
-    pct: number;
-    badgeText: string;
-    subtext: string;
-}
-
-function QuotaCard({
-    title,
-    icon,
-    used,
-    limit,
-    remaining,
-    pct,
-    badgeText,
-    subtext,
-}: QuotaCardProps) {
-    const clampedPct = Math.min(100, Math.max(0, pct));
-    const safeRemaining = Math.max(0, remaining);
-
-    return (
-        <div className="rounded-xl border border-border/70 bg-card/60 dark:bg-card/40 p-4 space-y-3.5 transition-colors hover:border-border">
-            {/* Header row */}
-            <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                    <div className="p-1.5 rounded-lg bg-muted/60 text-muted-foreground border border-border/40">
-                        {icon}
-                    </div>
-                    <div>
-                        <h4 className="text-[13px] font-semibold text-foreground tracking-tight">{title}</h4>
-                    </div>
-                </div>
-                {badgeText && (
-                    <span className="text-[11px] font-medium text-muted-foreground/80 bg-muted/50 px-2 py-0.5 rounded-md border border-border/40">
-                        {badgeText}
-                    </span>
-                )}
-            </div>
-
-            {/* Progress bar */}
-            <div className="relative h-2 w-full rounded-full overflow-hidden bg-muted/70">
-                <div
-                    className={cn(
-                        'h-full rounded-full transition-all duration-500 ease-out',
-                        getBarColor(clampedPct),
-                    )}
-                    style={{ width: `${Math.max(clampedPct, used > 0 ? 2 : 0)}%` }}
-                />
-            </div>
-
-            {/* Stats row */}
-            <div className="flex items-center justify-between text-xs">
-                <div className="flex items-baseline gap-1 text-muted-foreground">
-                    <span className="font-semibold text-foreground tabular-nums text-[13px]">
-                        {fmtNum(used)}
-                    </span>
-                    <span>/</span>
-                    <span className="tabular-nums font-medium">
-                        {fmtNum(limit)} credits
-                    </span>
-                </div>
-
-                <div className="flex items-center gap-2 tabular-nums">
-                    <span className="font-medium text-foreground">
-                        {fmtNum(safeRemaining)} left
-                    </span>
-                    <span className={cn('text-[11.5px]', getPctColor(clampedPct))}>
-                        ({Math.round(clampedPct)}%)
-                    </span>
-                </div>
-            </div>
-
-            {/* Footer subtext */}
-            <p className="text-[11px] text-muted-foreground/60 border-t border-border/30 pt-2.5">
-                {subtext}
-            </p>
-        </div>
-    );
-}
-
 // ─── Main Component ──────────────────────────────────────────────────────────
 
-interface UsageSettingsProps {
-    onNavigate?: (section: any) => void;
-}
-
-export function UsageSettings({ onNavigate }: UsageSettingsProps) {
+export function UsageSettings() {
     const { user, signInWithGoogle, signInWithGithub } = useAuth();
-    const [usage, setUsage]             = useState<AIQuotaStatus | null>(null);
-    const [loading, setLoading]         = useState(true);
-    const [error, setError]             = useState<string | null>(null);
+    const [usage, setUsage]         = useState<AIQuotaStatus | null>(null);
+    const [loading, setLoading]     = useState(true);
+    const [error, setError]         = useState<string | null>(null);
     const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-    const [now, setNow]                 = useState(() => new Date());
+    const [now, setNow]             = useState(() => new Date());
 
     useEffect(() => {
         const id = setInterval(() => setNow(new Date()), 30_000);
@@ -203,22 +99,21 @@ export function UsageSettings({ onNavigate }: UsageSettingsProps) {
         }
     }, [user, fetchData]);
 
-    // ── Derived Calculations ──────────────────────────────────────────────────
+    // ── Derived Values ──────────────────────────────────────────────────────
 
-    const dailyLimit = usage?.credit_limit_daily || 0;
-    const dailyUsed = usage?.credits_used_day || 0;
-    const dailyPct = dailyLimit > 0 ? Math.min(100, (dailyUsed / dailyLimit) * 100) : 0;
+    const monthLimit = usage?.credit_limit_monthly || 0;
+    const monthUsed = usage?.credits_used_month || 0;
+    const monthPct = monthLimit > 0 ? Math.min(100, (monthUsed / monthLimit) * 100) : 0;
+    const monthRemaining = usage?.credits_remaining ?? Math.max(0, monthLimit - monthUsed);
 
-    const monthlyLimit = usage?.credit_limit_monthly || 0;
-    const monthlyUsed = usage?.credits_used_month || 0;
-    const monthlyPct = monthlyLimit > 0 ? Math.min(100, (monthlyUsed / monthlyLimit) * 100) : (usage?.monthly_pct || 0);
-
-    const tomorrowMidnight = new Date(now);
-    tomorrowMidnight.setUTCDate(tomorrowMidnight.getUTCDate() + 1);
-    tomorrowMidnight.setUTCHours(0, 0, 0, 0);
+    const tomorrowMidnight = (() => {
+        const d = new Date(now);
+        d.setUTCHours(24, 0, 0, 0);
+        return d;
+    })();
 
     const planKey = usage?.plan_id || 'free';
-    const planInfo = PLAN_META[planKey] || { label: planKey, badgeClass: 'bg-primary/10 text-primary border-primary/25' };
+    const planInfo = PLAN_META[planKey] ?? { label: planKey, badgeClass: 'bg-primary/10 text-primary border-primary/25' };
 
     function lastUpdatedLabel() {
         if (!lastUpdated) return '';
@@ -228,44 +123,54 @@ export function UsageSettings({ onNavigate }: UsageSettingsProps) {
         return `${Math.floor(diffS / 60)}m ago`;
     }
 
+    // Reusable billing-style stat cell (no icons).
+    function StatCell({ label, value, hint }: { label: string; value: string; hint?: string }) {
+        return (
+            <div className="rounded-lg bg-muted/40 border border-border/50 p-3">
+                <p className="text-[11px] font-medium text-muted-foreground">{label}</p>
+                <p className="text-sm font-semibold text-foreground mt-0.5 tabular-nums">{value}</p>
+                {hint && <p className="text-[11px] text-muted-foreground/70 mt-0.5">{hint}</p>}
+            </div>
+        );
+    }
+
     // ── Unauthenticated State ────────────────────────────────────────────────
 
     if (!user) {
         return (
-            <div className="p-8 w-full flex flex-col items-center justify-center text-center space-y-4 py-16">
-                <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center text-primary">
-                    <BarChart3 className="w-6 h-6" />
-                </div>
-                <div className="space-y-1 max-w-sm">
-                    <h3 className="text-base font-semibold text-foreground">Sign in to view usage</h3>
-                    <p className="text-xs text-muted-foreground leading-relaxed">
-                        Sign in to view your real-time AI credits, daily limits, and plan quotas.
-                    </p>
-                </div>
-                <div className="flex flex-col w-full max-w-xs gap-2.5 pt-2">
-                    <Button
-                        onClick={() => signInWithGoogle()}
-                        variant="outline"
-                        className="w-full h-9 text-xs rounded-xl font-medium gap-2 shadow-xs"
-                    >
-                        <svg className="w-4 h-4" viewBox="0 0 24 24">
-                            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                            <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
-                            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
-                        </svg>
-                        Continue with Google
-                    </Button>
-                    <Button
-                        onClick={() => signInWithGithub()}
-                        variant="outline"
-                        className="w-full h-9 text-xs rounded-xl font-medium gap-2 shadow-xs"
-                    >
-                        <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
-                            <path fillRule="evenodd" clipRule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" />
-                        </svg>
-                        Continue with GitHub
-                    </Button>
+            <div className="p-6 w-full">
+                <div className="rounded-xl border bg-card p-8 flex flex-col items-center justify-center text-center space-y-4">
+                    <div className="space-y-1 max-w-sm">
+                        <h3 className="text-lg font-semibold text-foreground">Sign in to view usage</h3>
+                        <p className="text-sm text-muted-foreground leading-relaxed">
+                            View your real-time AI credits, daily limits, and plan quotas.
+                        </p>
+                    </div>
+                    <div className="flex flex-col w-full max-w-xs gap-2.5 pt-2">
+                        <Button
+                            onClick={() => signInWithGoogle()}
+                            variant="outline"
+                            className="w-full h-9 text-xs rounded-xl font-medium gap-2 shadow-xs"
+                        >
+                            <svg className="w-4 h-4" viewBox="0 0 24 24">
+                                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+                                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
+                            </svg>
+                            Continue with Google
+                        </Button>
+                        <Button
+                            onClick={() => signInWithGithub()}
+                            variant="outline"
+                            className="w-full h-9 text-xs rounded-xl font-medium gap-2 shadow-xs"
+                        >
+                            <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
+                                <path fillRule="evenodd" clipRule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.532 1.088 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" />
+                            </svg>
+                            Continue with GitHub
+                        </Button>
+                    </div>
                 </div>
             </div>
         );
@@ -287,10 +192,10 @@ export function UsageSettings({ onNavigate }: UsageSettingsProps) {
     if (error && !usage) {
         return (
             <div className="p-6 w-full">
-                <div className="rounded-xl border border-red-200 dark:border-red-900/40 bg-red-50 dark:bg-red-950/20 p-4 space-y-2">
-                    <p className="text-xs font-semibold text-red-600 dark:text-red-400">{error}</p>
+                <div className="rounded-xl border bg-card p-4 space-y-2">
+                    <p className="text-xs font-semibold text-foreground">{error}</p>
                     <p className="text-[11px] text-muted-foreground">
-                        Could not retrieve latest usage statistics from the server.
+                        Could not retrieve the latest usage statistics from the server.
                     </p>
                     <Button
                         onClick={fetchData}
@@ -307,23 +212,23 @@ export function UsageSettings({ onNavigate }: UsageSettingsProps) {
 
     if (!usage) return null;
 
-    // ── Render Dashboard ──────────────────────────────────────────────────────
+    // ── Render ────────────────────────────────────────────────────────────────
 
     return (
         <div className="p-6 w-full space-y-6">
 
-            {/* Header section */}
-            <div className="flex items-start justify-between">
+            {/* Header */}
+            <div className="flex items-center justify-between">
                 <div>
-                    <h3 className="text-base font-semibold text-foreground tracking-tight">Usage</h3>
-                    <p className="text-xs text-muted-foreground mt-0.5">
+                    <h3 className="text-lg font-semibold tracking-tight text-foreground">Usage</h3>
+                    <p className="text-sm text-muted-foreground">
                         AI credit usage and execution limits across all databases
                     </p>
                 </div>
                 <div className="flex items-center gap-2">
                     <Badge
                         variant="outline"
-                        className={cn('text-[11px] font-bold uppercase tracking-wider px-2.5 py-0.5', planInfo.badgeClass)}
+                        className={cn('text-[11px] font-medium px-2 py-0.5 rounded-full', planInfo.badgeClass)}
                     >
                         {planInfo.label}
                     </Badge>
@@ -340,102 +245,54 @@ export function UsageSettings({ onNavigate }: UsageSettingsProps) {
                 </div>
             </div>
 
-            {/* Quick Metrics Grid (2 balanced cards) */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {/* Concurrency Card */}
-                <div className="rounded-xl border border-border/70 bg-card/60 dark:bg-card/40 p-3.5 flex items-center gap-3.5">
-                    <div className="w-9 h-9 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0 border border-blue-500/20">
-                        <Cpu className="w-4.5 h-4.5" />
-                    </div>
-                    <div className="min-w-0">
-                        <div className="flex items-baseline gap-1.5">
-                            <span className="text-base font-bold text-foreground tabular-nums tracking-tight">
-                                {usage.concurrent_slots} / {usage.concurrent_limit}
-                            </span>
-                            <span className="text-[11px] text-muted-foreground/80 font-medium">
-                                Active Slots
-                            </span>
-                        </div>
-                        <p className="text-[11px] text-muted-foreground/60 truncate">
-                            Parallel agent execution capacity
-                        </p>
-                    </div>
+            {/* Monthly credits — primary number, no decoration */}
+            <div className="rounded-xl border bg-card p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                    <p className="text-[11px] font-medium text-muted-foreground">Monthly credits</p>
+                    <span className={cn('text-[11px]', getPctColor(monthPct))}>
+                        {Math.round(monthPct)}% used
+                    </span>
                 </div>
-
-                {/* AI Modes Card */}
-                <div className="rounded-xl border border-border/70 bg-card/60 dark:bg-card/40 p-3.5 flex items-center gap-3.5">
-                    <div className="w-9 h-9 rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0 border border-indigo-500/20">
-                        <Sparkles className="w-4.5 h-4.5" />
-                    </div>
-                    <div className="min-w-0">
-                        <div className="flex items-baseline gap-1.5">
-                            <span className="text-base font-bold text-foreground tracking-tight">
-                                Flash & Deep
-                            </span>
-                        </div>
-                        <p className="text-[11px] text-muted-foreground/60 truncate">
-                            Fast generation & multi-step reasoning
-                        </p>
-                    </div>
+                <div className="flex items-baseline gap-1.5">
+                    <span className="text-2xl font-bold tracking-tight text-foreground tabular-nums">
+                        {fmtNum(monthUsed)}
+                    </span>
+                    <span className="text-sm text-muted-foreground tabular-nums">
+                        / {fmtNum(monthLimit)} credits
+                    </span>
+                </div>
+                <div className="relative h-1.5 w-full rounded-full overflow-hidden bg-muted/70">
+                    <div
+                        className={cn('h-full rounded-full transition-all duration-500 ease-out', getBarColor(monthPct))}
+                        style={{ width: `${Math.max(monthPct, monthUsed > 0 ? 2 : 0)}%` }}
+                    />
+                </div>
+                <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                    <span className="tabular-nums">{fmtNum(monthRemaining)} credits remaining</span>
+                    <span>{fmtNum(usage.credits_used_day)} used today</span>
                 </div>
             </div>
 
-            {/* Usage Quotas Section */}
-            <div className="space-y-3.5">
-                {/* Daily Quota Card */}
-                <QuotaCard
-                    title="Daily Limit"
-                    icon={<Clock className="w-3.5 h-3.5" />}
-                    used={dailyUsed}
-                    limit={dailyLimit}
-                    remaining={usage.daily_remaining}
-                    pct={dailyPct}
-                    badgeText={`Resets in ${timeUntil(tomorrowMidnight)}`}
-                    subtext="Daily quota resets automatically at 00:00 UTC"
+            {/* Stat cells — same pattern as billing metrics */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                <StatCell
+                    label="Today"
+                    value={`${fmtNum(usage.credits_used_day)} / ${fmtNum(usage.credit_limit_daily)}`}
+                    hint={`Resets in ${timeUntil(tomorrowMidnight)}`}
                 />
-
-                {/* Monthly Quota Card */}
-                <QuotaCard
-                    title="Monthly Subscription Limit"
-                    icon={<BarChart3 className="w-3.5 h-3.5" />}
-                    used={monthlyUsed}
-                    limit={monthlyLimit}
-                    remaining={usage.credits_remaining}
-                    pct={monthlyPct}
-                    badgeText={`Resets ${formatMonthReset()}`}
-                    subtext="Total monthly credit budget renewed on the 1st of each month"
+                <StatCell
+                    label="Concurrent agents"
+                    value={`${usage.concurrent_slots} / ${usage.concurrent_limit}`}
+                    hint="Parallel execution capacity"
+                />
+                <StatCell
+                    label="Max tokens / run"
+                    value={fmtNum(usage.max_tokens_per_run)}
+                    hint={`Up to ${fmtNum(usage.max_agent_duration_secs / 60)} min per run`}
                 />
             </div>
 
-            {/* Upgrade Banner / Plan Navigation */}
-            <div className="rounded-xl border border-primary/20 bg-primary/5 dark:bg-primary/[0.03] p-4 flex items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                        <Zap className="w-4 h-4" />
-                    </div>
-                    <div>
-                        <p className="text-xs font-semibold text-foreground">
-                            Need more daily or monthly credits?
-                        </p>
-                        <p className="text-[11px] text-muted-foreground">
-                            Upgrade your plan to unlock higher capacity and increased limits.
-                        </p>
-                    </div>
-                </div>
-                {onNavigate && (
-                    <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => onNavigate('plans')}
-                        className="h-8 text-xs font-medium gap-1.5 rounded-lg border-primary/30 hover:bg-primary/10 text-primary shrink-0 shadow-2xs"
-                    >
-                        <span>View Plans</span>
-                        <ArrowUpRight className="w-3.5 h-3.5" />
-                    </Button>
-                )}
-            </div>
-
-            {/* Footer Timestamp */}
+            {/* Footer */}
             <div className="pt-1 text-center">
                 <p className="text-[11px] text-muted-foreground/50">
                     Updated {lastUpdatedLabel()} · Usage is synchronized live with your database

@@ -93,7 +93,15 @@ export async function apiRequest<T>(
 
     if (!response.ok) {
         if (response.status === 401) {
-            window.dispatchEvent(new Event('auth:unauthorized'));
+            // Exclude status check / login endpoints from firing global unauthorized event
+            const isAuthEndpoint = url.includes('/api/auth/session') ||
+                url.includes('/api/auth/google') ||
+                url.includes('/api/auth/github') ||
+                url.includes('/api/auth/logout');
+
+            if (!isAuthEndpoint) {
+                window.dispatchEvent(new Event('auth:unauthorized'));
+            }
         }
         throw new ApiError(response.status, data.message || data.error || 'Request failed', data);
     }

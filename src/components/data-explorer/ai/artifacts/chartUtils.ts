@@ -8,7 +8,7 @@ export type ChartType =
     | 'heatmap' | 'funnel' | 'scatter'
     | 'stats' | 'anomalies' | 'quality' | 'joins' | 'metrics'
     | 'executive' | 'diagram'
-    | 'chart' | 'stat_block' | 'report' | 'file' | 'suggestions' | 'analysis_plan' | 'slide_deck';
+    | 'chart' | 'stat_block' | 'report' | 'file' | 'suggestions' | 'analysis_plan' | 'slide_deck' | 'clarification';
 
 export function isNumericColumn(rows: Record<string, unknown>[], key: string): boolean {
     const vals = rows.slice(0, 15).map(r => r[key]);

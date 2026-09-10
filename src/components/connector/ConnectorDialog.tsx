@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Database } from 'lucide-react';
+import { PostgresIcon } from '@/components/data-explorer/shared/DatabaseEngineIcon';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
 import { Button } from '@/components/ui/button';
@@ -44,8 +44,8 @@ export function ConnectorDialog({ open, onClose, initialTab = 'overview', onSele
                     <VisuallyHidden>
                         <DialogTitle>Sign In Required</DialogTitle>
                     </VisuallyHidden>
-                    <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center text-primary">
-                        <Database className="w-6 h-6" />
+                    <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center">
+                        <PostgresIcon className="w-6 h-6" />
                     </div>
                     <div className="space-y-1">
                         <h3 className="text-base font-semibold text-foreground">Sign in required</h3>

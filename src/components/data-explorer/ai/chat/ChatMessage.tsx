@@ -1,7 +1,6 @@
 import { Check, Copy, AtSign, FileText, Download, Database } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { MarkdownText } from '../messages/MarkdownText';
-import { InlineSqlBlock } from '../messages/InlineSqlBlock';
 import { AgentStatusBar } from '../messages/AgentStatusBar';
 import { PlanSteps } from '../messages/PlanSteps';
 import { LiveToolSteps } from '../tools/LiveToolSteps';
@@ -23,18 +22,17 @@ interface ChatMessageProps {
     phase: AgentPhase;
     phaseDetail: string;
     iterations: number;
-    liveModel: string | null;
     isStreaming: boolean;
     copiedId: string | null;
     connectionId?: string;
     datasetCache: DatasetCache;
     availableTables: string[];
-    thinkingText?: string;
     liveThinking?: string;
     onCopy: (id: string, text: string) => void;
     onTableClick?: (tableName: string) => void;
     onExpand: (artifact: AgentArtifact) => void;
     onPin: (artifact: AgentArtifact) => void;
+    isPinnedArtifact?: (artifact: AgentArtifact) => boolean;
     onQuickSend?: (message: string) => void;
 }
 
@@ -49,8 +47,8 @@ function StreamingCursor() {
 
 export function ChatMessage({
     msg, agentMode, agentStatus, phase, phaseDetail, iterations,
-    liveModel, isStreaming, copiedId, connectionId, datasetCache,
-    availableTables, thinkingText = '', liveThinking, onCopy, onTableClick, onExpand, onPin, onQuickSend,
+    isStreaming, copiedId, connectionId, datasetCache,
+    availableTables, liveThinking, onCopy, onTableClick, onExpand, onPin, isPinnedArtifact, onQuickSend,
 }: ChatMessageProps) {
     return (
         <div className={cn('flex w-full group', msg.role === 'user' ? 'justify-end' : 'justify-start')}>
@@ -138,14 +136,13 @@ export function ChatMessage({
                 {msg.role === 'assistant' && (
                     <div className="flex flex-col gap-2 w-full">
                         {/* Agent status bar — live phase display */}
-                        {msg.isStreaming && agentMode && (
+                        {msg.isStreaming && isStreaming && agentMode && (
                             <AgentStatusBar
                                 phase={phase === 'idle' || phase === 'done' ? 'planning' : phase}
                                 phaseDetail={phaseDetail}
                                 toolSteps={msg.toolSteps ?? []}
                                 iteration={iterations ?? 0}
                                 isLive={agentStatus === 'running'}
-                                model={liveModel}
                                 liveThinking={liveThinking}
                             />
                         )}
@@ -154,7 +151,7 @@ export function ChatMessage({
                         {msg.planSteps && msg.planSteps.length > 0 && (
                             <PlanSteps
                                 steps={msg.planSteps}
-                                isLive={!!msg.isStreaming && agentStatus === 'running'}
+                                isLive={!!msg.isStreaming && isStreaming && agentStatus === 'running'}
                             />
                         )}
 
@@ -162,12 +159,31 @@ export function ChatMessage({
                         {msg.toolSteps && msg.toolSteps.length > 0 && (
                             <LiveToolSteps
                                 steps={msg.toolSteps}
-                                isLive={!!msg.isStreaming && agentStatus === 'running'}
+                                isLive={!!msg.isStreaming && isStreaming && agentStatus === 'running'}
                                 defaultExpanded={false}
                             />
                         )}
 
-                        {/* Artifacts */}
+                        {/* Text content */}
+                        {(msg.content || (msg.isStreaming && isStreaming && agentMode)) && (
+                            <div className="text-[15px] text-foreground leading-relaxed">
+                                {msg.content ? (
+                                    <>
+                                        <MarkdownText
+                                            text={msg.content}
+                                            onTableClick={onTableClick}
+                                            connectionId={connectionId}
+                                            availableTables={availableTables}
+                                        />
+                                        {msg.isStreaming && isStreaming && <StreamingCursor />}
+                                    </>
+                                ) : (
+                                    msg.isStreaming && isStreaming && <StreamingCursor />
+                                )}
+                            </div>
+                        )}
+
+                        {/* Artifacts (rendered after the narrative explanation) */}
                         {msg.artifacts && msg.artifacts.map((artifact, idx) => (
                             <ArtifactView
                                 key={idx}
@@ -175,38 +191,15 @@ export function ChatMessage({
                                 connectionId={connectionId}
                                 onExpand={onExpand}
                                 onPin={onPin}
+                                isPinned={isPinnedArtifact?.(artifact)}
                                 onQuickSend={onQuickSend}
                                 cachedAt={artifact.sql && connectionId ? datasetCache.getCachedAt(artifact.sql, connectionId) : null}
                             />
                         ))}
 
-                        {/* Text content */}
-                        {(msg.content || (msg.isStreaming && agentMode)) && (
-                            <div className="text-[15px] text-foreground leading-relaxed">
-                                {msg.content ? (
-                                    <>
-                                        <MarkdownText
-                                            text={
-                                                // Strip markdown pipe-table lines when data artifacts already display the same data
-                                                msg.artifacts?.some(a => a.rows && a.rows.length > 0)
-                                                    ? msg.content.split('\n').filter(l => !l.trimStart().startsWith('|')).join('\n').trim()
-                                                    : msg.content
-                                            }
-                                            onTableClick={onTableClick}
-                                            connectionId={connectionId}
-                                            availableTables={availableTables}
-                                        />
-                                        {msg.isStreaming && <StreamingCursor />}
-                                    </>
-                                ) : (
-                                    msg.isStreaming && <StreamingCursor />
-                                )}
-                            </div>
-                        )}
-
                         {/* Credits used footer */}
                         {!msg.isStreaming && msg.creditsUsed != null && msg.creditsUsed > 0 && (
-                            <div className="mt-1 text-[11px] text-muted-foreground/35 font-mono">
+                            <div className="mt-1 text-[11px] text-muted-foreground/75 font-mono">
                                 {msg.creditsUsed} credit{msg.creditsUsed !== 1 ? 's' : ''} used
                             </div>
                         )}
@@ -218,7 +211,7 @@ export function ChatMessage({
                     <div className={cn('flex opacity-0 group-hover:opacity-100 transition-opacity mt-0.5',
                         msg.role === 'user' ? 'justify-end' : 'justify-start')}>
                         <button
-                            className="flex items-center gap-1 text-[11px] text-muted-foreground/50 hover:text-muted-foreground transition-colors px-1 py-0.5 rounded"
+                            className="flex items-center gap-1 text-[11px] text-muted-foreground/75 hover:text-foreground transition-colors px-1 py-0.5 rounded cursor-pointer"
                             onClick={() => onCopy(msg.id, msg.content)}>
                             {copiedId === msg.id
                                 ? <Check className="h-3 w-3 text-green-500" />

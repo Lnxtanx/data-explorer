@@ -161,6 +161,79 @@ ${artifact.summary ? `<p style="margin:0.75rem 0;font-size:0.8125rem;color:var(-
 ${issueRows}`;
 }
 
+function buildRegressionSection(artifact: AgentArtifact): string {
+    const coeffs = artifact.coefficients ?? [];
+    const r2 = artifact.rSquared;
+    const adjR2 = artifact.adjRSquared;
+    const intercept = artifact.intercept;
+
+    const metrics = [
+        ['R²', r2 != null ? Number(r2).toFixed(4) : '—'],
+        ['Adj. R²', adjR2 != null ? Number(adjR2).toFixed(4) : '—'],
+        ['Intercept', intercept != null ? Number(intercept).toFixed(6) : '—'],
+        ['Sample size', artifact.sampleSize != null ? String(artifact.sampleSize) : '—'],
+    ];
+    const metricCards = metrics.map(([label, value]) =>
+        `<div class="stat-card"><div style="font-size:0.625rem;color:var(--muted)">${label}</div><div class="mono" style="font-size:1rem;margin-top:0.25rem">${esc(value)}</div></div>`
+    ).join('\n');
+
+    let coeffTable = '';
+    if (coeffs.length > 0) {
+        const keys = typeof coeffs[0] === 'object' ? Object.keys(coeffs[0]) : ['variable', 'coefficient'];
+        coeffTable = '<table><thead><tr>' + keys.map(k => `<th>${esc(k === 'pValue' ? 'p-value' : k.replace(/_/g, ' '))}</th>`).join('') +
+            '</tr></thead><tbody>' + coeffs.map(c =>
+                '<tr>' + keys.map(k => `<td class="mono">${esc((c as Record<string, unknown>)[k])}</td>`).join('') + '</tr>'
+            ).join('\n') + '</tbody></table>';
+    }
+
+    return `<div class="stat-grid">${metricCards}</div>${coeffTable}`;
+}
+
+function buildChartSection(artifact: AgentArtifact): string {
+    const rows: string[] = [];
+
+    const addTable = (heads: string[], data: Array<Array<unknown>>) => {
+        if (data.length === 0) return;
+        rows.push('<table><thead><tr>' + heads.map(h => `<th>${esc(h)}</th>`).join('') +
+            '</tr></thead><tbody>' + data.map(r =>
+                '<tr>' + r.map(c => `<td class="mono">${esc(c)}</td>`).join('') + '</tr>'
+            ).join('\n') + '</tbody></table>');
+    };
+
+    if (Array.isArray(artifact.stages) && artifact.stages.length > 0) {
+        addTable(
+            ['Stage', 'Count', 'Conversion'],
+            artifact.stages.map((s: Record<string, unknown>) => [
+                String(s.name ?? s.label ?? '—'),
+                s.count,
+                s.conversion != null ? Number(s.conversion).toFixed(2) + '%' : '—',
+            ]),
+        );
+    } else if (Array.isArray(artifact.labels) && Array.isArray(artifact.values)) {
+        addTable(
+            ['Label', 'Value'],
+            artifact.labels.map((l, i) => [l, artifact.values![i]]),
+        );
+    } else if (Array.isArray(artifact.matrix) && artifact.matrix.length > 0) {
+        const keys = Array.isArray(artifact.matrix[0]) ? null : Object.keys(artifact.matrix[0]);
+        if (keys) addTable(keys, artifact.matrix.map(m => keys.map(k => (m as Record<string, unknown>)[k])));
+    } else if (Array.isArray(artifact.historicalLabels) && Array.isArray(artifact.forecastLabels)) {
+        addTable(
+            ['Series', 'Label', 'Value'],
+            [
+                ...artifact.historicalLabels.map((l, i) => ['Historical', l, artifact.historicalValues?.[i]]),
+                ...artifact.forecastLabels.map((l, i) => ['Forecast', l, artifact.forecastValues?.[i]]),
+            ],
+        );
+    }
+
+    if (artifact.overallConversion != null) {
+        rows.unshift(`<p class="meta">Overall conversion: ${Number(artifact.overallConversion).toFixed(2)}%</p>`);
+    }
+
+    return rows.join('\n') || buildTableSection(artifact);
+}
+
 function buildJoinsSection(artifact: AgentArtifact): string {
     const paths = artifact.paths ?? [];
     if (paths.length === 0) return '<p>No join paths found.</p>';
@@ -195,13 +268,20 @@ function buildMetricsSection(artifact: AgentArtifact): string {
 
 export function buildHtmlReport(artifact: AgentArtifact): string {
     const artType = artifact.type as string;
-    const title = artifact.title || (artType === 'table' ? 'Query Results' : artType.charAt(0).toUpperCase() + artType.slice(1) + ' Report');
+    const kind = artType === 'stat_block' ? ((artifact.statBlockKind ?? 'table') as string) : artType === 'chart' ? 'chart' : artType;
+    const title = artifact.title
+        || (artType === 'table' ? 'Query Results'
+            : artType === 'chart' ? 'Chart Report'
+                : artType === 'stat_block' ? `${(artifact.statBlockKind ?? 'Analysis').charAt(0).toUpperCase()}${(artifact.statBlockKind ?? 'Analysis').slice(1)} Report`
+                    : artType.charAt(0).toUpperCase() + artType.slice(1) + ' Report');
 
     let body: string;
-    switch (artType) {
+    switch (kind) {
         case 'stats':      body = buildStatsSection(artifact); break;
         case 'anomalies':  body = buildAnomaliesSection(artifact); break;
         case 'quality':    body = buildQualitySection(artifact); break;
+        case 'regression': body = buildRegressionSection(artifact); break;
+        case 'chart':      body = buildChartSection(artifact); break;
         case 'joins':      body = buildJoinsSection(artifact); break;
         case 'metrics':    body = buildMetricsSection(artifact); break;
         default:           body = buildTableSection(artifact); break;

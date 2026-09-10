@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import {
-    Database, ClipboardPaste, CheckCircle2, AlertCircle,
+    ClipboardPaste, CheckCircle2, AlertCircle,
     Wifi, WifiOff, Copy, RefreshCw, ArrowRight, Check
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { useVerifyConnector, useConnectors } from '@/lib/api/connector';
 import type { ConnectorVerifyResult } from '@/lib/api/connector';
+import { DatabaseEngineIcon, PostgresIcon } from '@/components/data-explorer/shared/DatabaseEngineIcon';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
@@ -120,9 +121,12 @@ export function ConnectorWizard({ onClose }: ConnectorWizardProps) {
         <div className="p-6 space-y-6 flex flex-col h-full overflow-y-auto">
             {/* Clean Header */}
             <div className="pb-2 border-b">
-                <h3 className="text-xl font-semibold tracking-tight text-foreground">
-                    Connect PostgreSQL Database
-                </h3>
+                <div className="flex items-center gap-2">
+                    <PostgresIcon className="w-5 h-5" />
+                    <h3 className="text-xl font-semibold tracking-tight text-foreground">
+                        Connect PostgreSQL Database
+                    </h3>
+                </div>
                 <p className="text-xs text-muted-foreground mt-0.5">
                     Connect your local or VPC database via outbound proxy daemon without exposing credentials to the cloud.
                 </p>
@@ -196,7 +200,7 @@ export function ConnectorWizard({ onClose }: ConnectorWizardProps) {
                                     Connector ID
                                 </label>
                                 <div className="relative">
-                                    <Database className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                                    <PostgresIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" />
                                     <Input
                                         value={connectorIdInput}
                                         onChange={(e) => handleSmartPaste(e.target.value, 'id')}
@@ -257,10 +261,15 @@ export function ConnectorWizard({ onClose }: ConnectorWizardProps) {
                                     <div className={cn(
                                         'w-9 h-9 rounded-lg flex items-center justify-center border shrink-0',
                                         result.is_online
-                                            ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
-                                            : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20'
+                                            ? 'bg-emerald-500/10 border-emerald-500/20'
+                                            : 'bg-amber-500/10 border-amber-500/20'
                                     )}>
-                                        <Database className="w-4 h-4" />
+                                        <DatabaseEngineIcon
+                                            engine="postgres"
+                                            className="w-5 h-5"
+                                            isOnline={result.is_online}
+                                            showStatusDot={true}
+                                        />
                                     </div>
                                     <div>
                                         <p className="text-sm font-semibold text-foreground">
@@ -297,7 +306,15 @@ export function ConnectorWizard({ onClose }: ConnectorWizardProps) {
                                     <div className="space-y-1">
                                         {result.databases.map((db) => (
                                             <div key={db.db_alias} className="flex items-center justify-between px-3 py-1.5 rounded-lg bg-muted/40">
-                                                <span className="font-medium text-foreground">{db.database}</span>
+                                                <div className="flex items-center gap-2 min-w-0">
+                                                    <DatabaseEngineIcon
+                                                        engine="postgres"
+                                                        className="w-3.5 h-3.5"
+                                                        isOnline={result.is_online}
+                                                        showStatusDot={true}
+                                                    />
+                                                    <span className="font-medium text-foreground truncate">{db.database}</span>
+                                                </div>
                                                 {db.version && <span className="text-[10px] text-muted-foreground font-mono">{db.version}</span>}
                                             </div>
                                         ))}

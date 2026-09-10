@@ -79,7 +79,11 @@ export async function exportPdf(artifact: AgentArtifact, title?: string): Promis
 
     // ── Title ─────────────────────────────────────────────────────────────
     const artType = artifact.type as string;
-    const reportTitle = title || artifact.title || artType.charAt(0).toUpperCase() + artType.slice(1) + ' Report';
+    const kind = artType === 'stat_block' ? ((artifact.statBlockKind ?? 'table') as string) : artType === 'chart' ? 'chart' : artType;
+    const reportTitle = title || artifact.title
+        || (artType === 'chart' ? 'Chart Report'
+            : artType === 'stat_block' ? `${(artifact.statBlockKind ?? 'Analysis').charAt(0).toUpperCase()}${(artifact.statBlockKind ?? 'Analysis').slice(1)} Report`
+                : artType.charAt(0).toUpperCase() + artType.slice(1) + ' Report');
 
     addText(reportTitle, { size: 16, bold: true });
     addGap(2);
@@ -87,7 +91,7 @@ export async function exportPdf(artifact: AgentArtifact, title?: string): Promis
     addGap(16);
 
     // ── Body per artifact type ────────────────────────────────────────────
-    switch (artType) {
+    switch (kind) {
         case 'stats': {
             const stats = artifact.stats ?? [];
             addText(`${artifact.totalRows != null ? artifact.totalRows.toLocaleString() + ' total rows, ' : ''}${stats.length} columns analyzed`, { size: 9, color: C.muted });
@@ -145,6 +149,46 @@ export async function exportPdf(artifact: AgentArtifact, title?: string): Promis
                     [['Severity', 'Column', 'Issue', 'Affected Rows', 'Recommendation']],
                     issues.map(i => [i.severity.toUpperCase(), i.column, i.issueType.replace(/_/g, ' '), String(i.affectedRows), i.recommendation]),
                 );
+            }
+            break;
+        }
+
+        case 'regression': {
+            const coeffs = artifact.coefficients ?? [];
+            const r2 = artifact.rSquared;
+            const adjR2 = artifact.adjRSquared;
+            const intercept = artifact.intercept;
+            addText(`R² = ${r2 != null ? Number(r2).toFixed(4) : '—'}` + (adjR2 != null ? `   ·   Adj. R² = ${Number(adjR2).toFixed(4)}` : '') + (intercept != null ? `   ·   Intercept = ${Number(intercept).toFixed(6)}` : ''), { size: 9, color: C.muted });
+            addGap(8);
+            if (coeffs.length > 0) {
+                const keys = Object.keys(coeffs[0]);
+                addAutoTable(
+                    [keys.map(k => k === 'pValue' ? 'p-value' : k.replace(/_/g, ' '))],
+                    coeffs.map(c => keys.map(k => str((c as Record<string, unknown>)[k]))),
+                );
+            }
+            break;
+        }
+
+        case 'chart': {
+            const addT = (head: string[], body: unknown[][]) => addAutoTable([head], body.map(r => r.map(v => str(v))));
+            if (Array.isArray(artifact.stages) && artifact.stages.length > 0) {
+                addT(
+                    ['Stage', 'Count', 'Conversion'],
+                    artifact.stages.map(s => [str((s as Record<string, unknown>).name ?? (s as Record<string, unknown>).label ?? '—'), (s as Record<string, unknown>).count, (s as Record<string, unknown>).conversion != null ? Number((s as Record<string, unknown>).conversion).toFixed(2) + '%' : '—']),
+                );
+            } else if (Array.isArray(artifact.labels) && Array.isArray(artifact.values)) {
+                addT(['Label', 'Value'], artifact.labels.map((l, i) => [l, artifact.values![i]]));
+            } else if (Array.isArray(artifact.matrix) && artifact.matrix.length > 0 && typeof artifact.matrix[0] === 'object') {
+                const keys = Object.keys(artifact.matrix[0] as Record<string, unknown>);
+                addT(keys, artifact.matrix.map(m => keys.map(k => (m as Record<string, unknown>)[k])));
+            } else if (Array.isArray(artifact.historicalLabels) && Array.isArray(artifact.forecastLabels)) {
+                addT(['Series', 'Label', 'Value'], [
+                    ...artifact.historicalLabels.map((l, i) => ['Historical', l, artifact.historicalValues?.[i]]),
+                    ...artifact.forecastLabels.map((l, i) => ['Forecast', l, artifact.forecastValues?.[i]]),
+                ]);
+            } else {
+                addText('No data.', { size: 9, color: C.muted });
             }
             break;
         }

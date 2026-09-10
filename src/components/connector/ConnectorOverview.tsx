@@ -1,9 +1,10 @@
 import { useMemo } from 'react';
-import { Database, Wifi, WifiOff, Plus, ArrowRight, Activity, Clock, Zap, ShieldCheck, Terminal, Server, CheckCircle2, XCircle } from 'lucide-react';
+import { Wifi, WifiOff, Plus, ArrowRight, Activity, Clock, Zap, ShieldCheck, Terminal, Server, CheckCircle2, XCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useConnectors, useExecutionLogs, useHealthEvents } from '@/lib/api/connector';
+import { DatabaseEngineIcon, PostgresIcon } from '@/components/data-explorer/shared/DatabaseEngineIcon';
 import { cn } from '@/lib/utils';
 
 interface ConnectorOverviewProps {
@@ -58,7 +59,7 @@ export function ConnectorOverview({ onNavigate }: ConnectorOverviewProps) {
                 <div className="p-3 rounded-xl border bg-background space-y-1 shadow-xs">
                     <div className="flex items-center justify-between text-muted-foreground">
                         <span className="text-[10px] font-semibold uppercase tracking-wider">Connectors</span>
-                        <Database className="w-3.5 h-3.5 text-primary" />
+                        <PostgresIcon className="w-3.5 h-3.5" />
                     </div>
                     <div className="text-base font-semibold text-foreground pt-0.5">
                         {connectorsLoading ? '—' : `${totalConnectors} ${totalConnectors === 1 ? 'host' : 'hosts'}`}
@@ -138,7 +139,7 @@ export function ConnectorOverview({ onNavigate }: ConnectorOverviewProps) {
             <Card className="border rounded-xl shadow-none shrink-0 overflow-hidden">
                 <CardHeader className="py-2.5 px-4 border-b bg-muted/10 shrink-0 flex flex-row items-center justify-between">
                     <div className="flex items-center gap-2 text-xs font-semibold text-foreground">
-                        <Database className="w-3.5 h-3.5 text-primary" />
+                        <PostgresIcon className="w-3.5 h-3.5" />
                         <span>Registered Host Proxies</span>
                     </div>
                     <Button
@@ -167,14 +168,15 @@ export function ConnectorOverview({ onNavigate }: ConnectorOverviewProps) {
                                         <div className={cn(
                                             'w-7 h-7 rounded-lg flex items-center justify-center shrink-0 border',
                                             connector.is_online
-                                                ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
-                                                : 'bg-muted text-muted-foreground border-border'
+                                                ? 'bg-emerald-500/10 border-emerald-500/20'
+                                                : 'bg-muted border-border'
                                         )}>
-                                            {connector.is_online ? (
-                                                <Wifi className="w-3.5 h-3.5" />
-                                            ) : (
-                                                <WifiOff className="w-3.5 h-3.5" />
-                                            )}
+                                            <DatabaseEngineIcon
+                                                engine="postgres"
+                                                className="w-4 h-4"
+                                                isOnline={connector.is_online}
+                                                showStatusDot={true}
+                                            />
                                         </div>
                                         <div className="min-w-0 flex-1">
                                             <p className="font-semibold text-foreground truncate">
@@ -225,7 +227,7 @@ export function ConnectorOverview({ onNavigate }: ConnectorOverviewProps) {
                         </div>
                     ) : (
                         <div className="p-8 text-center space-y-2">
-                            <Database className="w-8 h-8 text-muted-foreground/40 mx-auto" />
+                            <PostgresIcon className="w-8 h-8 mx-auto opacity-50" />
                             <p className="text-xs font-semibold text-foreground">No proxy connectors connected</p>
                             <p className="text-[11px] text-muted-foreground max-w-sm mx-auto">
                                 Run <code className="px-1 py-0.5 rounded bg-muted font-mono text-[10px]">sw-agent start</code> on your local PostgreSQL machine to begin.
@@ -308,7 +310,7 @@ export function ConnectorOverview({ onNavigate }: ConnectorOverviewProps) {
                                             </span>
                                             {table && (
                                                 <span className="hidden md:inline-flex items-center gap-1 px-1.5 py-0.2 rounded bg-muted/60 text-[10px] text-muted-foreground shrink-0">
-                                                    <Database className="w-2.5 h-2.5" />
+                                                    <PostgresIcon className="w-2.5 h-2.5" />
                                                     {table}
                                                 </span>
                                             )}

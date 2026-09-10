@@ -10,6 +10,8 @@ import {
 } from 'recharts';
 import { cn } from '@/lib/utils';
 import { CHART_COLORS, ChartType, detectChartType, isNumericColumn } from './chartUtils';
+import { ChartView } from './views/ChartView';
+import { StatBlockView } from './views/StatBlockView';
 import { exportHtml as exportSingleHtml } from './htmlReport';
 import { exportPdf as exportSinglePdf } from './pdfReport';
 import type { AgentArtifact } from '@/hooks/useAIAgent';
@@ -28,23 +30,17 @@ interface DashboardPanelProps {
 
 function DashboardCard({ artifact, onRemove }: { artifact: AgentArtifact; onRemove: () => void }) {
     const artType = artifact.type as string;
-    const isStats = artType === 'stats' && Array.isArray(artifact.stats);
-    const isAnomalies = artType === 'anomalies' && Array.isArray(artifact.anomalies);
-    const isQuality = artType === 'quality' && artifact.score != null;
-    const isJoins = artType === 'joins' && Array.isArray(artifact.paths);
-    const isMetrics = artType === 'metrics';
+    const isChart = artType === 'chart' || artifact.previewType === 'chart';
+    const isStatBlock = artType === 'stat_block' || artifact.previewType === 'stat_block';
 
     const rows = artifact.rows ?? [];
     const cols = artifact.columns ?? [];
 
     const mode = useMemo<ChartType>(() => {
-        if (isStats) return 'stats';
-        if (isAnomalies) return 'anomalies';
-        if (isQuality) return 'quality';
-        if (isJoins) return 'joins';
-        if (isMetrics) return 'metrics';
+        if (isChart) return 'chart';
+        if (isStatBlock) return 'stat_block';
         return detectChartType(rows, cols);
-    }, [isStats, isAnomalies, isQuality, isJoins, isMetrics, rows, cols]);
+    }, [isChart, isStatBlock, rows, cols]);
 
     const numCols = cols.filter(c => isNumericColumn(rows, c.name));
     const labelCol = cols.find(c => !isNumericColumn(rows, c.name)) ?? cols[0];
@@ -60,11 +56,8 @@ function DashboardCard({ artifact, onRemove }: { artifact: AgentArtifact; onRemo
     // Title
     let title = artifact.title ?? '';
     if (!title) {
-        if (isStats) title = `${artifact.stats!.length} columns — stats`;
-        else if (isAnomalies) title = `Anomalies (${artifact.totalAnomalies ?? 0})`;
-        else if (isQuality) title = `Quality: ${artifact.score}/100`;
-        else if (isJoins) title = `${artifact.paths?.length ?? 0} join paths`;
-        else if (isMetrics) title = 'Inferred Metrics';
+        if (isChart) title = artifact.chartType ? `${artifact.chartType.charAt(0).toUpperCase()}${artifact.chartType.slice(1)} Chart` : 'Chart';
+        else if (isStatBlock) title = 'Stats';
         else title = `${rows.length} row${rows.length !== 1 ? 's' : ''}`;
     }
 
@@ -84,72 +77,11 @@ function DashboardCard({ artifact, onRemove }: { artifact: AgentArtifact; onRemo
             {/* Card body */}
             <div className="flex-1 overflow-auto p-2 min-h-0">
                 {/* Stats summary */}
-                {mode === 'stats' && isStats && (
-                    <div className="text-xs space-y-1">
-                        {artifact.stats!.slice(0, 8).map(s => (
-                            <div key={s.name} className="flex justify-between gap-2">
-                                <span className="font-mono text-foreground/80 truncate">{s.name}</span>
-                                <span className="text-muted-foreground/50 shrink-0">{s.nullPercent.toFixed(0)}% null</span>
-                            </div>
-                        ))}
-                        {artifact.stats!.length > 8 && (
-                            <div className="text-muted-foreground/40 text-center">+{artifact.stats!.length - 8} more</div>
-                        )}
-                    </div>
-                )}
+                {/* Chart */}
+                {mode === 'chart' && isChart && <ChartView artifact={artifact} height={160} />}
 
-                {/* Anomalies summary */}
-                {mode === 'anomalies' && isAnomalies && (
-                    <div className="text-xs space-y-1">
-                        {artifact.anomalies!.slice(0, 6).map((a, i) => (
-                            <div key={i} className="flex items-center gap-1.5">
-                                <span className={cn('text-[9px] font-semibold rounded px-1 py-0.5',
-                                    a.severity === 'high' ? 'text-red-500 bg-red-500/10' :
-                                    a.severity === 'medium' ? 'text-amber-500 bg-amber-500/10' :
-                                    'text-muted-foreground bg-muted/40'
-                                )}>{a.severity[0].toUpperCase()}</span>
-                                <span className="font-mono text-foreground/80 truncate">{a.column}</span>
-                                <span className="text-muted-foreground/50 ml-auto shrink-0">{a.count}</span>
-                            </div>
-                        ))}
-                    </div>
-                )}
-
-                {/* Quality score */}
-                {mode === 'quality' && isQuality && (
-                    <div className="flex flex-col items-center justify-center h-full gap-1">
-                        <span className={cn('text-3xl font-bold tabular-nums',
-                            artifact.score! >= 80 ? 'text-emerald-500' : artifact.score! >= 50 ? 'text-amber-500' : 'text-red-500'
-                        )}>{artifact.score}</span>
-                        <span className="text-xs text-muted-foreground/50">/100</span>
-                        {artifact.issues && <span className="text-[10px] text-muted-foreground/40">{artifact.issues.length} issues</span>}
-                    </div>
-                )}
-
-                {/* Joins */}
-                {mode === 'joins' && isJoins && (
-                    <div className="text-xs space-y-1">
-                        {artifact.paths!.slice(0, 6).map((p, i) => (
-                            <div key={i} className="flex items-center gap-1 text-[11px] truncate">
-                                <span className="font-mono text-foreground/70">{p.from}.{p.fromColumn}</span>
-                                <span className="text-muted-foreground/40">→</span>
-                                <span className="font-mono text-foreground/70">{p.to}.{p.toColumn}</span>
-                            </div>
-                        ))}
-                    </div>
-                )}
-
-                {/* Metrics */}
-                {mode === 'metrics' && isMetrics && (
-                    <div className="text-xs space-y-1.5">
-                        {(artifact.measures ?? []).length > 0 && (
-                            <div><span className="text-[9px] text-muted-foreground/50 uppercase">Measures:</span> <span className="font-mono text-emerald-600 dark:text-emerald-400">{artifact.measures!.join(', ')}</span></div>
-                        )}
-                        {(artifact.dimensions ?? []).length > 0 && (
-                            <div><span className="text-[9px] text-muted-foreground/50 uppercase">Dimensions:</span> <span className="font-mono text-blue-600 dark:text-blue-400">{artifact.dimensions!.join(', ')}</span></div>
-                        )}
-                    </div>
-                )}
+                {/* Stat block */}
+                {mode === 'stat_block' && isStatBlock && <StatBlockView artifact={artifact} />}
 
                 {/* Table */}
                 {mode === 'table' && (

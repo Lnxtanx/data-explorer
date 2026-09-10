@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { ChevronRight, FolderKanban } from 'lucide-react';
+import { ChevronRight, FolderKanban, X, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAIStream } from '@/hooks/useAIStream';
 import { useAIAgent } from '@/hooks/useAIAgent';
@@ -16,10 +16,9 @@ import { WorkspacePanel } from './artifacts/WorkspacePanel';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
 import { ChatMessage } from './chat/ChatMessage';
 import { ChatInput } from './chat/ChatInput';
-import { ContextWindowBar } from './chat/ContextWindowBar';
 import type { AgentMode } from './models/ModeSelector';
-import type { AgentArtifact } from '@/hooks/useAIAgent';
-import { uploadFilesForAI, type AIMessage } from '@/lib/api/ai';
+import type { AgentArtifact, AgentToolStep } from '@/hooks/useAIAgent';
+import { uploadFilesForAI, getChatMessages, type AIMessage } from '@/lib/api/ai';
 import type { LocalMessage } from './chat/types';
 import { logger } from '@/lib/logger';
 
@@ -85,29 +84,103 @@ function stripXmlTags(text: string): string {
 function hasArtifactData(a: NonNullable<AIMessage['artifacts']>[number]): boolean {
     if (!a.type) return !!(a.rows && a.columns);
     switch (a.type) {
-        case 'table':    return !!(a.rows && a.columns);
-        case 'stats':    return !!a.stats;
+        case 'table':
+        case 'sample':
+        case 'search':   return !!(a.rows && a.columns);
+        case 'stats':
+        case 'stat_block': return !!((a as any).stats || (a as any).stat_block || a.summary || (a as any).columnStats);
         case 'diagram':  return !!a.mermaid;
+        case 'file':     return !!((a as any).download_url || (a as any).downloadUrl || (a as any).url || (a as any).filename);
+        case 'chart':    return true;
+        case 'query':    return !!(a.sql || (a.rows && a.columns));
+        case 'report':   return !!((a as any).sections || (a as any).insights);
+        case 'suggestions': return !!((a as any).suggestions);
+        case 'analysis_plan': return !!((a as any).planStepsData || (a as any).plan_steps);
+        case 'slide_deck': return !!((a as any).content);
+        case 'clarification': return !!((a as any).question || (a as any).options);
+        case 'tool_call': return false; // Handled separately in toolSteps
+        case 'thinking': return false; // Handled separately in toolSteps
         default:         return !!(a.rows && a.columns);
     }
 }
 
-function toLocal(m: AIMessage): LocalMessage {
-    const artifacts: AgentArtifact[] = (m.artifacts ?? [])
+function toLocal(m: AIMessage, index?: number, allMessages?: AIMessage[]): LocalMessage {
+    const rawArtifacts = m.artifacts ?? [];
+    const artifacts: AgentArtifact[] = rawArtifacts
         .filter(hasArtifactData)
-        .map(a => ({ type: a.type ?? 'table', ...a } as AgentArtifact));
+        .map(a => ({
+            type: a.type ?? 'table',
+            downloadUrl: (a as any).download_url || (a as any).downloadUrl || (a as any).url,
+            filename: (a as any).filename,
+            fileSize: (a as any).file_size || (a as any).size_bytes || (a as any).fileSize,
+            rowCount: (a as any).row_count ?? (a as any).rowCount,
+            question: (a as any).question,
+            options: (a as any).options,
+            ...a,
+        } as AgentArtifact));
 
-    // Restore tool steps from execution_trace if available
+    // If an assistant message has a clarification artifact, check if it was answered in history
+    if (m.role === 'assistant' && allMessages && index !== undefined) {
+        const clarIdx = artifacts.findIndex(a => a.type === 'clarification');
+        if (clarIdx !== -1) {
+            const nextUserMsg = allMessages.slice(index + 1).find(msg => msg.role === 'user');
+            if (nextUserMsg && nextUserMsg.content) {
+                artifacts[clarIdx] = {
+                    ...artifacts[clarIdx],
+                    answered: true,
+                    answer: nextUserMsg.content,
+                };
+            }
+        }
+    }
+
+    // Restore tool steps from execution_trace if available, or fall back to tool_call artifacts
     const rawSteps = (m as any).execution_trace?.toolSteps ?? [];
-    const toolSteps = rawSteps.length > 0
-        ? rawSteps.map((s: any) => ({
+    let toolSteps: AgentToolStep[] | undefined = undefined;
+
+    if (rawSteps.length > 0) {
+        toolSteps = rawSteps.map((s: any) => ({
             id: s.id,
             name: s.name,
             input: s.input ?? {},
             status: s.status === 'done' ? 'done' as const : s.status === 'error' ? 'error' as const : 'calling' as const,
             result: s.result,
-        }))
-        : undefined;
+            latencyMs: s.latency_ms ?? s.latencyMs,
+            startedAt: s.startedAt,
+            downloadUrl: s.downloadUrl ?? s.download_url,
+            filename: s.filename,
+        }));
+    } else {
+        const toolArtifacts = rawArtifacts.filter(a => (a as any).type === 'tool_call');
+        if (toolArtifacts.length > 0) {
+            toolSteps = toolArtifacts.map((a: any, idx: number) => ({
+                id: a.id || `step-${idx}`,
+                name: a.tool || a.name || 'tool',
+                input: a.input ?? {},
+                status: (a.status === 'error' ? 'error' : 'done') as 'calling' | 'done' | 'error',
+                result: a.result || (a.summary ? { success: true, summary: a.summary } : undefined),
+                latencyMs: a.latency_ms ?? a.latencyMs,
+                downloadUrl: a.download_url ?? a.downloadUrl,
+                filename: a.filename,
+            }));
+        }
+    }
+
+    // Check if there is a thinking artifact and prepend as a thinking step if not already present
+    const thinkingArtifact = rawArtifacts.find(a => (a as any).type === 'thinking');
+    if (thinkingArtifact && (thinkingArtifact as any).text) {
+        const thinkingText = (thinkingArtifact as any).text;
+        const thinkingStep: AgentToolStep = {
+            id: 'thinking-rehydrated',
+            name: 'thinking',
+            type: 'thinking',
+            label: 'Thinking Process',
+            input: {},
+            status: 'done',
+            result: { success: true, summary: thinkingText },
+        };
+        toolSteps = [thinkingStep, ...(toolSteps ?? [])];
+    }
 
     return {
         id: m.id,
@@ -122,6 +195,36 @@ function toLocal(m: AIMessage): LocalMessage {
         authorName: m.authorName ?? null,
         authorEmail: m.authorEmail ?? null,
     };
+}
+
+function ChatLoadingSkeleton() {
+    return (
+        <div className="flex flex-col gap-6 py-4 animate-in fade-in duration-200" aria-label="Loading chat conversation">
+            {/* Simulated User Message Skeleton */}
+            <div className="flex justify-end">
+                <div className="h-10 w-48 sm:w-64 bg-muted/60 rounded-2xl animate-pulse" />
+            </div>
+            {/* Simulated Assistant Message Skeleton */}
+            <div className="flex justify-start">
+                <div className="flex flex-col gap-3 w-full max-w-xl">
+                    <div className="flex items-center gap-2">
+                        <div className="w-5 h-5 rounded-full bg-muted/70 animate-pulse" />
+                        <div className="h-4 w-28 bg-muted/70 rounded-md animate-pulse" />
+                    </div>
+                    <div className="space-y-2">
+                        <div className="h-4 w-full bg-muted/60 rounded-md animate-pulse" />
+                        <div className="h-4 w-5/6 bg-muted/50 rounded-md animate-pulse" />
+                        <div className="h-4 w-2/3 bg-muted/50 rounded-md animate-pulse" />
+                    </div>
+                    {/* Simulated Artifact Box Skeleton */}
+                    <div className="h-28 w-full bg-card/60 rounded-xl border border-border/40 p-4 flex flex-col gap-2.5 animate-pulse mt-1">
+                        <div className="h-4 w-36 bg-muted/60 rounded" />
+                        <div className="h-12 w-full bg-muted/30 rounded" />
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -141,10 +244,52 @@ export function AIChatMain({
     const [isUploading, setIsUploading] = useState(false);
     const [mentionQuery, setMentionQuery] = useState<string | null>(null);
     const [expandedArtifact, setExpandedArtifact] = useState<AgentArtifact | null>(null);
-    const [dashboardArtifacts, setDashboardArtifacts] = useState<AgentArtifact[]>([]);
+    const [dashboardArtifacts, setDashboardArtifacts] = useState<AgentArtifact[]>(() => {
+        if (!chatId) return [];
+        try {
+            const raw = localStorage.getItem(`sw_pinned_${chatId}`);
+            return raw ? JSON.parse(raw) : [];
+        } catch {
+            return [];
+        }
+    });
+
+    useEffect(() => {
+        if (!chatId) {
+            setDashboardArtifacts([]);
+            return;
+        }
+        try {
+            const raw = localStorage.getItem(`sw_pinned_${chatId}`);
+            setDashboardArtifacts(raw ? JSON.parse(raw) : []);
+        } catch {
+            setDashboardArtifacts([]);
+        }
+    }, [chatId]);
+
+    const updateDashboardArtifacts = useCallback((updater: AgentArtifact[] | ((prev: AgentArtifact[]) => AgentArtifact[])) => {
+        setDashboardArtifacts(prev => {
+            const next = typeof updater === 'function' ? updater(prev) : updater;
+            if (chatId) {
+                try {
+                    localStorage.setItem(`sw_pinned_${chatId}`, JSON.stringify(next));
+                } catch (e) {
+                    logger.warn('[AIChatMain] Failed to save pinned artifacts:', e);
+                }
+            }
+            return next;
+        });
+    }, [chatId]);
+
     const [showDashboard, setShowDashboard] = useState(false);
     const [showWorkspace, setShowWorkspace] = useState(false);
     const [workspaceRefreshCount, setWorkspaceRefreshCount] = useState(0);
+    const [dismissedWarnings, setDismissedWarnings] = useState<Record<string, boolean>>({});
+    // Pagination state for older messages
+    const [hasMoreOlder, setHasMoreOlder] = useState(false);
+    const [oldestCursor, setOldestCursor] = useState<string | null>(null);
+    const [isLoadingOlder, setIsLoadingOlder] = useState(false);
+
     // Data Explorer mode + thinking — per-chat, persisted server-side on the
     // chat_sessions row (restored below when reopening a chat). No localStorage.
     const [mode, setMode] = useState<AgentMode>('flash');
@@ -191,21 +336,35 @@ export function AIChatMain({
     } = useAIStream();
 
     const {
-        send: sendAgent, abort: abortAgent, status: agentStatus,
+        send: sendAgent, abort: abortAgent, status: agentStatus, runId: agentRunId,
         planSteps, toolSteps, artifacts, streamedText: agentText,
         thinkingText: agentThinking, liveThinking: agentLiveThinking, error: agentError, reset: resetAgent, chatId: agentChatId,
         phase, phaseDetail, iterations, tokenCount, creditsUsed, model, contextMeta,
+        warnings: agentWarnings,
+        pausedRunId,
+        resume: resumeAgent,
     } = useAIAgent();
 
-    const { data: chatHistory } = useAIChatMessages(chatId ?? '', { enabled: !!chatId });
+    const { data: chatHistory, isLoading: isChatLoading } = useAIChatMessages(chatId ?? '', { enabled: !!chatId });
     const { data: projects } = useProjects();
     const { data: connections } = useConnections();
+
+    // Check if the current chat history in cache matches the active chatId
+    const isChatReady = Boolean(chatId && chatHistory && chatHistory.chat?.id === chatId);
+    const isSwitchingChat = Boolean(chatId && chatId !== prevChatIdRef.current && !justCreatedChatRef.current && !isChatReady);
 
     const activeProjectId = projectId || chatHistory?.chat?.project_id;
     const activeProject = activeProjectId ? projects?.find(p => p.id === activeProjectId) : null;
     const activeConnection = connections?.find(c => c.id === connectionId);
     const dbName = activeConnection?.name;
+    // A clarification pause is NOT streaming — the input stays enabled and the
+    // next send answers the paused question (resume) instead of starting a new run.
     const isStreaming = agentMode ? agentStatus === 'running' : streamStatus === 'streaming';
+    const awaitingClarification = agentMode && agentStatus === 'awaiting_clarification';
+    // A paused clarification survives an in-memory state reset: `pausedRunId`
+    // is mirrored to session storage when the pause lands, so the "answer" send
+    // still routes to `resume()` even if `agentStatus`/`runId` were cleared.
+    const hasPausedRun = agentMode && (awaitingClarification || Boolean(agentRunId || pausedRunId));
     const activeError = agentMode ? agentError : streamError;
 
     // Quota errors — two sources:
@@ -232,51 +391,133 @@ export function AIChatMain({
         if (!chatId) {
             prevChatIdRef.current = null;
             setLocalMessages([]);
+            setHasMoreOlder(false);
+            setOldestCursor(null);
             resetStream(); resetAgent();
             return;
         }
         const isNavigating = chatId !== prevChatIdRef.current && !justCreatedChatRef.current;
-        if (isNavigating && chatHistory?.messages) {
+        if (isNavigating && chatHistory?.messages && chatHistory.chat?.id === chatId) {
             prevChatIdRef.current = chatId;
-            setLocalMessages(chatHistory.messages.filter(m => m.role !== 'system').map(toLocal));
+            setLocalMessages(chatHistory.messages.filter(m => m.role !== 'system').map((m, idx, arr) => toLocal(m, idx, arr)));
+            setHasMoreOlder(Boolean(chatHistory.hasMore));
+            setOldestCursor(chatHistory.oldestCursor ?? null);
             resetStream(); resetAgent();
         } else if (justCreatedChatRef.current && chatId) {
             prevChatIdRef.current = chatId;
             justCreatedChatRef.current = false;
         }
-    }, [chatId, chatHistory?.messages]);
+    }, [chatId, chatHistory]);
+
+    const handleLoadOlderMessages = useCallback(async () => {
+        if (!chatId || !oldestCursor || isLoadingOlder) return;
+        setIsLoadingOlder(true);
+        try {
+            const olderRes = await getChatMessages(chatId, { before: oldestCursor, limit: 30 });
+            if (olderRes && olderRes.messages && olderRes.messages.length > 0) {
+                const olderLocal = olderRes.messages.filter(m => m.role !== 'system').map((m, idx, arr) => toLocal(m, idx, arr));
+                setLocalMessages(prev => [...olderLocal, ...prev]);
+                setHasMoreOlder(Boolean(olderRes.hasMore));
+                setOldestCursor(olderRes.oldestCursor ?? null);
+            } else {
+                setHasMoreOlder(false);
+            }
+        } catch (err) {
+            logger.warn('[AIChatMain] Failed to load older messages:', err);
+        } finally {
+            setIsLoadingOlder(false);
+        }
+    }, [chatId, oldestCursor, isLoadingOlder]);
 
     useEffect(() => {
-        if (!agentMode && streamStatus === 'done' && streamedText) {
-            setLocalMessages(prev => [
-                ...prev.filter(m => !m.isStreaming),
-                { id: `assistant-${Date.now()}`, role: 'assistant', content: streamedText, sql: sqlArtifacts[0]?.sql },
-            ]);
-            queryClient.invalidateQueries({ queryKey: ['ai', 'chats'] });
-            queryClient.invalidateQueries({ queryKey: ['ai', 'projects'] });
+        if (!agentMode && (streamStatus === 'done' || streamStatus === 'aborted' || streamStatus === 'error')) {
+            setLocalMessages(prev => {
+                const nonStreaming = prev.filter(m => !m.isStreaming);
+                if (streamedText) {
+                    return [
+                        ...nonStreaming,
+                        { id: `assistant-${Date.now()}`, role: 'assistant', content: streamedText, sql: sqlArtifacts[0]?.sql },
+                    ];
+                }
+                return nonStreaming;
+            });
+            if (streamStatus === 'done') {
+                queryClient.invalidateQueries({ queryKey: ['ai', 'chats'] });
+                queryClient.invalidateQueries({ queryKey: ['ai', 'projects'] });
+            }
         }
     }, [streamStatus]);
 
     useEffect(() => {
-        if (agentMode && agentStatus === 'done') {
-            setLocalMessages(prev => [
-                ...prev.filter(m => !m.isStreaming),
-                {
-                    id: `assistant-${Date.now()}`, role: 'assistant', content: stripXmlTags(agentText),
-                    planSteps: planSteps.length > 0 ? [...planSteps] : undefined,
-                    toolSteps: toolSteps.length > 0 ? [...toolSteps] : undefined,
-                    artifacts: artifacts.length > 0 ? [...artifacts] : undefined,
-                    isAgent: true, tokenCount, creditsUsed, model,
-                },
-            ]);
-            if (connectionId && artifacts.length > 0) {
-                for (const a of artifacts) datasetCache.set(a, connectionId);
+        // `done`, `aborted`, `error`, AND `awaiting_clarification` finalize the
+        // streaming bubble into a snapshot. A clarification pause snapshots the
+        // pre-pause leg (incl. the clarification card) so it stays in the chat
+        // while the user answers; the DB/dataset side-effects below run ONLY on
+        // real completion (`done`).
+        if (agentMode && (agentStatus === 'done' || agentStatus === 'aborted' || agentStatus === 'error' || agentStatus === 'awaiting_clarification')) {
+            const hasOutput = Boolean(
+                agentText.trim() ||
+                artifacts.length > 0 ||
+                toolSteps.length > 0 ||
+                planSteps.length > 0
+            );
+
+            const finalOk = agentStatus === 'done' || agentStatus === 'awaiting_clarification';
+
+            const sanitizedToolSteps = toolSteps.length > 0
+                ? toolSteps.map(s => s.status === 'calling'
+                    ? {
+                        ...s,
+                        status: (finalOk ? 'done' : 'error') as 'done' | 'error',
+                        result: s.result ?? {
+                            success: finalOk,
+                            summary: agentStatus === 'aborted' ? 'Stopped by user' : (agentStatus === 'error' ? 'Failed' : 'Completed'),
+                        },
+                    }
+                    : s
+                )
+                : undefined;
+
+            const sanitizedPlanSteps = planSteps.length > 0
+                ? planSteps.map(p => p.status === 'running'
+                    ? { ...p, status: (finalOk ? 'done' : 'error') as 'done' | 'error' }
+                    : p
+                )
+                : undefined;
+
+            const finalizedArtifacts = artifacts.filter(a => !a.loading);
+
+            setLocalMessages(prev => {
+                const nonStreaming = prev.filter(m => !m.isStreaming);
+                if (hasOutput) {
+                    return [
+                        ...nonStreaming,
+                        {
+                            id: `assistant-${Date.now()}`,
+                            role: 'assistant',
+                            content: stripXmlTags(agentText),
+                            planSteps: sanitizedPlanSteps,
+                            toolSteps: sanitizedToolSteps,
+                            artifacts: finalizedArtifacts.length > 0 ? [...finalizedArtifacts] : undefined,
+                            isAgent: true,
+                            tokenCount,
+                            creditsUsed,
+                            model,
+                        },
+                    ];
+                }
+                return nonStreaming;
+            });
+
+            if (agentStatus === 'done') {
+                if (connectionId && finalizedArtifacts.length > 0) {
+                    for (const a of finalizedArtifacts) datasetCache.set(a, connectionId);
+                }
+                // Refresh workspace panel so any files written during this run appear.
+                setWorkspaceRefreshCount(c => c + 1);
+                queryClient.invalidateQueries({ queryKey: ['ai', 'chats'] });
+                queryClient.invalidateQueries({ queryKey: ['ai', 'projects'] });
             }
-            // Refresh workspace panel so any files written during this run appear.
-            setWorkspaceRefreshCount(c => c + 1);
-            // Refresh sidebar chat list & project queries so updated count, title, and timestamp appear immediately.
-            queryClient.invalidateQueries({ queryKey: ['ai', 'chats'] });
-            queryClient.invalidateQueries({ queryKey: ['ai', 'projects'] });
         }
     }, [agentStatus]);
 
@@ -397,6 +638,34 @@ export function AIChatMain({
     const handleQuickSend = useCallback(async (message: string, files?: File[]) => {
         if (!message.trim() && !(files && files.length > 0)) return;
         if (isStreaming) return;
+
+        // While paused for a clarification, a quick-sent message is the ANSWER
+        // to the question — resume the same run instead of starting a new one.
+        if (hasPausedRun) {
+            const resumed = await resumeAgent(message);
+            if (resumed) {
+                setLocalMessages(prev => {
+                    const updated = prev.map(m => {
+                        if (m.role === 'assistant' && m.artifacts?.some(a => a.type === 'clarification')) {
+                            return {
+                                ...m,
+                                artifacts: m.artifacts.map(a => a.type === 'clarification' ? { ...a, answered: true, answer: message } : a),
+                            };
+                        }
+                        return m;
+                    });
+                    return [
+                        ...updated,
+                        { id: `user-${Date.now()}`, role: 'user', content: message },
+                        { id: 'streaming', role: 'assistant', content: '', isStreaming: true, isAgent: true },
+                    ];
+                });
+                return;
+            }
+            // resume() declined (no paused run actually found) — fall through
+            // to a normal new run with this message.
+        }
+
         const effectiveSchema = aiContextSchema || 'public';
         const effectiveTables = aiContextTable ? [aiContextTable] : [];
         const filesToUpload = files ? [...files] : [];
@@ -428,10 +697,40 @@ export function AIChatMain({
         if (agentMode && connectionId) {
             await sendAgent({ connectionId, message, chatId: chatId ?? undefined, schemaName: effectiveSchema, databaseName: dbName, history, mentionedTables: effectiveTables, agentMode: mode, thinking, projectId, fileIds });
         }
-    }, [isStreaming, localMessages, connectionId, chatId, aiContextTable, aiContextSchema, agentMode, sendAgent, mode, thinking, dbName, projectId]);
+    }, [isStreaming, localMessages, connectionId, chatId, aiContextTable, aiContextSchema, agentMode, sendAgent, mode, thinking, dbName, projectId, hasPausedRun, resumeAgent]);
 
     const handleSend = useCallback(async () => {
         if ((!input.trim() && attachedFiles.length === 0) || isStreaming) return;
+
+        // While paused for a clarification, the sent text is the ANSWER to the
+        // question — resume the same run instead of starting a new one.
+        if (hasPausedRun) {
+            const answer = input.trim();
+            const resumed = await resumeAgent(answer);
+            if (resumed) {
+                setInput('');
+                setLocalMessages(prev => {
+                    const updated = prev.map(m => {
+                        if (m.role === 'assistant' && m.artifacts?.some(a => a.type === 'clarification')) {
+                            return {
+                                ...m,
+                                artifacts: m.artifacts.map(a => a.type === 'clarification' ? { ...a, answered: true, answer } : a),
+                            };
+                        }
+                        return m;
+                    });
+                    return [
+                        ...updated,
+                        { id: `user-${Date.now()}`, role: 'user', content: answer },
+                        { id: 'streaming', role: 'assistant', content: '', isStreaming: true, isAgent: true },
+                    ];
+                });
+                if (textareaRef.current) textareaRef.current.style.height = '52px';
+                return;
+            }
+            // resume() declined — fall through to a normal new run.
+        }
+
         // Block send if quota is exhausted (double-check, UI already disables button)
         if (quotaError) {
             logger.warn('[AIChatMain] Send blocked: quota exhausted');
@@ -489,12 +788,22 @@ export function AIChatMain({
         } else {
             await sendStream({ connectionId, chatId: chatId ?? undefined, message: messageText, history, mentionedTables: effectiveTables, tableContext: effectiveTables.length > 0 ? { tableName: effectiveTables[0], schemaName: effectiveSchema } : undefined, projectId: activeProjectId ?? undefined, fileIds });
         }
-    }, [input, attachedFiles, isStreaming, localMessages, connectionId, chatId, aiContextTable, aiContextSchema, agentMode, sendAgent, sendStream, availableTables, mode, thinking, quotaError, activeProjectId, showUploadError]);
+    }, [input, attachedFiles, isStreaming, localMessages, connectionId, chatId, aiContextTable, aiContextSchema, agentMode, sendAgent, sendStream, availableTables, mode, thinking, quotaError, activeProjectId, showUploadError, hasPausedRun, resumeAgent]);
 
     // ── Build display messages ────────────────────────────────────────────────
 
     const displayMessages: LocalMessage[] = localMessages.map(m => {
         if (!m.isStreaming) return m;
+        if (!isStreaming) {
+            return {
+                ...m,
+                isStreaming: false,
+                content: agentMode ? (agentText ? stripXmlTags(agentText) : m.content) : (streamedText || m.content),
+                planSteps: agentMode && planSteps.length > 0 ? planSteps.map(p => p.status === 'running' ? { ...p, status: 'error' } : p) : m.planSteps,
+                toolSteps: agentMode && toolSteps.length > 0 ? toolSteps.map(s => s.status === 'calling' ? { ...s, status: 'error' } : s) : m.toolSteps,
+                artifacts: agentMode && artifacts.length > 0 ? artifacts.filter(a => !a.loading) : m.artifacts,
+            };
+        }
         if (agentMode) return { ...m, content: agentText, planSteps: planSteps.length > 0 ? planSteps : undefined, toolSteps: toolSteps.length > 0 ? toolSteps : undefined, artifacts: artifacts.length > 0 ? artifacts : undefined };
         return { ...m, content: streamedText, sql: sqlArtifacts[0]?.sql };
     });
@@ -521,31 +830,60 @@ export function AIChatMain({
             <div className="flex-1 overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-muted-foreground/20 [&::-webkit-scrollbar-thumb]:rounded-full">
                 <div className="max-w-3xl mx-auto w-full px-4 pt-8 pb-40 flex flex-col gap-6">
 
-                    {/* Empty state */}
-                    {displayMessages.length === 0 && (
-                        <div className="flex flex-col items-center mt-20 gap-3 text-center">
-                            <img src="/resona.png" alt="Resona AI" className="w-10 h-10 object-contain opacity-70" />
+                    {/* Loading skeleton when switching between existing chats */}
+                    {isSwitchingChat ? (
+                        <ChatLoadingSkeleton />
+                    ) : displayMessages.length === 0 ? (
+                        <div className="flex flex-col items-center mt-24 sm:mt-28 gap-4 text-center select-none">
+                            <img
+                                src="/resona.png"
+                                alt="Resona AI"
+                                className="w-14 h-14 sm:w-16 sm:h-16 object-contain opacity-90 transition-transform duration-300 hover:scale-105"
+                            />
                             <div>
-                                <h3 className="text-xl font-semibold text-foreground tracking-tight">How can I help?</h3>
-                                <p className="text-sm text-muted-foreground mt-1">Ask anything about your data.</p>
+                                <h2 className="text-2xl sm:text-3xl font-semibold text-foreground tracking-tight">
+                                    How can I help?
+                                </h2>
+                                <p className="text-sm sm:text-base text-muted-foreground mt-1.5">
+                                    Ask anything about your data.
+                                </p>
                             </div>
                             {aiContextTable && (
-                                <div className="mt-2 flex flex-col gap-1.5 w-full max-w-sm text-left">
+                                <div className="mt-3 flex flex-col gap-2 w-full max-w-md text-left">
                                     {[`Describe the ${aiContextTable} table`, `Show top 10 rows from ${aiContextTable}`, `Any anomalies in ${aiContextTable}?`].map(prompt => (
                                         <button key={prompt}
                                             onClick={() => { setInput(prompt); textareaRef.current?.focus(); }}
-                                            className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted/40 rounded-lg px-3 py-2 transition-colors border border-border/30 hover:border-border/60">
-                                            <ChevronRight className="w-3.5 h-3.5 shrink-0 opacity-40" />
-                                            {prompt}
+                                            className="flex items-center gap-2.5 text-sm text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-xl px-3.5 py-2.5 transition-all border border-border/40 hover:border-border/80 shadow-2xs cursor-pointer">
+                                            <ChevronRight className="w-4 h-4 shrink-0 opacity-40" />
+                                            <span>{prompt}</span>
                                         </button>
                                     ))}
                                 </div>
                             )}
                         </div>
-                    )}
-
-                    {/* Message list */}
-                    {displayMessages.map(msg => (
+                    ) : (
+                        <>
+                            {/* Load older messages trigger */}
+                            {hasMoreOlder && (
+                                <div className="flex justify-center -mb-2">
+                                    <button
+                                        onClick={handleLoadOlderMessages}
+                                        disabled={isLoadingOlder}
+                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium text-muted-foreground hover:text-foreground bg-muted/60 hover:bg-muted border border-border/60 transition-colors shadow-2xs cursor-pointer"
+                                    >
+                                        {isLoadingOlder ? (
+                                            <>
+                                                <Loader2 className="w-3 h-3 animate-spin text-primary" />
+                                                <span>Loading earlier messages…</span>
+                                            </>
+                                        ) : (
+                                            <span>Load earlier messages</span>
+                                        )}
+                                    </button>
+                                </div>
+                            )}
+                            {/* Message list */}
+                            {displayMessages.map(msg => (
                         <ChatMessage
                             key={msg.id}
                             msg={msg}
@@ -554,21 +892,28 @@ export function AIChatMain({
                             phase={phase}
                             phaseDetail={phaseDetail}
                             iterations={iterations ?? 0}
-                            liveModel={model}
                             isStreaming={isStreaming}
                             copiedId={copiedId}
                             connectionId={connectionId}
                             datasetCache={datasetCache}
                             availableTables={availableTables}
-                            thinkingText={agentThinking}
                             liveThinking={agentLiveThinking}
                             onCopy={handleCopy}
                             onTableClick={onTableClick}
                             onExpand={setExpandedArtifact}
-                            onPin={a => { setDashboardArtifacts(prev => [...prev, a]); setShowDashboard(true); setExpandedArtifact(null); }}
+                            onPin={a => {
+                                updateDashboardArtifacts(prev => {
+                                    const isPinned = prev.some(p => (p.title && p.title === a.title) || (p.sql && p.sql === a.sql) || (p.downloadUrl && p.downloadUrl === a.downloadUrl));
+                                    if (isPinned) return prev.filter(p => !((p.title && p.title === a.title) || (p.sql && p.sql === a.sql) || (p.downloadUrl && p.downloadUrl === a.downloadUrl)));
+                                    return [...prev, a];
+                                });
+                                setShowDashboard(true);
+                                setExpandedArtifact(null);
+                            }}
+                            isPinnedArtifact={a => dashboardArtifacts.some(p => (p.title && p.title === a.title) || (p.sql && p.sql === a.sql) || (p.downloadUrl && p.downloadUrl === a.downloadUrl))}
                             onQuickSend={handleQuickSend}
                         />
-                    ))}
+                    ))}</>)}
 
                     {/* Error — quota errors are shown in the input banner instead */}
                     {activeError && !quotaError && (
@@ -580,15 +925,6 @@ export function AIChatMain({
                     <div ref={messagesEndRef} />
                 </div>
             </div>
-
-            {/* Context window indicator */}
-            {agentMode && (
-                <ContextWindowBar
-                    contextMeta={contextMeta}
-                    localMessageCount={localMessages.filter(m => !m.isStreaming).length}
-                    className="border-t border-border/20"
-                />
-            )}
 
             {/* Input */}
             <ChatInput
@@ -605,6 +941,9 @@ export function AIChatMain({
                 showDashboard={showDashboard}
                 mode={mode}
                 thinking={thinking}
+                contextMeta={contextMeta}
+                localMessageCount={localMessages.filter(m => !m.isStreaming).length}
+                tokenCount={tokenCount}
                 textareaRef={textareaRef}
                 fileInputRef={fileInputRef}
                 onInput={handleInput}
@@ -645,6 +984,8 @@ export function AIChatMain({
                 onOpenPlans={onOpenPlans}
                 uploadError={uploadError}
                 isUploading={isUploading}
+                agentWarnings={(agentWarnings ?? []).filter(w => !dismissedWarnings[w.id])}
+                onDismissWarning={id => setDismissedWarnings(prev => ({ ...prev, [id]: true }))}
             />
         </main>
     );
@@ -660,7 +1001,7 @@ export function AIChatMain({
         <DashboardPanel
             artifacts={dashboardArtifacts}
             onClose={() => setShowDashboard(false)}
-            onRemove={idx => setDashboardArtifacts(prev => prev.filter((_, i) => i !== idx))}
+            onRemove={idx => updateDashboardArtifacts(prev => prev.filter((_, i) => i !== idx))}
         />
     ) : expandedArtifact ? (
         <ArtifactPanel artifact={expandedArtifact} onClose={() => setExpandedArtifact(null)} onQuickSend={handleQuickSend} />

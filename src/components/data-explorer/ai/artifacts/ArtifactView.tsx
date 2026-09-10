@@ -1,364 +1,29 @@
-import { useState, useMemo, useRef, useEffect, type FormEvent } from 'react';
-import { Copy, Check, Database, BarChart, LineChart as LineChartIcon, PieChart as PieChartIcon, TableIcon, Maximize2, PinIcon } from 'lucide-react';
+import { useState, useEffect, useMemo, useRef, type FormEvent } from 'react';
+import { BarChart, LineChart as LineChartIcon, PieChart as PieChartIcon, TableIcon, Maximize2, PinIcon, ChevronDown, ChevronUp, HelpCircle, Check } from 'lucide-react';
 import {
     BarChart as ReBarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
     XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts';
 import { cn } from '@/lib/utils';
-import { CHART_COLORS, ChartType, detectChartType, isNumericColumn } from './chartUtils';
+import { CHART_COLORS, ChartType, isNumericColumn } from './chartUtils';
 import { exportCsv, exportJson, copyTsv, exportChartPng, exportExcel } from './exportUtils';
 import { exportHtml, exportExecutiveHtml } from './htmlReport';
 import { exportPdf, exportExecutivePdf } from './pdfReport';
-import { exportPptx } from './pptxReport';
 import { useSaveChart } from '@/hooks/useCharts';
 import { ChartView } from './views/ChartView';
 import { StatBlockView } from './views/StatBlockView';
 import { FileView } from './views/FileView';
-import { SuggestionsView } from './views/SuggestionsView';
-import { ReportView } from './views/ReportView';
-import { PlanView } from './views/PlanView';
-import { SlidePreviewView } from './views/SlidePreviewView';
-import type { AgentArtifact, ColumnStat, AnomalyEntry, QualityIssue, JoinPath } from '@/hooks/useAIAgent';
+import { ClarificationView } from './views/ClarificationView';
+import type { AgentArtifact } from '@/hooks/useAIAgent';
 interface ArtifactViewProps {
     artifact: AgentArtifact;
     connectionId?: string;
     variant?: 'chat' | 'card';
     onExpand?: (artifact: AgentArtifact) => void;
     onPin?: (artifact: AgentArtifact) => void;
+    isPinned?: boolean;
     onQuickSend?: (message: string) => void;
     cachedAt?: number | null;
-}
-
-// ─── Stats card sub-component ─────────────────────────────────────────────────
-
-function StatCard({ stat }: { stat: ColumnStat }) {
-    const nullPct = stat.nullPercent ?? 0;
-    const badges: string[] = [];
-    if (stat.isPrimaryKey) badges.push('PK');
-    if (stat.isIndexed) badges.push('IDX');
-    if (stat.nullable) badges.push('NULL');
-
-    return (
-        <div className="rounded-md border border-border/50 bg-background p-3 flex flex-col gap-2">
-            {/* Column name + type */}
-            <div className="flex items-baseline justify-between gap-2 min-w-0">
-                <span className="text-sm font-medium text-foreground truncate">{stat.name}</span>
-                <span className="text-[10px] text-muted-foreground/60 font-mono shrink-0">{stat.dataType}</span>
-            </div>
-
-            {/* Badges */}
-            {badges.length > 0 && (
-                <div className="flex gap-1">
-                    {badges.map(b => (
-                        <span key={b} className="text-[9px] font-semibold tracking-wider text-muted-foreground/50 bg-muted/40 rounded px-1.5 py-0.5">
-                            {b}
-                        </span>
-                    ))}
-                </div>
-            )}
-
-            {/* Min / Max / Avg row */}
-            {(stat.min !== null || stat.max !== null || stat.avg !== null) && (
-                <div className="grid grid-cols-3 gap-1 text-[11px]">
-                    {stat.min !== null && (
-                        <div>
-                            <span className="text-muted-foreground/50 block">min</span>
-                            <span className="text-foreground/80 font-mono truncate block">{String(stat.min)}</span>
-                        </div>
-                    )}
-                    {stat.max !== null && (
-                        <div>
-                            <span className="text-muted-foreground/50 block">max</span>
-                            <span className="text-foreground/80 font-mono truncate block">{String(stat.max)}</span>
-                        </div>
-                    )}
-                    {stat.avg !== null && (
-                        <div>
-                            <span className="text-muted-foreground/50 block">avg</span>
-                            <span className="text-foreground/80 font-mono truncate block">{stat.avg}</span>
-                        </div>
-                    )}
-                </div>
-            )}
-
-            {/* Distinct count */}
-            <div className="text-[11px] text-muted-foreground/60">
-                {stat.distinctCount} distinct value{stat.distinctCount !== 1 ? 's' : ''}
-            </div>
-
-            {/* Null rate bar */}
-            <div className="flex items-center gap-2">
-                <div className="flex-1 h-1.5 bg-muted/50 rounded-full overflow-hidden">
-                    <div
-                        className={cn(
-                            'h-full rounded-full transition-all',
-                            nullPct === 0 ? 'bg-emerald-500/60' : nullPct < 20 ? 'bg-amber-500/60' : 'bg-red-500/60',
-                        )}
-                        style={{ width: `${Math.max(nullPct, nullPct > 0 ? 2 : 0)}%` }}
-                    />
-                </div>
-                <span className="text-[10px] text-muted-foreground/50 tabular-nums shrink-0 w-10 text-right">
-                    {nullPct.toFixed(1)}% null
-                </span>
-            </div>
-
-            {/* Top values */}
-            {stat.topValues && stat.topValues.length > 0 && (
-                <div className="text-[11px]">
-                    <span className="text-muted-foreground/50">top: </span>
-                    <span className="text-foreground/60 font-mono">
-                        {stat.topValues.map(v => v === null ? 'null' : String(v)).join(', ')}
-                    </span>
-                </div>
-            )}
-        </div>
-    );
-}
-
-// ─── Anomalies renderer ───────────────────────────────────────────────────────
-
-const SEVERITY_CLASS = {
-    high: 'text-red-500 bg-red-500/10',
-    medium: 'text-amber-500 bg-amber-500/10',
-    low: 'text-muted-foreground bg-muted/40',
-} as const;
-
-function AnomaliesView({ anomalies, scannedColumns, totalAnomalies }: {
-    anomalies: AnomalyEntry[];
-    scannedColumns: number;
-    totalAnomalies: number;
-}) {
-    return (
-        <div className="flex flex-col gap-2">
-            <p className="text-xs text-muted-foreground">
-                {totalAnomalies} anomal{totalAnomalies === 1 ? 'y' : 'ies'} found across {scannedColumns} columns
-            </p>
-            {anomalies.length > 0 && (
-                <div className="overflow-x-auto">
-                    <table className="w-full text-xs">
-                        <thead>
-                            <tr className="border-b border-border/40">
-                                <th className="text-left px-2 py-1.5 font-medium text-muted-foreground">Column</th>
-                                <th className="text-left px-2 py-1.5 font-medium text-muted-foreground">Type</th>
-                                <th className="text-left px-2 py-1.5 font-medium text-muted-foreground">Severity</th>
-                                <th className="text-right px-2 py-1.5 font-medium text-muted-foreground">Count</th>
-                                <th className="text-left px-2 py-1.5 font-medium text-muted-foreground">Detail</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {anomalies.map((a, i) => (
-                                <tr key={i} className="border-b border-border/20 last:border-0">
-                                    <td className="px-2 py-1.5 font-mono text-foreground/80">{a.column}</td>
-                                    <td className="px-2 py-1.5 text-muted-foreground">{a.type.replace(/_/g, ' ')}</td>
-                                    <td className="px-2 py-1.5">
-                                        <span className={cn('text-[10px] font-semibold tracking-wide rounded px-1.5 py-0.5', SEVERITY_CLASS[a.severity] ?? SEVERITY_CLASS.low)}>
-                                            {a.severity.toUpperCase()}
-                                        </span>
-                                    </td>
-                                    <td className="px-2 py-1.5 text-right tabular-nums text-foreground/70">{a.count}</td>
-                                    <td className="px-2 py-1.5 text-muted-foreground/70 max-w-[200px] truncate">{a.explanation}</td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-            )}
-        </div>
-    );
-}
-
-// ─── Quality renderer ─────────────────────────────────────────────────────────
-
-function QualityView({ score, summary, issues }: {
-    score: number;
-    summary: string;
-    issues: QualityIssue[];
-}) {
-    const scoreColor = score >= 80 ? 'text-emerald-500' : score >= 50 ? 'text-amber-500' : 'text-red-500';
-    const barColor = score >= 80 ? 'bg-emerald-500/60' : score >= 50 ? 'bg-amber-500/60' : 'bg-red-500/60';
-
-    return (
-        <div className="flex flex-col gap-3">
-            {/* Score display */}
-            <div className="flex items-baseline gap-3">
-                <span className={cn('text-3xl font-bold tabular-nums', scoreColor)}>{score}</span>
-                <span className="text-sm text-muted-foreground/60">/100</span>
-                <div className="flex-1 h-1.5 bg-muted/50 rounded-full overflow-hidden ml-2">
-                    <div className={cn('h-full rounded-full', barColor)} style={{ width: `${score}%` }} />
-                </div>
-            </div>
-            {summary && <p className="text-xs text-muted-foreground/70">{summary}</p>}
-
-            {/* Issues list */}
-            {issues.length > 0 && (
-                <div className="flex flex-col gap-1">
-                    {issues.map((issue, i) => (
-                        <div key={i} className="flex items-baseline gap-2 text-xs py-1.5 border-b border-border/20 last:border-0">
-                            <span className={cn('text-[10px] font-semibold tracking-wide rounded px-1.5 py-0.5 shrink-0', SEVERITY_CLASS[issue.severity] ?? SEVERITY_CLASS.low)}>
-                                {issue.severity.toUpperCase()}
-                            </span>
-                            <span className="font-mono text-foreground/80 shrink-0">{issue.column}</span>
-                            <span className="text-muted-foreground/60">{issue.issueType.replace(/_/g, ' ')}</span>
-                            <span className="text-muted-foreground/40 tabular-nums shrink-0">{issue.affectedRows} rows</span>
-                            {issue.recommendation && (
-                                <span className="text-muted-foreground/50 truncate ml-auto max-w-[200px]">{issue.recommendation}</span>
-                            )}
-                        </div>
-                    ))}
-                </div>
-            )}
-        </div>
-    );
-}
-
-// ─── Join paths renderer ──────────────────────────────────────────────────────
-
-function JoinsView({ paths }: { paths: JoinPath[] }) {
-    if (paths.length === 0) return <p className="text-xs text-muted-foreground">No join paths found.</p>;
-
-    return (
-        <div className="flex flex-col gap-1.5">
-            {paths.map((p, i) => (
-                <div key={i} className="flex items-center gap-1.5 text-xs py-1.5 border-b border-border/20 last:border-0 flex-wrap">
-                    <span className="font-mono text-foreground/80">{p.from}</span>
-                    <span className="text-muted-foreground/40">.</span>
-                    <span className="font-mono text-primary/70">{p.fromColumn}</span>
-                    <span className="text-muted-foreground/40 px-1">→</span>
-                    <span className="font-mono text-foreground/80">{p.to}</span>
-                    <span className="text-muted-foreground/40">.</span>
-                    <span className="font-mono text-primary/70">{p.toColumn}</span>
-                    <span className="ml-auto flex items-center gap-1.5 shrink-0">
-                        <span className="text-[10px] text-muted-foreground/50 font-mono">
-                            {p.joinType === 'foreign_key' ? 'FK' : 'heuristic'}
-                        </span>
-                        <span className="text-[10px] tabular-nums text-muted-foreground/40">
-                            {Math.round(p.confidence * 100)}%
-                        </span>
-                    </span>
-                </div>
-            ))}
-        </div>
-    );
-}
-
-// ─── Metrics renderer ─────────────────────────────────────────────────────────
-
-const METRIC_GROUPS = [
-    { key: 'identifiers', label: 'Identifiers', className: 'bg-violet-500/10 text-violet-600 dark:text-violet-400' },
-    { key: 'dimensions', label: 'Dimensions', className: 'bg-blue-500/10 text-blue-600 dark:text-blue-400' },
-    { key: 'measures', label: 'Measures', className: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' },
-    { key: 'timestamps', label: 'Timestamps', className: 'bg-amber-500/10 text-amber-600 dark:text-amber-400' },
-] as const;
-
-function MetricsView({ identifiers, dimensions, measures, timestamps }: {
-    identifiers: string[];
-    dimensions: string[];
-    measures: string[];
-    timestamps: string[];
-}) {
-    const groups = { identifiers, dimensions, measures, timestamps };
-
-    return (
-        <div className="flex flex-col gap-3">
-            {METRIC_GROUPS.map(({ key, label, className }) => {
-                const items = groups[key];
-                if (!items || items.length === 0) return null;
-                return (
-                    <div key={key}>
-                        <span className="text-[10px] font-semibold tracking-widest text-muted-foreground/50 uppercase">{label}</span>
-                        <div className="flex flex-wrap gap-1.5 mt-1">
-                            {items.map(col => (
-                                <span key={col} className={cn('text-xs font-mono rounded-md px-2 py-1', className)}>
-                                    {col}
-                                </span>
-                            ))}
-                        </div>
-                    </div>
-                );
-            })}
-        </div>
-    );
-}
-
-// ─── Mermaid diagram renderer ────────────────────────────────────────────────
-
-function DiagramView({ mermaid: mermaidCode, title }: { mermaid: string; title?: string }) {
-    const containerRef = useRef<HTMLDivElement>(null);
-    const [svgContent, setSvgContent] = useState<string | null>(null);
-    const [error, setError] = useState<string | null>(null);
-
-    useEffect(() => {
-        let cancelled = false;
-
-        (async () => {
-            try {
-                const mermaid = (await import('mermaid')).default;
-                mermaid.initialize({
-                    startOnLoad: false,
-                    theme: 'neutral',
-                    securityLevel: 'strict',
-                    er: { useMaxWidth: true },
-                    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-                });
-
-                const id = `mermaid-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-                const { svg } = await mermaid.render(id, mermaidCode);
-                if (!cancelled) {
-                    setSvgContent(svg);
-                    setError(null);
-                }
-            } catch (e) {
-                if (!cancelled) {
-                    setError(e instanceof Error ? e.message : 'Failed to render diagram');
-                    setSvgContent(null);
-                }
-            }
-        })();
-
-        return () => { cancelled = true; };
-    }, [mermaidCode]);
-
-    if (error) {
-        return (
-            <div className="flex flex-col gap-2">
-                <p className="text-xs text-red-500/70">Diagram render error: {error}</p>
-                <details className="text-[11px]">
-                    <summary className="text-muted-foreground/50 cursor-pointer">View Mermaid source</summary>
-                    <pre className="mt-1 p-2 bg-muted/10 rounded text-foreground/60 overflow-x-auto whitespace-pre-wrap text-[10px]">
-                        {mermaidCode}
-                    </pre>
-                </details>
-            </div>
-        );
-    }
-
-    if (!svgContent) {
-        return (
-            <div className="flex items-center justify-center py-8">
-                <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse mr-2" />
-                <span className="text-xs text-muted-foreground/50">Rendering diagram...</span>
-            </div>
-        );
-    }
-
-    return (
-        <div className="flex flex-col gap-2">
-            {title && <span className="text-xs font-medium text-muted-foreground/60">{title}</span>}
-            <div
-                ref={containerRef}
-                className="overflow-x-auto [&_svg]:max-w-full [&_svg]:h-auto"
-                dangerouslySetInnerHTML={{ __html: svgContent }}
-            />
-            <details className="text-[11px]">
-                <summary className="text-muted-foreground/40 cursor-pointer hover:text-muted-foreground transition-colors">
-                    View Mermaid source
-                </summary>
-                <pre className="mt-1 p-2 bg-muted/10 rounded text-foreground/60 overflow-x-auto whitespace-pre-wrap text-[10px]">
-                    {mermaidCode}
-                </pre>
-            </details>
-        </div>
-    );
 }
 
 // ─── Executive summary view ─────────────────────────────────────────────────
@@ -404,16 +69,16 @@ function ExecutiveView({ artifact }: { artifact: AgentArtifact }) {
             <div className="flex items-center gap-6 py-2">
                 <div>
                     <span className="text-2xl font-bold tabular-nums text-foreground">{rows.length}</span>
-                    <span className="text-xs text-muted-foreground/50 ml-1">rows</span>
+                    <span className="text-xs text-muted-foreground ml-1">rows</span>
                 </div>
                 <div>
                     <span className="text-2xl font-bold tabular-nums text-foreground">{cols.length}</span>
-                    <span className="text-xs text-muted-foreground/50 ml-1">columns</span>
+                    <span className="text-xs text-muted-foreground ml-1">columns</span>
                 </div>
                 {numericCols.length > 0 && (
                     <div>
                         <span className="text-2xl font-bold tabular-nums text-foreground">{numericCols.length}</span>
-                        <span className="text-xs text-muted-foreground/50 ml-1">numeric</span>
+                        <span className="text-xs text-muted-foreground ml-1">numeric</span>
                     </div>
                 )}
             </div>
@@ -421,27 +86,27 @@ function ExecutiveView({ artifact }: { artifact: AgentArtifact }) {
             {/* Numeric column highlights */}
             {numericCols.length > 0 && (
                 <div>
-                    <span className="text-[10px] font-semibold tracking-widest text-muted-foreground/50 uppercase">Numeric Highlights</span>
+                    <span className="text-[10px] font-semibold tracking-widest text-muted-foreground/80 uppercase">Numeric Highlights</span>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-1.5">
                         {numericCols.map(c => (
                             <div key={c.name} className="rounded-md border border-border/50 bg-background p-2.5">
                                 <div className="text-xs font-medium text-foreground mb-1">{c.name}</div>
                                 <div className="grid grid-cols-4 gap-1 text-[11px]">
                                     <div>
-                                        <span className="text-muted-foreground/50 block">min</span>
-                                        <span className="text-foreground/80 font-mono tabular-nums">{c.min?.toLocaleString()}</span>
+                                        <span className="text-muted-foreground/80 block">min</span>
+                                        <span className="text-foreground font-mono tabular-nums">{c.min?.toLocaleString()}</span>
                                     </div>
                                     <div>
-                                        <span className="text-muted-foreground/50 block">max</span>
-                                        <span className="text-foreground/80 font-mono tabular-nums">{c.max?.toLocaleString()}</span>
+                                        <span className="text-muted-foreground/80 block">max</span>
+                                        <span className="text-foreground font-mono tabular-nums">{c.max?.toLocaleString()}</span>
                                     </div>
                                     <div>
-                                        <span className="text-muted-foreground/50 block">avg</span>
-                                        <span className="text-foreground/80 font-mono tabular-nums">{c.avg?.toFixed(2)}</span>
+                                        <span className="text-muted-foreground/80 block">avg</span>
+                                        <span className="text-foreground font-mono tabular-nums">{c.avg?.toFixed(2)}</span>
                                     </div>
                                     <div>
-                                        <span className="text-muted-foreground/50 block">sum</span>
-                                        <span className="text-foreground/80 font-mono tabular-nums">{c.sum?.toLocaleString()}</span>
+                                        <span className="text-muted-foreground/80 block">sum</span>
+                                        <span className="text-foreground font-mono tabular-nums">{c.sum?.toLocaleString()}</span>
                                     </div>
                                 </div>
                             </div>
@@ -453,17 +118,17 @@ function ExecutiveView({ artifact }: { artifact: AgentArtifact }) {
             {/* Categorical highlights */}
             {categoryCols.length > 0 && (
                 <div>
-                    <span className="text-[10px] font-semibold tracking-widest text-muted-foreground/50 uppercase">Categorical Summary</span>
+                    <span className="text-[10px] font-semibold tracking-widest text-muted-foreground/80 uppercase">Categorical Summary</span>
                     <div className="flex flex-col gap-1 mt-1.5">
                         {categoryCols.map(c => (
                             <div key={c.name} className="flex items-baseline gap-3 text-xs py-1 border-b border-border/20 last:border-0">
-                                <span className="font-medium text-foreground/80 w-28 truncate shrink-0">{c.name}</span>
-                                <span className="text-muted-foreground/50 tabular-nums">{c.uniqueCount} unique</span>
+                                <span className="font-medium text-foreground w-28 truncate shrink-0">{c.name}</span>
+                                <span className="text-muted-foreground/80 tabular-nums">{c.uniqueCount} unique</span>
                                 {c.topValue && (
-                                    <span className="text-muted-foreground/40 font-mono truncate">top: {c.topValue}</span>
+                                    <span className="text-muted-foreground/75 font-mono truncate">top: {c.topValue}</span>
                                 )}
                                 {c.nullCount > 0 && (
-                                    <span className="text-amber-500/60 tabular-nums ml-auto">{c.nullCount} null</span>
+                                    <span className="text-amber-500/80 tabular-nums ml-auto">{c.nullCount} null</span>
                                 )}
                             </div>
                         ))}
@@ -474,13 +139,13 @@ function ExecutiveView({ artifact }: { artifact: AgentArtifact }) {
             {/* Preview — first 5 rows */}
             {rows.length > 0 && cols.length > 0 && (
                 <div>
-                    <span className="text-[10px] font-semibold tracking-widest text-muted-foreground/50 uppercase">Data Preview</span>
+                    <span className="text-[10px] font-semibold tracking-widest text-muted-foreground/80 uppercase">Data Preview</span>
                     <div className="overflow-x-auto mt-1.5">
                         <table className="w-full text-xs">
                             <thead>
-                                <tr className="border-b border-border/40">
+                                <tr className="border-b border-border/60">
                                     {cols.map(c => (
-                                        <th key={c.name} className="text-left px-2 py-1 font-medium text-muted-foreground whitespace-nowrap">{c.name}</th>
+                                        <th key={c.name} className="text-left px-2 py-1 font-semibold text-foreground whitespace-nowrap">{c.name}</th>
                                     ))}
                                 </tr>
                             </thead>
@@ -488,9 +153,9 @@ function ExecutiveView({ artifact }: { artifact: AgentArtifact }) {
                                 {rows.slice(0, 5).map((row, ri) => (
                                     <tr key={ri} className="border-b border-border/20 last:border-0">
                                         {cols.map(c => (
-                                            <td key={c.name} className="px-2 py-1 text-foreground/70 font-mono max-w-[150px] truncate">
+                                            <td key={c.name} className="px-2 py-1 text-foreground font-normal font-mono max-w-[150px] truncate">
                                                 {row[c.name] === null || row[c.name] === undefined
-                                                    ? <span className="text-muted-foreground/30 italic text-[10px]">null</span>
+                                                    ? <span className="text-muted-foreground/75 italic text-[11px]">null</span>
                                                     : String(row[c.name])}
                                             </td>
                                         ))}
@@ -499,7 +164,7 @@ function ExecutiveView({ artifact }: { artifact: AgentArtifact }) {
                             </tbody>
                         </table>
                         {rows.length > 5 && (
-                            <p className="text-[10px] text-muted-foreground/40 mt-1">+ {rows.length - 5} more rows</p>
+                            <p className="text-[10px] text-muted-foreground/75 mt-1">+ {rows.length - 5} more rows</p>
                         )}
                     </div>
                 </div>
@@ -619,7 +284,7 @@ function SaveForm({ defaultTitle, onConfirm, onCancel, isPending }: {
 
 // ─── Main artifact component ──────────────────────────────────────────────────
 
-export function ArtifactView({ artifact, connectionId, variant = 'chat', onExpand, onPin, onQuickSend, cachedAt }: ArtifactViewProps) {
+export function ArtifactView({ artifact, connectionId, variant = 'chat', onExpand, onPin, isPinned = false, onQuickSend, cachedAt }: ArtifactViewProps) {
     // Loading placeholder — show skeleton while tool is executing
     if (artifact.loading) {
         return (
@@ -639,50 +304,39 @@ export function ArtifactView({ artifact, connectionId, variant = 'chat', onExpan
         );
     }
 
-    // Detect special artifact types
+    // Detect special artifact types. The backend emits generic renderer types
+    // ('chart', 'stat_block', 'file', 'clarification'); previewType is kept as a
+    // forward-compat fallback so previously-persisted artifacts still render.
     const artType = artifact.type as string;
-    const isStats = artType === 'stats' && Array.isArray(artifact.stats);
-    const isAnomalies = (artType === 'anomalies' && Array.isArray(artifact.anomalies)) || (artType === 'stat_block' && artifact.statBlockKind === 'anomalies');
-    const isQuality = (artType === 'quality' && artifact.score != null) || (artType === 'stat_block' && artifact.statBlockKind === 'quality');
-    const isJoins = artType === 'joins' && Array.isArray(artifact.paths);
-    const isMetrics = artType === 'metrics';
-    const isDiagram = artType === 'diagram' && !!artifact.mermaid;
-    // New artifact types
-    const isChart = artType === 'chart';
-    const isStatBlock = artType === 'stat_block';
-    const isReport = artType === 'report';
+    const previewType = artifact.previewType as string | undefined;
+    const isChart = artType === 'chart' || previewType === 'chart';
+    const isStatBlock = artType === 'stat_block' || previewType === 'stat_block';
     const isFile = artType === 'file';
-    const isSuggestions = artType === 'suggestions';
-    const isPlan = artType === 'analysis_plan';
-    const isSlideDeck = artType === 'slide_deck' && !!artifact.content;
-    const isSpecial = isStats || isAnomalies || isQuality || isJoins || isMetrics || isDiagram
-        || isChart || isStatBlock || isReport || isFile || isSuggestions || isPlan || isSlideDeck;
+    const isClarification = artType === 'clarification';
+    const isSpecial = isChart || isStatBlock || isFile || isClarification;
+
+    const isAnswered = Boolean(artifact.answered || artifact.answer);
+    const [isClarificationCollapsed, setIsClarificationCollapsed] = useState<boolean>(() => isClarification ? isAnswered : false);
+
+    useEffect(() => {
+        if (isClarification && isAnswered) {
+            setIsClarificationCollapsed(true);
+        }
+    }, [isClarification, isAnswered]);
 
     const rows = artifact.rows ?? [];
     const cols = artifact.columns ?? [];
 
     const defaultMode = useMemo<ChartType>(() => {
-        // Raw-row artifact types: always start in table view.
-        // The agent explicitly used sample_rows or search_rows — the user wants to see rows.
-        if (artType === 'sample' || artType === 'search') return 'table';
-        if (isStats) return 'stats';
-        if (isAnomalies) return 'anomalies';
-        if (isQuality) return 'quality';
-        if (isJoins) return 'joins';
-        if (isMetrics) return 'metrics';
-        if (isDiagram) return 'diagram';
         if (isChart) return 'chart';
         if (isStatBlock) return 'stat_block';
-        if (isReport) return 'report';
         if (isFile) return 'file';
-        if (isSuggestions) return 'suggestions';
-        if (isPlan) return 'analysis_plan';
-        if (isSlideDeck) return 'slide_deck';
-        // Generic query results (run_query, compute_distribution, etc.) always
-        // start in table view so the user immediately sees their data.
-        // Chart toggle buttons (bar / line / pie) remain available for manual switch.
+        if (isClarification) return 'clarification';
+        // Generic query results (run_query) always start in table view so the
+        // user immediately sees their data. Chart toggle buttons (bar / line /
+        // pie) remain available for manual switch.
         return 'table';
-    }, [artType, isStats, isAnomalies, isQuality, isJoins, isMetrics, isDiagram, isChart, isStatBlock, isReport, isFile, isSuggestions, isPlan, isSlideDeck]);
+    }, [isChart, isStatBlock, isFile, isClarification]);
 
     const [mode, setMode] = useState<ChartType>(defaultMode);
     const [copied, setCopied] = useState(false);
@@ -710,8 +364,7 @@ export function ArtifactView({ artifact, connectionId, variant = 'chat', onExpan
         _label: String(r[labelCol?.name ?? ''] ?? ''),
     }));
 
-    const specialLabel = isStats ? 'Stats' : isAnomalies ? 'Anomalies' : isQuality ? 'Quality' : isJoins ? 'Joins' : isMetrics ? 'Metrics' : isDiagram ? 'Diagram'
-        : isChart ? (artifact.chartType ?? 'Chart') : isStatBlock ? 'Stats' : isReport ? 'Report' : isFile ? 'File' : isSuggestions ? 'Suggestions' : isPlan ? 'Plan' : isSlideDeck ? 'Slides' : '';
+    const specialLabel = isChart ? (artifact.chartType ?? 'Chart') : isStatBlock ? 'Stats' : isFile ? 'File' : isClarification ? 'Clarification' : '';
 
     // When locked=true (or any special type), show NO toggle buttons.
     // This is the core of the standalone-UI feature.
@@ -735,50 +388,27 @@ export function ArtifactView({ artifact, connectionId, variant = 'chat', onExpan
     // Header summary text
     let headerText = artifact.title ?? '';
     let headerMeta = '';
-    if (isStats) {
-        headerText = headerText || `${artifact.stats!.length} columns`;
-        headerMeta = artifact.totalRows != null ? `· ${artifact.totalRows.toLocaleString()} rows` : '';
-    } else if (isAnomalies) {
-        headerText = headerText || 'Anomaly Detection';
-        headerMeta = `· ${artifact.totalAnomalies ?? 0} found`;
-    } else if (isQuality) {
-        headerText = headerText || 'Quality Report';
-        headerMeta = `· score ${artifact.score}`;
-    } else if (isJoins) {
-        headerText = headerText || 'Join Paths';
-        headerMeta = `· ${artifact.paths?.length ?? 0} path${(artifact.paths?.length ?? 0) !== 1 ? 's' : ''}`;
-    } else if (isMetrics) {
-        headerText = headerText || 'Inferred Metrics';
-    } else if (isDiagram) {
-        headerText = headerText || 'Schema Diagram';
-        const parts: string[] = [];
-        if (artifact.tableCount) parts.push(`${artifact.tableCount} table${artifact.tableCount !== 1 ? 's' : ''}`);
-        if (artifact.relationshipCount) parts.push(`${artifact.relationshipCount} relationship${artifact.relationshipCount !== 1 ? 's' : ''}`);
-        headerMeta = parts.length > 0 ? `· ${parts.join(', ')}` : '';
-    } else if (isChart) {
+    if (isChart) {
         headerText = headerText || (artifact.chartType ? artifact.chartType.charAt(0).toUpperCase() + artifact.chartType.slice(1) + ' Chart' : 'Chart');
         if (artifact.granularity) headerMeta = `· ${artifact.granularity}`;
         if (artifact.direction) headerMeta += ` · ${artifact.direction}`;
     } else if (isStatBlock) {
         headerText = headerText || 'Statistics';
-    } else if (isReport) {
-        headerText = headerText || 'Report';
-        headerMeta = artifact.sections ? `· ${artifact.sections.length} section${artifact.sections.length !== 1 ? 's' : ''}` : '';
+        const kind = artifact.statBlockKind;
+        if (kind === 'anomalies') {
+            headerText = headerText || 'Anomaly Detection';
+        } else if (kind === 'quality') {
+            headerText = headerText || 'Quality Report';
+            const qScore = artifact.qualityScore ?? artifact.score;
+            headerMeta = qScore != null ? `· score ${qScore}` : '';
+        } else if (kind === 'regression') {
+            headerText = headerText || 'Regression Analysis';
+        }
     } else if (isFile) {
         headerText = headerText || artifact.fileName || 'File';
         if (artifact.fileType) headerMeta = `· ${artifact.fileType.toUpperCase()}`;
-    } else if (isSuggestions) {
-        headerText = headerText || 'Suggested Analyses';
-        headerMeta = artifact.suggestions ? `· ${artifact.suggestions.length} suggestion${artifact.suggestions.length !== 1 ? 's' : ''}` : '';
-    } else if (isPlan) {
-        headerText = headerText || 'Analysis Plan';
-        headerMeta = artifact.planStepsData ? `· ${artifact.planStepsData.length} steps` : '';
-    } else if (isSlideDeck) {
-        headerText = headerText || 'Slide Deck';
-        try {
-            const deckObj = JSON.parse(artifact.content!);
-            headerMeta = deckObj?.slides ? `· ${deckObj.slides.length} slides` : '';
-        } catch { headerMeta = ''; }
+    } else if (isClarification) {
+        headerText = headerText || 'Clarification Needed';
     } else {
         headerText = headerText || `${rows.length} row${rows.length !== 1 ? 's' : ''}`;
         headerMeta = cols.length > 0 ? `· ${cols.length} col${cols.length !== 1 ? 's' : ''}` : '';
@@ -799,58 +429,55 @@ export function ArtifactView({ artifact, connectionId, variant = 'chat', onExpan
         if (isChartMode) {
             actions.push({ label: 'PNG', action: () => exportChartPng(chartRef.current, headerText) });
         }
-        // Special types — JSON dump of the structured data
-        if (isStats && artifact.stats) {
-            actions.push({ label: 'JSON', action: () => exportJson(artifact.stats, headerText) });
-        }
-        if (isAnomalies && artifact.anomalies) {
-            actions.push({ label: 'JSON', action: () => exportJson(artifact.anomalies, headerText) });
-        }
-        if (isQuality) {
-            actions.push({ label: 'JSON', action: () => exportJson({ score: artifact.score, issues: artifact.issues, summary: artifact.summary }, headerText) });
-        }
-        if (isJoins && artifact.paths) {
-            actions.push({ label: 'JSON', action: () => exportJson(artifact.paths, headerText) });
-        }
-        if (isMetrics) {
-            actions.push({ label: 'JSON', action: () => exportJson({ identifiers: artifact.identifiers, dimensions: artifact.dimensions, measures: artifact.measures, timestamps: artifact.timestamps }, headerText) });
-        }
-        if (isDiagram && artifact.mermaid) {
-            actions.push({ label: 'Mermaid', action: () => {
-                const blob = new Blob([artifact.mermaid!], { type: 'text/plain;charset=utf-8' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `${(headerText || 'diagram').replace(/[^a-zA-Z0-9_\- ]/g, '').replace(/\s+/g, '_').slice(0, 60)}.mmd`;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-            }});
-            actions.push({ label: 'PNG', action: async () => {
-                const container = document.querySelector('[data-diagram-container]');
-                if (container) await exportChartPng(container as HTMLElement, headerText);
-            }});
-        }
         // HTML + PDF reports — available for all artifact types
         actions.push({ label: 'HTML Report', action: () => exportHtml(artifact, headerText) });
         actions.push({ label: 'PDF', action: () => exportPdf(artifact, headerText) });
-        actions.push({ label: 'PPTX', action: () => exportPptx(artifact, headerText) });
         // Executive formats — only for table artifacts with data
         if (!isSpecial && rows.length > 0) {
             actions.push({ label: 'Executive HTML', action: () => exportExecutiveHtml(artifact, headerText) });
             actions.push({ label: 'Executive PDF', action: () => exportExecutivePdf(artifact, headerText) });
         }
         return actions;
-    }, [rows, cols, headerText, isChartMode, isStats, isAnomalies, isQuality, isJoins, isMetrics, artifact]);
+    }, [rows, cols, headerText, isChartMode, artifact]);
 
     return (
-        <div className="rounded-lg border border-border/60 bg-card overflow-hidden my-1 shadow-sm">
+        <div className={cn(
+            'rounded-lg border border-border/60 bg-card overflow-hidden my-1 shadow-sm transition-all duration-200',
+            isClarification && isAnswered && 'border-border/40 bg-card/60'
+        )}>
             {/* Header: title + summary meta */}
-            <div className="flex items-center justify-between px-3 h-10 bg-muted/20 border-b border-border/40">
+            <div
+                onClick={isClarification ? () => setIsClarificationCollapsed(c => !c) : undefined}
+                className={cn(
+                    'flex items-center justify-between px-3 h-10 bg-muted/20',
+                    (!isClarification || !isClarificationCollapsed) && 'border-b border-border/40',
+                    isClarification && 'cursor-pointer select-none hover:bg-muted/30 transition-colors'
+                )}
+            >
                 <div className="flex items-center gap-2 min-w-0">
-                    <span className="text-xs font-semibold text-foreground truncate">{headerText}</span>
-                    {headerMeta && (
+                    {isClarification && (
+                        <HelpCircle className={cn('w-3.5 h-3.5 shrink-0', isAnswered ? 'text-emerald-500' : 'text-blue-500')} />
+                    )}
+                    <span className="text-xs font-semibold text-foreground truncate">
+                        {isClarification && isAnswered ? 'Clarification Answered' : headerText}
+                    </span>
+                    {isClarification && isAnswered && artifact.answer && (
+                        <span className="text-[11px] text-muted-foreground font-normal truncate">
+                            · &quot;{artifact.answer}&quot;
+                        </span>
+                    )}
+                    {isClarification && (
+                        isAnswered ? (
+                            <span className="text-[9px] font-bold uppercase tracking-wider bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 px-1.5 py-0.5 rounded shrink-0">
+                                Resolved
+                            </span>
+                        ) : (
+                            <span className="text-[9px] font-bold uppercase tracking-wider bg-blue-500/10 text-blue-500 px-1.5 py-0.5 rounded shrink-0">
+                                Action Needed
+                            </span>
+                        )
+                    )}
+                    {!isClarification && headerMeta && (
                         <span className="text-[10px] text-muted-foreground/60 tabular-nums shrink-0">{headerMeta}</span>
                     )}
                     {variant === 'card' && artifact.streaming && (
@@ -859,7 +486,7 @@ export function ArtifactView({ artifact, connectionId, variant = 'chat', onExpan
                         </span>
                     )}
                     {cachedAt && !artifact.streaming && variant === 'card' && (
-                        <span className="text-[9px] text-muted-foreground/40" title={`Cached at ${new Date(cachedAt).toLocaleTimeString()}`}>
+                        <span className="text-[9px] text-muted-foreground/75 font-medium" title={`Cached at ${new Date(cachedAt).toLocaleTimeString()}`}>
                             cached
                         </span>
                     )}
@@ -878,7 +505,7 @@ export function ArtifactView({ artifact, connectionId, variant = 'chat', onExpan
                                         'p-1.5 rounded transition-colors',
                                         mode === v.id
                                             ? 'bg-primary/10 text-primary font-bold'
-                                            : 'text-muted-foreground/40 hover:text-muted-foreground',
+                                            : 'text-muted-foreground hover:text-foreground',
                                     )}
                                     title={v.id}
                                 >
@@ -892,23 +519,41 @@ export function ArtifactView({ artifact, connectionId, variant = 'chat', onExpan
 
                     {variant === 'chat' && (
                         <>
-                            <ExportDropdown actions={exportActions} />
-                            {onPin && (
+                            {!isFile && !isClarification && <ExportDropdown actions={exportActions} />}
+                            {onPin && !isClarification && (
                                 <button
                                     onClick={() => onPin(artifact)}
-                                    className="p-1.5 text-muted-foreground/40 hover:text-primary transition-colors shrink-0"
-                                    title="Pin to dashboard"
+                                    className={cn(
+                                        'p-1.5 transition-colors shrink-0',
+                                        isPinned
+                                            ? 'text-primary hover:text-primary/80'
+                                            : 'text-muted-foreground hover:text-primary',
+                                    )}
+                                    title={isPinned ? 'Pinned to dashboard' : 'Pin to dashboard'}
                                 >
-                                    <PinIcon className="w-3.5 h-3.5" />
+                                    <PinIcon className={cn('w-3.5 h-3.5', isPinned && 'fill-primary')} />
                                 </button>
                             )}
-                            {onExpand && (
+                            {onExpand && !isClarification && (
                                 <button
                                     onClick={() => onExpand(artifact)}
-                                    className="p-1.5 text-muted-foreground/40 hover:text-primary transition-colors shrink-0"
+                                    className="p-1.5 text-muted-foreground hover:text-primary transition-colors shrink-0"
                                     title="Expand view"
                                 >
                                     <Maximize2 className="w-3.5 h-3.5" />
+                                </button>
+                            )}
+                            {isClarification && (
+                                <button
+                                    type="button"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setIsClarificationCollapsed(c => !c);
+                                    }}
+                                    className="p-1 text-muted-foreground/60 hover:text-foreground rounded transition-colors shrink-0"
+                                    title={isClarificationCollapsed ? 'Expand clarification' : 'Collapse clarification'}
+                                >
+                                    {isClarificationCollapsed ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
                                 </button>
                             )}
                         </>
@@ -951,72 +596,36 @@ export function ArtifactView({ artifact, connectionId, variant = 'chat', onExpan
             )}
 
             {/* Content */}
-            <div className="p-3">
-                {/* ── New standalone artifact types ──────────────────────────── */}
-                {isChart && <ChartView artifact={artifact} height={200} />}
-                {isStatBlock && <StatBlockView artifact={artifact} />}
-                {isReport && <ReportView artifact={artifact} />}
-                {isFile && <FileView artifact={artifact} />}
-                {isSuggestions && <SuggestionsView artifact={artifact} />}
-                {isPlan && <PlanView artifact={artifact} onProceed={onQuickSend} />}
-                {isSlideDeck && artifact.content && <SlidePreviewView content={artifact.content} height={320} />}
+            {(!isClarification || !isClarificationCollapsed) && (
+                <div className="p-3">
+                    {/* ── Standalone artifact types ───────────────────────────── */}
+                    {isChart && <ChartView artifact={artifact} height={200} />}
+                    {isStatBlock && <StatBlockView artifact={artifact} />}
+                    {isFile && <FileView artifact={artifact} onView={onExpand} />}
+                    {isClarification && (
+                        <ClarificationView
+                            artifact={artifact}
+                            onSelect={answer => {
+                                onQuickSend?.(answer);
+                                setIsClarificationCollapsed(true);
+                            }}
+                            answered={isAnswered}
+                            answer={artifact.answer}
+                        />
+                    )}
 
-                {/* ── Legacy special types ────────────────────────────────────── */}
-                {mode === 'stats' && isStats && (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
-                        {artifact.stats!.map(stat => (
-                            <StatCard key={stat.name} stat={stat} />
-                        ))}
-                    </div>
-                )}
-
-                {mode === 'anomalies' && isAnomalies && (
-                    <AnomaliesView
-                        anomalies={artifact.anomalies!}
-                        scannedColumns={artifact.scannedColumns ?? 0}
-                        totalAnomalies={artifact.totalAnomalies ?? 0}
-                    />
-                )}
-
-                {mode === 'quality' && isQuality && (
-                    <QualityView
-                        score={artifact.score!}
-                        summary={artifact.summary ?? ''}
-                        issues={artifact.issues ?? []}
-                    />
-                )}
-
-                {mode === 'joins' && isJoins && (
-                    <JoinsView paths={artifact.paths!} />
-                )}
-
-                {mode === 'metrics' && isMetrics && (
-                    <MetricsView
-                        identifiers={artifact.identifiers ?? []}
-                        dimensions={artifact.dimensions ?? []}
-                        measures={artifact.measures ?? []}
-                        timestamps={artifact.timestamps ?? []}
-                    />
-                )}
-
-                {mode === 'diagram' && isDiagram && (
-                    <div data-diagram-container>
-                        <DiagramView mermaid={artifact.mermaid!} title={artifact.title} />
-                    </div>
-                )}
-
-                {mode === 'executive' && rows.length > 0 && (
-                    <ExecutiveView artifact={artifact} />
-                )}
+                    {mode === 'executive' && rows.length > 0 && (
+                        <ExecutiveView artifact={artifact} />
+                    )}
 
                 {mode === 'table' && (
                     <div>
                         <div className="overflow-x-auto max-h-72 overflow-y-auto [&::-webkit-scrollbar]:h-1 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-muted-foreground/20 [&::-webkit-scrollbar-thumb]:rounded-full">
                             <table className="w-full text-xs">
                                 <thead className="sticky top-0 z-10 bg-card">
-                                    <tr className="border-b border-border/40">
+                                    <tr className="border-b border-border/60">
                                         {cols.map(c => (
-                                            <th key={c.name} className="text-left px-2 py-1.5 font-medium text-muted-foreground whitespace-nowrap bg-muted/30">
+                                            <th key={c.name} className="text-left px-2 py-1.5 font-semibold text-foreground whitespace-nowrap bg-muted/60 border-b border-border/60">
                                                 {c.name}
                                             </th>
                                         ))}
@@ -1037,11 +646,11 @@ export function ArtifactView({ artifact, connectionId, variant = 'chat', onExpan
                                                 const str = val === null || val === undefined ? null : String(val);
                                                 return (
                                                     <td key={c.name}
-                                                        className="px-2 py-1 text-foreground/80 max-w-[160px] truncate"
+                                                        className="px-2 py-1 text-foreground font-normal max-w-[160px] truncate"
                                                         title={str ?? ''}
                                                     >
                                                         {str === null
-                                                            ? <span className="text-muted-foreground/30 italic text-[10px]">null</span>
+                                                            ? <span className="text-muted-foreground/75 italic text-[11px]">null</span>
                                                             : str}
                                                     </td>
                                                 );
@@ -1067,10 +676,10 @@ export function ArtifactView({ artifact, connectionId, variant = 'chat', onExpan
                         {expandedRow && (
                             <div className="border-t border-border/40 bg-muted/10 px-3 py-2.5">
                                 <div className="flex items-center justify-between mb-2">
-                                    <span className="text-[10px] font-semibold text-muted-foreground/60 uppercase tracking-wider">Row Detail</span>
+                                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Row Detail</span>
                                     <button
                                         onClick={() => setExpandedRow(null)}
-                                        className="text-[10px] text-muted-foreground/40 hover:text-foreground/60 transition-colors"
+                                        className="text-[10px] text-muted-foreground hover:text-foreground transition-colors"
                                     >
                                         ✕ close
                                     </button>
@@ -1081,11 +690,11 @@ export function ArtifactView({ artifact, connectionId, variant = 'chat', onExpan
                                         const str = val === null || val === undefined ? null : String(val);
                                         return (
                                             <div key={c.name} className="flex gap-2 text-xs min-w-0">
-                                                <span className="shrink-0 w-28 text-muted-foreground/60 font-mono truncate text-right">{c.name}</span>
+                                                <span className="shrink-0 w-28 text-muted-foreground font-mono truncate text-right">{c.name}</span>
                                                 <span className="text-border/60">·</span>
-                                                <span className="text-foreground/80 break-all">
+                                                <span className="text-foreground font-normal break-all">
                                                     {str === null
-                                                        ? <span className="italic text-muted-foreground/30">null</span>
+                                                        ? <span className="italic text-muted-foreground/75">null</span>
                                                         : str}
                                                 </span>
                                             </div>
@@ -1149,6 +758,7 @@ export function ArtifactView({ artifact, connectionId, variant = 'chat', onExpan
                     </div>
                 )}
             </div>
+            )}
 
             {artifact.sql && (
                 <details className="border-t border-border/30 group">

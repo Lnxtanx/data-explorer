@@ -77,7 +77,11 @@ export async function exportPptx(artifact: AgentArtifact, title?: string): Promi
     pptx.company = 'Schema Weaver';
 
     const artType = artifact.type as string;
-    const reportTitle = title || artifact.title || artType.charAt(0).toUpperCase() + artType.slice(1) + ' Report';
+    const kind = artType === 'stat_block' ? ((artifact.statBlockKind ?? 'table') as string) : artType === 'chart' ? 'chart' : artType;
+    const reportTitle = title || artifact.title
+        || (artType === 'chart' ? 'Chart Report'
+            : artType === 'stat_block' ? `${(artifact.statBlockKind ?? 'Analysis').charAt(0).toUpperCase()}${(artifact.statBlockKind ?? 'Analysis').slice(1)} Report`
+                : artType.charAt(0).toUpperCase() + artType.slice(1) + ' Report');
 
     pptx.title = reportTitle;
 
@@ -85,7 +89,7 @@ export async function exportPptx(artifact: AgentArtifact, title?: string): Promi
     addTitleSlide(pptx, reportTitle);
 
     // Content slide(s)
-    switch (artType) {
+    switch (kind) {
         case 'stats': {
             const stats = artifact.stats ?? [];
             // Split stats into pages of 12
@@ -151,6 +155,56 @@ export async function exportPptx(artifact: AgentArtifact, title?: string): Promi
                 slide.addTable(tableRows, { x: 0.5, y: 3.1, w: 12.3, colW: [1, 2, 2.5, 1, 5.8], border: { pt: 0.5, color: 'E4E4E7' }, autoPage: true });
             }
             addFooter(slide);
+            break;
+        }
+
+        case 'regression': {
+            const coeffs = artifact.coefficients ?? [];
+            const slide = pptx.addSlide();
+            slide.addText('Regression Analysis', { x: 0.5, y: 0.3, w: 9, h: 0.4, fontSize: 16, fontFace: FONT, bold: true, color: COLORS.title });
+            slide.addText(
+                `R² = ${artifact.rSquared != null ? Number(artifact.rSquared).toFixed(4) : '—'}` +
+                (artifact.adjRSquared != null ? `   ·   Adj. R² = ${Number(artifact.adjRSquared).toFixed(4)}` : '') +
+                (artifact.intercept != null ? `   ·   Intercept = ${Number(artifact.intercept).toFixed(6)}` : '') +
+                (artifact.sampleSize != null ? `   ·   n = ${artifact.sampleSize}` : ''),
+                { x: 0.5, y: 0.7, w: 12.3, h: 0.25, fontSize: 9, fontFace: FONT, color: COLORS.muted },
+            );
+            if (coeffs.length > 0) {
+                const keys = Object.keys(coeffs[0]);
+                const tableRows = makeTableRows(
+                    keys.map(k => k === 'pValue' ? 'p-value' : k.replace(/_/g, ' ')),
+                    coeffs.map(c => keys.map(k => str((c as Record<string, unknown>)[k]))),
+                );
+                slide.addTable(tableRows, { x: 0.5, y: 1.05, w: 12.3, colW: keys.map(() => 2), border: { pt: 0.5, color: 'E4E4E7' }, autoPage: true });
+            }
+            addFooter(slide);
+            break;
+        }
+
+        case 'chart': {
+            const addT = (head: string[], body: unknown[][]) => {
+                const slide = pptx.addSlide();
+                slide.addText(reportTitle, { x: 0.5, y: 0.3, w: 9, h: 0.4, fontSize: 16, fontFace: FONT, bold: true, color: COLORS.title });
+                const tableRows = makeTableRows(head, body.map(r => r.map(v => str(v))));
+                slide.addTable(tableRows, { x: 0.5, y: 1.05, w: 12.3, colW: head.map(() => Math.min(12.3 / head.length, 3)), border: { pt: 0.5, color: 'E4E4E7' }, autoPage: true });
+                addFooter(slide);
+            };
+            if (Array.isArray(artifact.stages) && artifact.stages.length > 0) {
+                addT(
+                    ['Stage', 'Count', 'Conversion'],
+                    artifact.stages.map(s => [str((s as Record<string, unknown>).name ?? (s as Record<string, unknown>).label ?? '—'), (s as Record<string, unknown>).count, (s as Record<string, unknown>).conversion != null ? Number((s as Record<string, unknown>).conversion).toFixed(2) + '%' : '—']),
+                );
+            } else if (Array.isArray(artifact.labels) && Array.isArray(artifact.values)) {
+                addT(['Label', 'Value'], artifact.labels.map((l, i) => [l, artifact.values![i]]));
+            } else if (Array.isArray(artifact.matrix) && artifact.matrix.length > 0 && typeof artifact.matrix[0] === 'object') {
+                const keys = Object.keys(artifact.matrix[0] as Record<string, unknown>);
+                addT(keys, artifact.matrix.map(m => keys.map(k => (m as Record<string, unknown>)[k])));
+            } else if (Array.isArray(artifact.historicalLabels) && Array.isArray(artifact.forecastLabels)) {
+                addT(['Series', 'Label', 'Value'], [
+                    ...artifact.historicalLabels.map((l, i) => ['Historical', l, artifact.historicalValues?.[i]]),
+                    ...artifact.forecastLabels.map((l, i) => ['Forecast', l, artifact.forecastValues?.[i]]),
+                ]);
+            }
             break;
         }
 

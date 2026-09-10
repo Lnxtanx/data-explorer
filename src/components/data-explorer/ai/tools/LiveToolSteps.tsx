@@ -18,9 +18,9 @@ export function LiveToolSteps({ steps, isLive, defaultExpanded }: LiveToolStepsP
         <div className="flex flex-col gap-1.5 my-2">
             {/* Live execution indicator */}
             {isLive && hasPending && (
-                <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground/60 px-0.5">
+                <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground/60 px-0.5 mb-0.5">
                     <Loader2 className="w-3 h-3 text-blue-500 animate-spin" />
-                    <span>{doneCount}/{steps.length} tools completed</span>
+                    <span>Executing tools ({doneCount}/{steps.length} completed)…</span>
                 </div>
             )}
 
@@ -29,6 +29,7 @@ export function LiveToolSteps({ steps, isLive, defaultExpanded }: LiveToolStepsP
                 <ToolCallCard
                     key={step.id}
                     step={step}
+                    isLive={isLive}
                     defaultExpanded={defaultExpanded}
                 />
             ))}

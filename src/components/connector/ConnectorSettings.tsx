@@ -1,7 +1,8 @@
-import { Database, ShieldOff, Trash2, Wifi, WifiOff, RefreshCw, Info, Users } from 'lucide-react';
+import { ShieldOff, Trash2, Wifi, WifiOff, RefreshCw, Info, Users } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useConnectors, useRevokeConnector, useRemoveConnector } from '@/lib/api/connector';
+import { DatabaseEngineIcon, PostgresIcon } from '@/components/data-explorer/shared/DatabaseEngineIcon';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
@@ -49,7 +50,7 @@ export function ConnectorSettings() {
     if (connectors.length === 0) {
         return (
             <div className="text-center py-16 space-y-3 font-sans">
-                <Database className="w-10 h-10 mx-auto text-muted-foreground/50" />
+                <PostgresIcon className="w-10 h-10 mx-auto opacity-50" />
                 <p className="text-sm font-semibold text-foreground">No PostgreSQL connectors registered</p>
                 <p className="text-xs text-muted-foreground">
                     Add a connector to manage its credentials and proxy settings here.
@@ -100,10 +101,15 @@ export function ConnectorSettings() {
                                     <div className={cn(
                                         'w-9 h-9 rounded-lg flex items-center justify-center shrink-0 border',
                                         connector.is_online
-                                            ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
-                                            : 'bg-muted text-muted-foreground'
+                                            ? 'bg-emerald-500/10 border-emerald-500/20'
+                                            : 'bg-muted border-border'
                                     )}>
-                                        <Database className="w-4.5 h-4.5" />
+                                        <DatabaseEngineIcon
+                                            engine="postgres"
+                                            className="w-5 h-5"
+                                            isOnline={connector.is_online}
+                                            showStatusDot={true}
+                                        />
                                     </div>
                                     <div className="min-w-0">
                                         <p className="text-sm font-semibold text-foreground truncate">

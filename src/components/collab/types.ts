@@ -4,6 +4,7 @@ export const queryKeys = {
     invites: (teamId: string) => ['collaboration', 'invites', teamId],
     projects: ['collaboration', 'projects'],
     seats: (teamId: string) => ['collaboration', 'seats', teamId],
+    teamBilling: (teamId: string) => ['collaboration', 'billing', teamId],
     agentShares: (teamId: string) => ['collaboration', 'agent-shares', teamId],
 };
 

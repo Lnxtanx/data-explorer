@@ -77,6 +77,7 @@ export async function getTeam(id: string): Promise<TeamResponse> {
 export async function createTeam(params: {
     name: string;
     slug?: string;
+    intent?: 'team_plan_purchase';
 }): Promise<TeamResponse> {
     return post<TeamResponse>('/api/teams', params);
 }
@@ -143,8 +144,68 @@ export interface TeamSeats {
     occupied: number;
 }
 
+// ─── Team billing (per-seat Team plan) ──────────────────────────────────────
+
+export interface TeamBillingSeats extends TeamSeats {
+    remaining?: number;
+    kind?: 'team' | 'legacy';
+    hasTeamSub?: boolean;
+}
+
+export interface TeamSubscription {
+    id: string;
+    status: string;
+    planId: string;
+    seatCount: number;
+    currentPeriodStart: string | null;
+    currentPeriodEnd: string | null;
+    cancelAtPeriodEnd: boolean;
+    canceledAt: string | null;
+    createdAt: string | null;
+}
+
+export interface TeamBillingStatus {
+    teamId: string;
+    status: 'none' | 'active' | 'canceled' | 'expired' | string;
+    seats: TeamBillingSeats | null;
+    subscription: TeamSubscription | null;
+}
+
+export interface TeamOrderResponse {
+    order: {
+        id: string;
+        amount: number;
+        currency: string;
+        keyId: string;
+        planId: string;
+        planName: string;
+        reused?: boolean;
+    };
+    paymentRowId: string | null;
+    seatCount: number;
+    mode: 'purchase' | 'add' | 'renew';
+    prorated?: {
+        seatDelta: number;
+        totalSeats: number;
+        periodDays: number;
+        remainingDays: number;
+        amountPaise: number;
+    } | null;
+}
+
 export async function getTeamSeats(teamId: string): Promise<TeamSeats> {
     return get<TeamSeats>(`/api/teams/${teamId}/seats`);
+}
+
+export async function getTeamBillingStatus(teamId: string): Promise<TeamBillingStatus> {
+    return get<TeamBillingStatus>(`/api/teams/${teamId}/billing`);
+}
+
+export async function createTeamSeatOrder(
+    teamId: string,
+    params: { planId?: string; seats: number; mode?: 'purchase' | 'add' | 'renew'; currency?: 'INR' | 'USD' }
+): Promise<TeamOrderResponse> {
+    return post<TeamOrderResponse>(`/api/teams/${teamId}/billing/orders`, params);
 }
 
 export async function getTeamInvitations(

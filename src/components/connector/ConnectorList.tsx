@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
     Wifi, WifiOff, ChevronDown, ChevronRight,
-    Database, Trash2, ShieldOff, RefreshCw, Radio, Loader2
+    Trash2, ShieldOff, RefreshCw, Radio, Loader2
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -13,6 +13,7 @@ import {
 } from '@/lib/api/connector';
 import type { DatabaseConnector } from '@/lib/api/connector';
 import { useConnections } from '@/lib/api/data/connection';
+import { DatabaseEngineIcon, PostgresIcon } from '@/components/data-explorer/shared/DatabaseEngineIcon';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
@@ -46,7 +47,7 @@ export function ConnectorList({ onSelectConnection }: ConnectorListProps) {
         return (
             <div className="text-center py-16 space-y-3 font-sans">
                 <div className="w-12 h-12 mx-auto rounded-full bg-muted flex items-center justify-center">
-                    <Database className="w-6 h-6 text-muted-foreground" />
+                    <PostgresIcon className="w-6 h-6" />
                 </div>
                 <p className="text-sm font-semibold text-foreground">No PostgreSQL connectors registered</p>
                 <p className="text-xs text-muted-foreground">
@@ -157,12 +158,17 @@ function ConnectorCard({
                     <div className={cn(
                         'w-9 h-9 rounded-lg flex items-center justify-center shrink-0 border',
                         connector.is_online
-                            ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
+                            ? 'bg-emerald-500/10 border-emerald-500/20'
                             : isRevoked
-                            ? 'bg-destructive/10 text-destructive border-destructive/20'
-                            : 'bg-muted text-muted-foreground'
+                            ? 'bg-destructive/10 border-destructive/20'
+                            : 'bg-muted border-border'
                     )}>
-                        <Database className="w-4.5 h-4.5" />
+                        <DatabaseEngineIcon
+                            engine="postgres"
+                            className="w-5 h-5"
+                            isOnline={connector.is_online}
+                            showStatusDot={true}
+                        />
                     </div>
                     <div className="min-w-0">
                         <p className="text-sm font-semibold text-foreground truncate">
@@ -228,9 +234,10 @@ function ConnectorCard({
                     {/* Discovered Databases */}
                     {connector.is_online && (
                         <div className="space-y-2 pt-1 border-t">
-                            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-                                Discovered PostgreSQL Databases
-                            </p>
+                            <div className="flex items-center gap-1.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                                <PostgresIcon className="w-3 h-3" />
+                                <span>Discovered PostgreSQL Databases</span>
+                            </div>
                             {databases.length > 0 ? (
                                 <div className="space-y-1.5">
                                     {databases.map((db) => {
@@ -251,7 +258,12 @@ function ConnectorCard({
                                                 className="flex items-center justify-between px-3 py-2 rounded-lg bg-muted/40 hover:bg-primary/10 transition-colors border border-transparent hover:border-primary/20 text-xs cursor-pointer group"
                                             >
                                                 <div className="flex items-center gap-2">
-                                                    <Database className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                                                    <DatabaseEngineIcon
+                                                        engine="postgres"
+                                                        className="w-3.5 h-3.5"
+                                                        isOnline={connector.is_online}
+                                                        showStatusDot={true}
+                                                    />
                                                     <span className="font-semibold text-foreground group-hover:text-primary">
                                                         {db.database}
                                                     </span>

@@ -137,6 +137,8 @@ export interface ChatMessagesResponse {
         thinking_enabled?: boolean;
     };
     messages: AIMessage[];
+    hasMore?: boolean;
+    oldestCursor?: string | null;
 }
 
 export interface ListChatsResponse {
@@ -188,10 +190,18 @@ export async function listChats(params?: {
 }
 
 /**
- * Fetch all messages for a chat.
+ * Fetch messages for a chat with pagination and payload slimming support.
  */
-export async function getChatMessages(chatId: string): Promise<ChatMessagesResponse> {
-    return apiRequest<ChatMessagesResponse>(`/api/ai/chats/${chatId}/messages`);
+export async function getChatMessages(
+    chatId: string,
+    params?: { limit?: number; before?: string | null; slim?: boolean }
+): Promise<ChatMessagesResponse> {
+    const qs = new URLSearchParams();
+    if (params?.limit) qs.set('limit', String(params.limit));
+    if (params?.before) qs.set('before', params.before);
+    if (params?.slim !== undefined) qs.set('slim', String(params.slim));
+    const query = qs.toString() ? `?${qs.toString()}` : '';
+    return apiRequest<ChatMessagesResponse>(`/api/ai/chats/${chatId}/messages${query}`);
 }
 
 /**

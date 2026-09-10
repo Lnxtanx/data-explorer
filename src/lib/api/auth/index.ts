@@ -107,8 +107,13 @@ export async function logout(): Promise<{ success: boolean }> {
 export async function validateSession(): Promise<SessionResponse> {
     try {
         return await get<SessionResponse>('/api/auth/session');
-    } catch {
-        return { valid: false };
+    } catch (err: any) {
+        // Only an explicit 401 means the server confirmed no valid session
+        if (err?.status === 401) {
+            return { valid: false };
+        }
+        // Rate limits (429), server errors (500/503), or network dropouts must throw, not invalidate session
+        throw err;
     }
 }
 
