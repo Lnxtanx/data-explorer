@@ -33,7 +33,7 @@ export function AgentSharesPanel({
         <div className="space-y-4 animate-in fade-in duration-300">
             <div className="space-y-2">
                 <div className="flex items-center justify-between px-0.5">
-                    <SectionLabel>SW-Agents ({allAgentEntries.length})</SectionLabel>
+                    <SectionLabel>Connectors ({allAgentEntries.length})</SectionLabel>
                     <Button
                         variant="ghost"
                         size="sm"
@@ -42,8 +42,8 @@ export function AgentSharesPanel({
                             queryClient.invalidateQueries({ queryKey: connectorKeys.list });
                         }}
                         className="h-6 px-2 text-[11px] text-muted-foreground hover:text-foreground gap-1"
-                        title="Refresh agents list"
-                        aria-label="Refresh agents list"
+                        title="Refresh connectors list"
+                        aria-label="Refresh connectors list"
                     >
                         <RefreshCw className="h-3 w-3" />
                         <span>Refresh</span>
@@ -64,9 +64,9 @@ export function AgentSharesPanel({
                     ) : allAgentEntries.length === 0 ? (
                         <div className="py-12 flex flex-col items-center text-center space-y-1.5 text-muted-foreground">
                             <Database className="w-8 h-8 text-muted-foreground/30" />
-                            <p className="text-xs font-semibold text-foreground">No SW-Agents found</p>
+                            <p className="text-xs font-semibold text-foreground">No connectors found</p>
                             <p className="text-[11px] text-muted-foreground/70 max-w-[260px]">
-                                Connect an SW-Agent connector to share local databases with your team.
+                                Connect a connector to share local databases with your team.
                             </p>
                         </div>
                     ) : (

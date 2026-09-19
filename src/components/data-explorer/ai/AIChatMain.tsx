@@ -15,12 +15,15 @@ import { DashboardPanel } from './artifacts/DashboardPanel';
 import { WorkspacePanel } from './artifacts/WorkspacePanel';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
 import { ChatMessage } from './chat/ChatMessage';
-import { ChatInput } from './chat/ChatInput';
+import { ChatInput, type ChatInputProps } from './chat/ChatInput';
+import { TurnNavigator } from './chat/TurnNavigator';
+import { useGreeting } from '@/hooks/useGreeting';
 import type { AgentMode } from './models/ModeSelector';
 import type { AgentArtifact, AgentToolStep } from '@/hooks/useAIAgent';
 import { uploadFilesForAI, getChatMessages, type AIMessage } from '@/lib/api/ai';
 import type { LocalMessage } from './chat/types';
 import { logger } from '@/lib/logger';
+import { getDraft, saveDraft, clearDraft } from '@/lib/chatDrafts';
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -106,7 +109,7 @@ function hasArtifactData(a: NonNullable<AIMessage['artifacts']>[number]): boolea
 
 function toLocal(m: AIMessage, index?: number, allMessages?: AIMessage[]): LocalMessage {
     const rawArtifacts = m.artifacts ?? [];
-    const artifacts: AgentArtifact[] = rawArtifacts
+    const mappedArtifacts: AgentArtifact[] = rawArtifacts
         .filter(hasArtifactData)
         .map(a => ({
             type: a.type ?? 'table',
@@ -118,6 +121,34 @@ function toLocal(m: AIMessage, index?: number, allMessages?: AIMessage[]): Local
             options: (a as any).options,
             ...a,
         } as AgentArtifact));
+
+    // Deduplicate file artifacts by canonical filename: group versions together under latest
+    const fileArtifactMap = new Map<string, { latest: AgentArtifact; previousVersions: AgentArtifact[] }>();
+    const nonFileArtifacts: AgentArtifact[] = [];
+
+    for (const a of mappedArtifacts) {
+        if (a.type === 'file') {
+            const canonicalName = ((a as any).fileName || (a as any).filename || a.title || '').trim().toLowerCase();
+            if (canonicalName) {
+                if (!fileArtifactMap.has(canonicalName)) {
+                    fileArtifactMap.set(canonicalName, { latest: a, previousVersions: [] });
+                } else {
+                    const existing = fileArtifactMap.get(canonicalName)!;
+                    existing.previousVersions.push(existing.latest);
+                    existing.latest = a;
+                }
+                continue;
+            }
+        }
+        nonFileArtifacts.push(a);
+    }
+
+    const consolidatedFileArtifacts = Array.from(fileArtifactMap.values()).map(({ latest, previousVersions }) => ({
+        ...latest,
+        ...(previousVersions.length > 0 ? { previousVersions } : {}),
+    }));
+
+    const artifacts: AgentArtifact[] = [...nonFileArtifacts, ...consolidatedFileArtifacts];
 
     // If an assistant message has a clarification artifact, check if it was answered in history
     if (m.role === 'assistant' && allMessages && index !== undefined) {
@@ -177,6 +208,7 @@ function toLocal(m: AIMessage, index?: number, allMessages?: AIMessage[]): Local
             label: 'Thinking Process',
             input: {},
             status: 'done',
+            latencyMs: (thinkingArtifact as any).latency_ms ?? (thinkingArtifact as any).latencyMs ?? (thinkingArtifact as any).duration_ms,
             result: { success: true, summary: thinkingText },
         };
         toolSteps = [thinkingStep, ...(toolSteps ?? [])];
@@ -234,8 +266,51 @@ export function AIChatMain({
     onChatCreated, onProjectClick,
     aiContextTable, aiContextSchema, onTableClick, onOpenPlans,
 }: AIChatMainProps) {
-    // ── State ────────────────────────────────────────────────────────────────
-    const [input, setInput] = useState('');
+    const greeting = useGreeting();
+
+    // ── State & Draft Persistence ────────────────────────────────────────────
+    const [input, setInput] = useState(() => getDraft(chatId, connectionId));
+    const inputRef = useRef(input);
+    inputRef.current = input;
+
+    const activeTargetRef = useRef({ chatId, connectionId });
+    const draftSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    // Debounced draft save helper
+    const queueSaveDraft = useCallback((text: string, cId = chatId, connId = connectionId) => {
+        if (draftSaveTimeoutRef.current) clearTimeout(draftSaveTimeoutRef.current);
+        draftSaveTimeoutRef.current = setTimeout(() => {
+            saveDraft(cId, connId, text);
+        }, 300);
+    }, [chatId, connectionId]);
+
+    // Save previous draft and load incoming draft on conversation/connection switch
+    useEffect(() => {
+        const prev = activeTargetRef.current;
+        if (prev.chatId !== chatId || prev.connectionId !== connectionId) {
+            if (draftSaveTimeoutRef.current) clearTimeout(draftSaveTimeoutRef.current);
+            saveDraft(prev.chatId, prev.connectionId, inputRef.current);
+
+            const restored = getDraft(chatId, connectionId);
+            setInput(restored);
+            inputRef.current = restored;
+            activeTargetRef.current = { chatId, connectionId };
+        }
+    }, [chatId, connectionId]);
+
+    // Save on beforeunload / component unmount
+    useEffect(() => {
+        const handleBeforeUnload = () => {
+            saveDraft(activeTargetRef.current.chatId, activeTargetRef.current.connectionId, inputRef.current);
+        };
+        window.addEventListener('beforeunload', handleBeforeUnload);
+        return () => {
+            window.removeEventListener('beforeunload', handleBeforeUnload);
+            if (draftSaveTimeoutRef.current) clearTimeout(draftSaveTimeoutRef.current);
+            saveDraft(activeTargetRef.current.chatId, activeTargetRef.current.connectionId, inputRef.current);
+        };
+    }, []);
+
     const [scrollTop, setScrollTop] = useState(0);
     const [localMessages, setLocalMessages] = useState<LocalMessage[]>([]);
     const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -244,6 +319,18 @@ export function AIChatMain({
     const [isUploading, setIsUploading] = useState(false);
     const [mentionQuery, setMentionQuery] = useState<string | null>(null);
     const [expandedArtifact, setExpandedArtifact] = useState<AgentArtifact | null>(null);
+
+    const handleToggleExpand = useCallback((artifact: AgentArtifact) => {
+        setExpandedArtifact(prev => {
+            if (!prev) return artifact;
+            const isSame = (prev === artifact) ||
+                (artifact.key && prev.key === artifact.key) ||
+                (artifact.downloadUrl && prev.downloadUrl === artifact.downloadUrl) ||
+                (artifact.id && prev.id === artifact.id) ||
+                (artifact.fileName && prev.fileName === artifact.fileName);
+            return isSame ? null : artifact;
+        });
+    }, []);
     const [dashboardArtifacts, setDashboardArtifacts] = useState<AgentArtifact[]>(() => {
         if (!chatId) return [];
         try {
@@ -295,13 +382,21 @@ export function AIChatMain({
     const [mode, setMode] = useState<AgentMode>('flash');
     const [thinking, setThinking] = useState(false);
 
-    // ── Refs ─────────────────────────────────────────────────────────────────
+    // ── Refs & Scroll Tracking ────────────────────────────────────────────────
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const scrollContainerRef = useRef<HTMLDivElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const justCreatedChatRef = useRef(false);
     const prevChatIdRef = useRef<string | null | undefined>(undefined);
     const uploadErrorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    // Turn navigation & bottom scroll tracking state
+    const [isAtBottom, setIsAtBottom] = useState(true);
+    const [hasNewMessages, setHasNewMessages] = useState(false);
+    const [activeTurnId, setActiveTurnId] = useState<string | null>(null);
+    const lastScrollTopRef = useRef<number>(0);
+    const wasAtBottomRef = useRef<boolean>(true);
 
     // Single auto-dismiss helper for uploadError (#22): any new error clears a
     // pending timer so a stale validation error can't wipe out a later error,
@@ -521,13 +616,82 @@ export function AIChatMain({
         }
     }, [agentStatus]);
 
+    // Scroll handling and bottom detection
+    const handleScroll = useCallback(() => {
+        const el = scrollContainerRef.current;
+        if (!el) return;
+        lastScrollTopRef.current = el.scrollTop;
+        const distanceToBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+        const atBottom = distanceToBottom < 120;
+        setIsAtBottom(atBottom);
+        wasAtBottomRef.current = atBottom;
+        if (atBottom) {
+            setHasNewMessages(false);
+        }
+    }, []);
+
+    // When new messages arrive or streaming updates
     useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        if (wasAtBottomRef.current) {
+            messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        } else {
+            setHasNewMessages(true);
+        }
     }, [localMessages, isStreaming]);
+
+    // When switching chats, reset to bottom
+    useEffect(() => {
+        wasAtBottomRef.current = true;
+        setHasNewMessages(false);
+        const t = setTimeout(() => {
+            messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
+        }, 60);
+        return () => clearTimeout(t);
+    }, [chatId]);
+
+    // When side panels toggle (Workspace, Dashboard, Artifact), preserve scroll position
+    useEffect(() => {
+        const el = scrollContainerRef.current;
+        if (!el) return;
+        const wasAtBottom = wasAtBottomRef.current;
+        const savedTop = lastScrollTopRef.current;
+
+        const t = setTimeout(() => {
+            if (wasAtBottom) {
+                messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
+            } else if (el) {
+                el.scrollTop = savedTop;
+            }
+        }, 50);
+        return () => clearTimeout(t);
+    }, [showWorkspace, showDashboard, Boolean(expandedArtifact)]);
+
+    // Turn navigation handlers
+    const handleSelectTurn = useCallback((turnId: string) => {
+        const el = document.getElementById(`turn-${turnId}`);
+        if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            setActiveTurnId(turnId);
+        }
+    }, []);
+
+    const handleScrollToBottom = useCallback(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        setIsAtBottom(true);
+        wasAtBottomRef.current = true;
+        setHasNewMessages(false);
+    }, []);
+
+    const handleScrollToTop = useCallback(() => {
+        if (scrollContainerRef.current) {
+            scrollContainerRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+    }, []);
 
     const activeChatId = agentMode ? agentChatId : streamedChatId;
     useEffect(() => {
         if (activeChatId && !chatId) {
+            clearDraft(null, connectionId);
             justCreatedChatRef.current = true;
             onChatCreated?.(activeChatId);
         }
@@ -535,11 +699,25 @@ export function AIChatMain({
 
     // ── Handlers ─────────────────────────────────────────────────────────────
 
-    const handleCopy = (id: string, text: string) => {
+    const handleCopy = useCallback((id: string, text: string) => {
         navigator.clipboard.writeText(text);
         setCopiedId(id);
         setTimeout(() => setCopiedId(null), 2000);
-    };
+    }, []);
+
+    const handlePinArtifact = useCallback((a: AgentArtifact) => {
+        updateDashboardArtifacts(prev => {
+            const isPinned = prev.some(p => (p.title && p.title === a.title) || (p.sql && p.sql === a.sql) || (p.downloadUrl && p.downloadUrl === a.downloadUrl));
+            if (isPinned) return prev.filter(p => !((p.title && p.title === a.title) || (p.sql && p.sql === a.sql) || (p.downloadUrl && p.downloadUrl === a.downloadUrl)));
+            return [...prev, a];
+        });
+        setShowDashboard(true);
+        setExpandedArtifact(null);
+    }, [updateDashboardArtifacts]);
+
+    const isPinnedArtifact = useCallback((a: AgentArtifact) => {
+        return dashboardArtifacts.some(p => (p.title && p.title === a.title) || (p.sql && p.sql === a.sql) || (p.downloadUrl && p.downloadUrl === a.downloadUrl));
+    }, [dashboardArtifacts]);
 
     const handleModeChange = (m: AgentMode) => {
         // Mode persists on the chat row via upsertChat on the next send.
@@ -571,12 +749,21 @@ export function AIChatMain({
     const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
         const val = e.target.value;
         setInput(val);
-        e.target.style.height = '52px';
-        e.target.style.height = `${Math.min(e.target.scrollHeight, 200)}px`;
+        queueSaveDraft(val);
+        e.target.style.height = 'auto';
+        e.target.style.height = `${Math.min(e.target.scrollHeight, 160)}px`;
         const cursor = e.target.selectionStart ?? val.length;
         const atMatch = val.slice(0, cursor).match(/@(\w*)$/);
         setMentionQuery(atMatch ? atMatch[1] : null);
     };
+
+    // Keep textarea height synchronized whenever input changes programmatically
+    useEffect(() => {
+        if (textareaRef.current) {
+            textareaRef.current.style.height = 'auto';
+            textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 160)}px`;
+        }
+    }, [input]);
 
     const handleMentionSelect = (table: string) => {
         setInput(prev => {
@@ -641,6 +828,7 @@ export function AIChatMain({
 
         // While paused for a clarification, a quick-sent message is the ANSWER
         // to the question — resume the same run instead of starting a new one.
+        clearDraft(chatId, connectionId);
         if (hasPausedRun) {
             const resumed = await resumeAgent(message);
             if (resumed) {
@@ -725,7 +913,8 @@ export function AIChatMain({
                         { id: 'streaming', role: 'assistant', content: '', isStreaming: true, isAgent: true },
                     ];
                 });
-                if (textareaRef.current) textareaRef.current.style.height = '52px';
+                if (textareaRef.current) textareaRef.current.style.height = 'auto';
+                setScrollTop(0);
                 return;
             }
             // resume() declined — fall through to a normal new run.
@@ -750,10 +939,12 @@ export function AIChatMain({
             { id: userMessageId, role: 'user', content: messageText, files: filesToUpload.length > 0 ? ['uploading…'] : [], mentionedTable: effectiveTables[0] },
             { id: 'streaming', role: 'assistant', content: '', isStreaming: true, isAgent: agentMode },
         ]);
+        clearDraft(chatId, connectionId);
         setInput('');
         setAttachedFiles([]);
+        setScrollTop(0);
         showUploadError(null);
-        if (textareaRef.current) textareaRef.current.style.height = '52px';
+        if (textareaRef.current) textareaRef.current.style.height = 'auto';
 
         let fileIds: string[] = [];
         let uploadedFileNames: string[] = [];
@@ -808,6 +999,99 @@ export function AIChatMain({
         return { ...m, content: streamedText, sql: sqlArtifacts[0]?.sql };
     });
 
+    // IntersectionObserver to track and highlight the currently visible user turn
+    useEffect(() => {
+        const container = scrollContainerRef.current;
+        if (!container) return;
+
+        const turnElements = container.querySelectorAll<HTMLElement>('[data-turn-id]');
+        if (turnElements.length === 0) return;
+
+        const observer = new IntersectionObserver(
+            (entries) => {
+                for (const entry of entries) {
+                    if (entry.isIntersecting) {
+                        const id = entry.target.getAttribute('data-turn-id');
+                        if (id) {
+                            setActiveTurnId(id);
+                        }
+                    }
+                }
+            },
+            {
+                root: container,
+                rootMargin: '0px 0px -60% 0px',
+                threshold: 0.1,
+            }
+        );
+
+        turnElements.forEach(el => observer.observe(el));
+        return () => observer.disconnect();
+    }, [displayMessages]);
+
+    // ── ChatInput Props ──────────────────────────────────────────────────────
+
+    const chatInputProps: ChatInputProps = {
+        input,
+        scrollTop,
+        attachedFiles,
+        mentionQuery,
+        availableTables,
+        isStreaming,
+        agentMode,
+        connectionId,
+        dbName,
+        dashboardCount: dashboardArtifacts.length,
+        showDashboard,
+        mode,
+        thinking,
+        contextMeta,
+        localMessageCount: localMessages.filter(m => !m.isStreaming).length,
+        tokenCount,
+        textareaRef,
+        fileInputRef,
+        onInput: handleInput,
+        onScroll: e => setScrollTop((e.currentTarget as HTMLTextAreaElement).scrollTop),
+        onKeyDown: handleKeyDown,
+        onSend: handleSend,
+        onAbort: () => agentMode ? abortAgent() : abortStream(),
+        onFileSelect: e => {
+            if (!e.target.files) return;
+            const { valid, errors } = validateFiles(Array.from(e.target.files));
+            if (errors.length > 0) {
+                showUploadError(errors.join('; '));
+            }
+            if (valid.length > 0) {
+                setAttachedFiles(prev => {
+                    const combined = [...prev, ...valid];
+                    if (combined.length > MAX_FILE_COUNT) {
+                        showUploadError(`Maximum ${MAX_FILE_COUNT} files allowed. Only the first ${MAX_FILE_COUNT} will be attached.`);
+                        return combined.slice(0, MAX_FILE_COUNT);
+                    }
+                    return combined;
+                });
+            }
+            if (fileInputRef.current) fileInputRef.current.value = '';
+        },
+        onRemoveFile: i => setAttachedFiles(prev => prev.filter((_, j) => j !== i)),
+        onMentionSelect: handleMentionSelect,
+        onMentionClose: () => setMentionQuery(null),
+        onMentionTrigger: handleMentionTrigger,
+        onModeChange: handleModeChange,
+        onThinkingChange: handleThinkingChange,
+        onToggleDashboard: () => { setShowDashboard(s => !s); setShowWorkspace(false); setExpandedArtifact(null); },
+        onToggleWorkspace: () => { setShowWorkspace(s => !s); setShowDashboard(false); setExpandedArtifact(null); },
+        showWorkspace,
+        onTranscript: text => { setInput(prev => prev + (prev && !prev.endsWith(' ') ? ' ' : '') + text); textareaRef.current?.focus(); },
+        quotaError,
+        quotaWarning,
+        onOpenPlans,
+        uploadError,
+        isUploading,
+        agentWarnings: (agentWarnings ?? []).filter(w => !dismissedWarnings[w.id]),
+        onDismissWarning: id => setDismissedWarnings(prev => ({ ...prev, [id]: true })),
+    };
+
     // ── Render ────────────────────────────────────────────────────────────────
 
     const chatPanel = (
@@ -826,43 +1110,82 @@ export function AIChatMain({
                 </div>
             )}
 
-            {/* Messages */}
-            <div className="flex-1 overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-muted-foreground/20 [&::-webkit-scrollbar-thumb]:rounded-full">
-                <div className="max-w-3xl mx-auto w-full px-4 pt-8 pb-40 flex flex-col gap-6">
-
-                    {/* Loading skeleton when switching between existing chats */}
-                    {isSwitchingChat ? (
+            {isSwitchingChat ? (
+                <div className="flex-1 overflow-y-auto">
+                    <div className="max-w-3xl mx-auto w-full px-4 pt-8 pb-40 flex flex-col gap-6">
                         <ChatLoadingSkeleton />
-                    ) : displayMessages.length === 0 ? (
-                        <div className="flex flex-col items-center mt-24 sm:mt-28 gap-4 text-center select-none">
-                            <img
-                                src="/resona.png"
-                                alt="Resona AI"
-                                className="w-14 h-14 sm:w-16 sm:h-16 object-contain opacity-90 transition-transform duration-300 hover:scale-105"
+                    </div>
+                </div>
+            ) : displayMessages.length === 0 ? (
+                /* Empty State: Centered Hero Layout with Claude-style Contextual Greeting */
+                <div className="flex-1 overflow-y-auto flex flex-col items-center justify-center px-4 py-8 select-none">
+                    <div className="w-full max-w-2xl flex flex-col items-center text-center -mt-4">
+                        {/* Resona Logo (clean, without card wrapper) */}
+                        <img
+                            src="/resona.png"
+                            alt="Resona AI"
+                            className="w-12 h-12 sm:w-14 sm:h-14 object-contain mb-3.5 select-none transition-transform duration-200 hover:scale-105"
+                        />
+
+                        {/* Contextual Greeting & Subtitle */}
+                        <h1 className="font-serif text-3xl sm:text-4xl text-foreground font-normal tracking-tight">
+                            {greeting.heading}
+                        </h1>
+                        <p className="text-sm sm:text-base text-muted-foreground mt-2 font-normal">
+                            {greeting.subtitle}
+                        </p>
+
+                        {/* Centered Input Card */}
+                        <div className="w-full mt-5 text-left">
+                            <ChatInput
+                                {...chatInputProps}
+                                isEmptyState={true}
                             />
-                            <div>
-                                <h2 className="text-2xl sm:text-3xl font-semibold text-foreground tracking-tight">
-                                    How can I help?
-                                </h2>
-                                <p className="text-sm sm:text-base text-muted-foreground mt-1.5">
-                                    Ask anything about your data.
-                                </p>
-                            </div>
-                            {aiContextTable && (
-                                <div className="mt-3 flex flex-col gap-2 w-full max-w-md text-left">
-                                    {[`Describe the ${aiContextTable} table`, `Show top 10 rows from ${aiContextTable}`, `Any anomalies in ${aiContextTable}?`].map(prompt => (
-                                        <button key={prompt}
-                                            onClick={() => { setInput(prompt); textareaRef.current?.focus(); }}
-                                            className="flex items-center gap-2.5 text-sm text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-xl px-3.5 py-2.5 transition-all border border-border/40 hover:border-border/80 shadow-2xs cursor-pointer">
-                                            <ChevronRight className="w-4 h-4 shrink-0 opacity-40" />
-                                            <span>{prompt}</span>
-                                        </button>
-                                    ))}
-                                </div>
-                            )}
                         </div>
-                    ) : (
-                        <>
+
+                        {/* Quick table suggestion chips */}
+                        {aiContextTable ? (
+                            <div className="mt-4 flex flex-wrap gap-2 justify-center w-full max-w-2xl">
+                                {[
+                                    `Describe the ${aiContextTable} table`,
+                                    `Show top 10 rows from ${aiContextTable}`,
+                                    `Any anomalies in ${aiContextTable}?`,
+                                ].map(prompt => (
+                                    <button
+                                        key={prompt}
+                                        onClick={() => { setInput(prompt); textareaRef.current?.focus(); }}
+                                        className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/70 bg-card rounded-full px-3.5 py-1.5 transition-all border border-border/60 hover:border-border shadow-2xs cursor-pointer"
+                                    >
+                                        <ChevronRight className="w-3.5 h-3.5 shrink-0 opacity-50" />
+                                        <span>{prompt}</span>
+                                    </button>
+                                ))}
+                            </div>
+                        ) : availableTables.length > 0 ? (
+                            <div className="mt-4 flex flex-wrap gap-2 justify-center w-full max-w-2xl">
+                                {availableTables.slice(0, 4).map(table => (
+                                    <button
+                                        key={table}
+                                        onClick={() => { setInput(`Tell me about the @${table} table`); textareaRef.current?.focus(); }}
+                                        className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/70 bg-card rounded-full px-3.5 py-1.5 transition-all border border-border/60 hover:border-border shadow-2xs cursor-pointer"
+                                    >
+                                        <span className="font-mono text-primary text-[11px]">@{table}</span>
+                                        <span>overview</span>
+                                    </button>
+                                ))}
+                            </div>
+                        ) : null}
+                    </div>
+                </div>
+            ) : (
+                /* Active Conversation Thread */
+                <>
+                    <div
+                        ref={scrollContainerRef}
+                        onScroll={handleScroll}
+                        className="flex-1 overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-muted-foreground/20 [&::-webkit-scrollbar-thumb]:rounded-full"
+                    >
+                        <div className="max-w-3xl mx-auto w-full px-4 pt-8 pb-48 sm:pb-52 flex flex-col gap-6">
                             {/* Load older messages trigger */}
                             {hasMoreOlder && (
                                 <div className="flex justify-center -mb-2">
@@ -882,111 +1205,62 @@ export function AIChatMain({
                                     </button>
                                 </div>
                             )}
+
                             {/* Message list */}
                             {displayMessages.map(msg => (
-                        <ChatMessage
-                            key={msg.id}
-                            msg={msg}
-                            agentMode={agentMode}
-                            agentStatus={agentStatus}
-                            phase={phase}
-                            phaseDetail={phaseDetail}
-                            iterations={iterations ?? 0}
-                            isStreaming={isStreaming}
-                            copiedId={copiedId}
-                            connectionId={connectionId}
-                            datasetCache={datasetCache}
-                            availableTables={availableTables}
-                            liveThinking={agentLiveThinking}
-                            onCopy={handleCopy}
-                            onTableClick={onTableClick}
-                            onExpand={setExpandedArtifact}
-                            onPin={a => {
-                                updateDashboardArtifacts(prev => {
-                                    const isPinned = prev.some(p => (p.title && p.title === a.title) || (p.sql && p.sql === a.sql) || (p.downloadUrl && p.downloadUrl === a.downloadUrl));
-                                    if (isPinned) return prev.filter(p => !((p.title && p.title === a.title) || (p.sql && p.sql === a.sql) || (p.downloadUrl && p.downloadUrl === a.downloadUrl)));
-                                    return [...prev, a];
-                                });
-                                setShowDashboard(true);
-                                setExpandedArtifact(null);
-                            }}
-                            isPinnedArtifact={a => dashboardArtifacts.some(p => (p.title && p.title === a.title) || (p.sql && p.sql === a.sql) || (p.downloadUrl && p.downloadUrl === a.downloadUrl))}
-                            onQuickSend={handleQuickSend}
-                        />
-                    ))}</>)}
+                                <ChatMessage
+                                    key={msg.id}
+                                    msg={msg}
+                                    agentMode={agentMode}
+                                    agentStatus={agentStatus}
+                                    phase={phase}
+                                    phaseDetail={phaseDetail}
+                                    iterations={iterations ?? 0}
+                                    isStreaming={isStreaming}
+                                    copiedId={copiedId}
+                                    connectionId={connectionId}
+                                    datasetCache={datasetCache}
+                                    availableTables={availableTables}
+                                    liveThinking={agentLiveThinking}
+                                    expandedArtifact={expandedArtifact}
+                                    onCopy={handleCopy}
+                                    onTableClick={onTableClick}
+                                    onExpand={handleToggleExpand}
+                                    onPin={handlePinArtifact}
+                                    isPinnedArtifact={isPinnedArtifact}
+                                    onQuickSend={handleQuickSend}
+                                />
+                            ))}
 
-                    {/* Error — quota errors are shown in the input banner instead */}
-                    {activeError && !quotaError && (
-                        <div className="text-sm text-red-500 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg px-4 py-3">
-                            {activeError}
+                            {/* Error — quota errors are shown in the input banner instead */}
+                            {activeError && !quotaError && (
+                                <div className="text-sm text-red-500 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg px-4 py-3">
+                                    {activeError}
+                                </div>
+                            )}
+
+                            <div ref={messagesEndRef} className="h-4 shrink-0 scroll-mb-40" />
                         </div>
-                    )}
+                    </div>
 
-                    <div ref={messagesEndRef} />
-                </div>
-            </div>
+                    {/* Docked Compact Bottom Input Bar */}
+                    <ChatInput
+                        {...chatInputProps}
+                        isEmptyState={false}
+                    />
 
-            {/* Input */}
-            <ChatInput
-                input={input}
-                scrollTop={scrollTop}
-                attachedFiles={attachedFiles}
-                mentionQuery={mentionQuery}
-                availableTables={availableTables}
-                isStreaming={isStreaming}
-                agentMode={agentMode}
-                connectionId={connectionId}
-                dbName={dbName}
-                dashboardCount={dashboardArtifacts.length}
-                showDashboard={showDashboard}
-                mode={mode}
-                thinking={thinking}
-                contextMeta={contextMeta}
-                localMessageCount={localMessages.filter(m => !m.isStreaming).length}
-                tokenCount={tokenCount}
-                textareaRef={textareaRef}
-                fileInputRef={fileInputRef}
-                onInput={handleInput}
-                onScroll={e => setScrollTop((e.currentTarget as HTMLTextAreaElement).scrollTop)}
-                onKeyDown={handleKeyDown}
-                onSend={handleSend}
-                onAbort={() => agentMode ? abortAgent() : abortStream()}
-                onFileSelect={e => {
-                    if (!e.target.files) return;
-                    const { valid, errors } = validateFiles(Array.from(e.target.files));
-                    if (errors.length > 0) {
-                        showUploadError(errors.join('; '));
-                    }
-                    if (valid.length > 0) {
-                        setAttachedFiles(prev => {
-                            const combined = [...prev, ...valid];
-                            if (combined.length > MAX_FILE_COUNT) {
-                                showUploadError(`Maximum ${MAX_FILE_COUNT} files allowed. Only the first ${MAX_FILE_COUNT} will be attached.`);
-                                return combined.slice(0, MAX_FILE_COUNT);
-                            }
-                            return combined;
-                        });
-                    }
-                    if (fileInputRef.current) fileInputRef.current.value = '';
-                }}
-                onRemoveFile={i => setAttachedFiles(prev => prev.filter((_, j) => j !== i))}
-                onMentionSelect={handleMentionSelect}
-                onMentionClose={() => setMentionQuery(null)}
-                onMentionTrigger={handleMentionTrigger}
-                onModeChange={handleModeChange}
-                onThinkingChange={handleThinkingChange}
-                onToggleDashboard={() => { setShowDashboard(s => !s); setShowWorkspace(false); setExpandedArtifact(null); }}
-                onToggleWorkspace={() => { setShowWorkspace(s => !s); setShowDashboard(false); setExpandedArtifact(null); }}
-                showWorkspace={showWorkspace}
-                onTranscript={text => { setInput(prev => prev + (prev && !prev.endsWith(' ') ? ' ' : '') + text); textareaRef.current?.focus(); }}
-                quotaError={quotaError}
-                quotaWarning={quotaWarning}
-                onOpenPlans={onOpenPlans}
-                uploadError={uploadError}
-                isUploading={isUploading}
-                agentWarnings={(agentWarnings ?? []).filter(w => !dismissedWarnings[w.id])}
-                onDismissWarning={id => setDismissedWarnings(prev => ({ ...prev, [id]: true }))}
-            />
+                    {/* Floating Turn Navigator & Claude-style Scroll-to-bottom button */}
+                    <TurnNavigator
+                        messages={displayMessages}
+                        activeTurnId={activeTurnId}
+                        isAtBottom={isAtBottom}
+                        hasNewMessages={hasNewMessages}
+                        onSelectTurn={handleSelectTurn}
+                        onScrollToBottom={handleScrollToBottom}
+                        onScrollToTop={handleScrollToTop}
+                    />
+                </>
+            )}
         </main>
     );
 
@@ -1007,13 +1281,19 @@ export function AIChatMain({
         <ArtifactPanel artifact={expandedArtifact} onClose={() => setExpandedArtifact(null)} onQuickSend={handleQuickSend} />
     ) : null;
 
-    if (!sidePanel) return chatPanel;
-
     return (
         <ResizablePanelGroup direction="horizontal" className="h-full">
-            <ResizablePanel defaultSize={50} minSize={30}>{chatPanel}</ResizablePanel>
-            <ResizableHandle withHandle />
-            <ResizablePanel defaultSize={50} minSize={25}>{sidePanel}</ResizablePanel>
+            <ResizablePanel id="chat-main" defaultSize={sidePanel ? 55 : 100} minSize={30}>
+                {chatPanel}
+            </ResizablePanel>
+            {sidePanel && (
+                <>
+                    <ResizableHandle withHandle />
+                    <ResizablePanel id="chat-side" defaultSize={45} minSize={25}>
+                        {sidePanel}
+                    </ResizablePanel>
+                </>
+            )}
         </ResizablePanelGroup>
     );
 }

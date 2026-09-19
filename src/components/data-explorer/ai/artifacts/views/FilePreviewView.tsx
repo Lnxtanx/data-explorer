@@ -1,6 +1,6 @@
 // =============================================================================
-// FilePreviewView — Rich in-app preview for exported files (CSV, Excel, TSV, JSON)
-// Opened in the right-side ArtifactPanel when a user clicks [View] on a file artifact.
+// FilePreviewView — Rich in-app preview for exported files (HTML, CSV, Excel, PDF, JSON)
+// Opened in the right-side ArtifactPanel when a user clicks [Preview/View] on a file artifact.
 // =============================================================================
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
@@ -8,7 +8,7 @@ import {
     FileSpreadsheet, FileText, FileCode, Download, Search, Copy, Check,
     RefreshCw, AlertCircle, Loader2, ChevronLeft, ChevronRight,
     ArrowUpDown, ArrowUp, ArrowDown, ExternalLink, Table as TableIcon,
-    Code, X, Layers, Eye
+    X, Layers, Eye, Share2, Code
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { cn } from '@/lib/utils';
@@ -22,6 +22,18 @@ function humanSize(bytes?: number): string {
     return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
+// ── Authentic HTML5 Shield Icon ───────────────────────────────────────────────
+function Html5Icon({ className }: { className?: string }) {
+    return (
+        <svg viewBox="0 0 512 512" className={cn("w-4 h-4", className)} fill="currentColor">
+            <path fill="#E34F26" d="M71 460L30 0h452l-41 460-185 52z" />
+            <path fill="#EF652A" d="M256 472l149-41 35-391H256v432z" />
+            <path fill="#EBEBEB" d="M256 208H181l-5-57h80V95H115l15 170h126zm0 148l-83-22-6-62H111l10 119 135 37z" />
+            <path fill="#FFFFFF" d="M256 208h75l-7 78-68 19v58l122-34 17-191H256zm0-113v56h141l5-56z" />
+        </svg>
+    );
+}
+
 interface ParsedSheet {
     name: string;
     headers: string[];
@@ -30,12 +42,15 @@ interface ParsedSheet {
 
 interface FilePreviewViewProps {
     artifact: AgentArtifact;
+    onClose?: () => void;
 }
 
-export function FilePreviewView({ artifact }: FilePreviewViewProps) {
+export function FilePreviewView({ artifact, onClose }: FilePreviewViewProps) {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [downloading, setDownloading] = useState(false);
+    const [sharing, setSharing] = useState(false);
+    const [copiedShare, setCopiedShare] = useState(false);
     const [copied, setCopied] = useState<string | null>(null);
 
     // Parsed tabular data
@@ -45,7 +60,9 @@ export function FilePreviewView({ artifact }: FilePreviewViewProps) {
     // Non-tabular content
     const [jsonRaw, setJsonRaw] = useState<string | null>(null);
     const [textRaw, setTextRaw] = useState<string | null>(null);
+    const [htmlRaw, setHtmlRaw] = useState<string | null>(null);
     const [imageUrl, setImageUrl] = useState<string | null>(null);
+    const [pdfUrl, setPdfUrl] = useState<string | null>(null);
 
     // View toggles
     const [viewMode, setViewMode] = useState<'table' | 'raw'>('table');
@@ -58,32 +75,24 @@ export function FilePreviewView({ artifact }: FilePreviewViewProps) {
     const [pageSize, setPageSize] = useState(50);
     const [selectedRow, setSelectedRow] = useState<{ index: number; data: (string | number | boolean | null)[] } | null>(null);
 
-    const fileName = artifact.fileName || 'export';
-    const ext = (fileName.split('.').pop() || artifact.fileType || '').toLowerCase();
+    const fileName = artifact.fileName || (artifact as any).filename || artifact.title || 'export';
+    const ext = (fileName.split('.').pop() || artifact.fileType || (artifact as any).format || '').toLowerCase();
 
     const isExcel = ['xlsx', 'xls', 'xlsm'].includes(ext) || artifact.fileType === 'xlsx';
     const isCsv = ['csv', 'tsv'].includes(ext) || artifact.fileType === 'csv';
     const isJson = ext === 'json' || artifact.fileType === 'json';
+    const isHtml = ['html', 'htm'].includes(ext) || (artifact as any).format === 'html';
+    const isPdf = ext === 'pdf';
     const isImage = ['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg'].includes(ext) || artifact.type === 'image';
-    const isText = ['txt', 'log', 'md', 'sql', 'html'].includes(ext);
+    const isText = ['txt', 'log', 'md', 'sql'].includes(ext);
 
-    // ── Re-sign or resolve download URL ─────────────────────────────────────────
+    // ── Re-sign or resolve download/content URL ─────────────────────────────────
     const fetchValidUrl = useCallback(async (): Promise<string> => {
-        let url = artifact.downloadUrl;
+        // If we have an S3 key, use our same-origin content streaming endpoint to completely avoid S3 CORS
         if (artifact.key) {
-            try {
-                const res = await fetch(
-                    `${API_BASE_URL}/api/ai/exports/download-url?key=${encodeURIComponent(artifact.key)}`,
-                    { credentials: 'include' }
-                );
-                if (res.ok) {
-                    const data = await res.json();
-                    if (data?.success && data.url) url = data.url;
-                }
-            } catch {
-                // fall back to stored URL
-            }
+            return `/ai-api/ai/exports/content?key=${encodeURIComponent(artifact.key)}`;
         }
+        let url = artifact.downloadUrl;
         if (!url) {
             throw new Error('File download URL is not available.');
         }
@@ -98,7 +107,7 @@ export function FilePreviewView({ artifact }: FilePreviewViewProps) {
             // Check if rows and columns were already provided directly on artifact
             if (artifact.rows && artifact.rows.length > 0 && artifact.columns && artifact.columns.length > 0) {
                 const headers = artifact.columns.map(c => c.name);
-                const rows = artifact.rows.map(r => headers.map(h => r[h] ?? null));
+                const rows = artifact.rows.map(r => headers.map(h => (r[h] ?? null) as string | number | boolean | null));
                 setSheets([{ name: 'Data', headers, rows }]);
                 setLoading(false);
                 return;
@@ -112,9 +121,22 @@ export function FilePreviewView({ artifact }: FilePreviewViewProps) {
                 return;
             }
 
-            const res = await fetch(url);
+            if (isPdf) {
+                setPdfUrl(url);
+                setLoading(false);
+                return;
+            }
+
+            const res = await fetch(url, { credentials: 'include' });
             if (!res.ok) {
                 throw new Error(`Failed to fetch file (${res.status} ${res.statusText})`);
+            }
+
+            if (isHtml) {
+                const text = await res.text();
+                setHtmlRaw(text);
+                setLoading(false);
+                return;
             }
 
             if (isJson) {
@@ -191,61 +213,64 @@ export function FilePreviewView({ artifact }: FilePreviewViewProps) {
         } finally {
             setLoading(false);
         }
-    }, [artifact, fetchValidUrl, isImage, isJson, isText]);
+    }, [artifact, fetchValidUrl, isHtml, isImage, isJson, isPdf, isText]);
 
     useEffect(() => {
         loadFile();
     }, [loadFile]);
 
     // ── Active sheet data ────────────────────────────────────────────────────────
-    const activeSheet = sheets[activeSheetIdx] || { name: 'Sheet1', headers: [], rows: [] };
+    const activeSheet = useMemo<ParsedSheet>(() => {
+        return sheets[activeSheetIdx] || { name: 'Empty', headers: [], rows: [] };
+    }, [sheets, activeSheetIdx]);
 
-    // ── Filtered & Sorted rows ───────────────────────────────────────────────────
+    // ── Filter rows by search ───────────────────────────────────────────────────
     const filteredRows = useMemo(() => {
-        let result = activeSheet.rows;
+        if (!searchQuery.trim()) return activeSheet.rows;
+        const q = searchQuery.toLowerCase();
+        return activeSheet.rows.filter(row =>
+            row.some(val => val !== null && String(val).toLowerCase().includes(q))
+        );
+    }, [activeSheet.rows, searchQuery]);
 
-        if (searchQuery.trim()) {
-            const query = searchQuery.toLowerCase().trim();
-            result = result.filter(row =>
-                row.some(cell => (cell !== null && cell !== undefined ? String(cell).toLowerCase().includes(query) : false))
-            );
-        }
+    // ── Sort rows ───────────────────────────────────────────────────────────────
+    const sortedRows = useMemo(() => {
+        if (sortCol === null) return filteredRows;
+        return [...filteredRows].sort((a, b) => {
+            const valA = a[sortCol];
+            const valB = b[sortCol];
 
-        if (sortCol !== null) {
-            const colIdx = sortCol;
-            result = [...result].sort((a, b) => {
-                const va = a[colIdx];
-                const vb = b[colIdx];
-                if (va === vb) return 0;
-                if (va === null || va === undefined) return 1;
-                if (vb === null || vb === undefined) return -1;
+            if (valA === null || valA === undefined) return 1;
+            if (valB === null || valB === undefined) return -1;
 
-                const numA = Number(va);
-                const numB = Number(vb);
-                if (!isNaN(numA) && !isNaN(numB)) {
-                    return sortDir === 'asc' ? numA - numB : numB - numA;
-                }
-                const cmp = String(va).localeCompare(String(vb));
-                return sortDir === 'asc' ? cmp : -cmp;
-            });
-        }
+            const numA = Number(valA);
+            const numB = Number(valB);
+            if (!isNaN(numA) && !isNaN(numB)) {
+                return sortDir === 'asc' ? numA - numB : numB - numA;
+            }
 
-        return result;
-    }, [activeSheet.rows, searchQuery, sortCol, sortDir]);
+            const strA = String(valA).toLowerCase();
+            const strB = String(valB).toLowerCase();
+            if (strA < strB) return sortDir === 'asc' ? -1 : 1;
+            if (strA > strB) return sortDir === 'asc' ? 1 : -1;
+            return 0;
+        });
+    }, [filteredRows, sortCol, sortDir]);
 
-    // ── Pagination ───────────────────────────────────────────────────────────────
-    const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
+    // ── Paginate rows ───────────────────────────────────────────────────────────
+    const totalPages = Math.max(1, Math.ceil(sortedRows.length / pageSize));
     const paginatedRows = useMemo(() => {
         const start = (page - 1) * pageSize;
-        return filteredRows.slice(start, start + pageSize);
-    }, [filteredRows, page, pageSize]);
+        return sortedRows.slice(start, start + pageSize);
+    }, [sortedRows, page, pageSize]);
 
-    // Reset pagination when sheet or search changes
+    // Reset pagination on filter or sheet switch
     useEffect(() => {
         setPage(1);
-    }, [activeSheetIdx, searchQuery]);
+        setSelectedRow(null);
+    }, [searchQuery, activeSheetIdx, sortCol, sortDir]);
 
-    // ── Handlers ─────────────────────────────────────────────────────────────────
+    // ── Sort toggle ─────────────────────────────────────────────────────────────
     function handleSort(colIdx: number) {
         if (sortCol === colIdx) {
             if (sortDir === 'asc') setSortDir('desc');
@@ -259,49 +284,104 @@ export function FilePreviewView({ artifact }: FilePreviewViewProps) {
         }
     }
 
+    // ── Direct Download Action ──────────────────────────────────────────────────
     async function handleDownload() {
         setDownloading(true);
         try {
-            const url = await fetchValidUrl();
+            let url = artifact.downloadUrl;
+            if (artifact.key) {
+                try {
+                    const res = await fetch(
+                        `${API_BASE_URL}/api/ai/exports/download-url?key=${encodeURIComponent(artifact.key)}`,
+                        { credentials: 'include' }
+                    );
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data?.success && data.url) url = data.url;
+                    }
+                } catch {
+                    // Fall back to stored URL
+                }
+            }
+            if (!url) return;
             const a = document.createElement('a');
             a.href = url;
             a.download = fileName;
             document.body.appendChild(a);
             a.click();
             a.remove();
-        } catch (err: any) {
-            alert('Failed to download: ' + (err?.message || 'Unknown error'));
         } finally {
             setDownloading(false);
         }
     }
 
-    function handleCopyTsv() {
-        if (activeSheet.headers.length === 0) return;
-        const headerLine = activeSheet.headers.join('\t');
-        const bodyLines = filteredRows.map(r => r.map(c => (c === null || c === undefined ? '' : String(c))).join('\t'));
-        const tsv = [headerLine, ...bodyLines].join('\n');
-        navigator.clipboard.writeText(tsv);
-        setCopied('tsv');
-        setTimeout(() => setCopied(null), 2000);
+    // ── Public Share Action (Compact branded link) ───────────────────────────
+    async function handleShare() {
+        setSharing(true);
+        try {
+            if (artifact.key) {
+                const query = new URLSearchParams({
+                    key: artifact.key,
+                    filename: fileName,
+                    title: artifact.title || fileName,
+                });
+                const res = await fetch(`/ai-api/ai/exports/share?${query.toString()}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.shareId) {
+                        const fullUrl = `${window.location.origin}/share/r/${data.shareId}`;
+                        await navigator.clipboard.writeText(fullUrl);
+                        setCopiedShare(true);
+                        setTimeout(() => setCopiedShare(false), 2500);
+                        return;
+                    }
+                }
+            }
+            if (artifact.downloadUrl) {
+                await navigator.clipboard.writeText(artifact.downloadUrl);
+                setCopiedShare(true);
+                setTimeout(() => setCopiedShare(false), 2500);
+            }
+        } catch {
+            if (artifact.downloadUrl) {
+                await navigator.clipboard.writeText(artifact.downloadUrl);
+                setCopiedShare(true);
+                setTimeout(() => setCopiedShare(false), 2500);
+            }
+        } finally {
+            setSharing(false);
+        }
     }
 
+    // ── Copy as CSV / TSV ───────────────────────────────────────────────────────
     function handleCopyCsv() {
-        if (activeSheet.headers.length === 0) return;
-        const escape = (v: any) => {
-            if (v === null || v === undefined) return '';
-            const s = String(v);
-            return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s;
-        };
-        const headerLine = activeSheet.headers.map(escape).join(',');
-        const bodyLines = filteredRows.map(r => r.map(escape).join(','));
-        const csv = [headerLine, ...bodyLines].join('\n');
-        navigator.clipboard.writeText(csv);
+        const lines = [
+            activeSheet.headers.join(','),
+            ...activeSheet.rows.map(r =>
+                r.map(v => {
+                    const s = String(v ?? '');
+                    return s.includes(',') || s.includes('"') || s.includes('\n')
+                        ? `"${s.replace(/"/g, '""')}"`
+                        : s;
+                }).join(',')
+            ),
+        ];
+        navigator.clipboard.writeText(lines.join('\n'));
         setCopied('csv');
         setTimeout(() => setCopied(null), 2000);
     }
 
-    const FileIcon = isExcel ? FileSpreadsheet : isJson || isText ? FileCode : FileText;
+    function handleCopyTsv() {
+        const lines = [
+            activeSheet.headers.join('\t'),
+            ...activeSheet.rows.map(r => r.map(v => String(v ?? '').replace(/\t/g, ' ')).join('\t')),
+        ];
+        navigator.clipboard.writeText(lines.join('\n'));
+        setCopied('tsv');
+        setTimeout(() => setCopied(null), 2000);
+    }
+
+    const FileIcon = isHtml ? Html5Icon : isExcel ? FileSpreadsheet : isJson || isText ? FileCode : FileText;
 
     // ── Loading state ────────────────────────────────────────────────────────────
     if (loading) {
@@ -330,7 +410,7 @@ export function FilePreviewView({ artifact }: FilePreviewViewProps) {
                 <div className="flex items-center gap-2 mt-2">
                     <button
                         onClick={loadFile}
-                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors cursor-pointer"
                     >
                         <RefreshCw className="w-3.5 h-3.5" />
                         Retry
@@ -339,12 +419,209 @@ export function FilePreviewView({ artifact }: FilePreviewViewProps) {
                         <button
                             onClick={handleDownload}
                             disabled={downloading}
-                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-border rounded-md hover:bg-muted transition-colors disabled:opacity-50"
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-border rounded-md hover:bg-muted transition-colors disabled:opacity-50 cursor-pointer"
                         >
                             <Download className="w-3.5 h-3.5" />
                             Direct Download
                         </button>
                     )}
+                </div>
+            </div>
+        );
+    }
+
+    // ── Interactive HTML Report Preview ──────────────────────────────────────────
+    if (isHtml) {
+        return (
+            <div className="flex flex-col h-full bg-background overflow-hidden">
+                {/* Unified Single Header Toolbar */}
+                <div className="flex items-center justify-between px-3.5 py-2 border-b border-border/40 bg-muted/10 shrink-0 gap-2">
+                    {/* Left side: Always clean, properly truncated, never wraps or leaks */}
+                    <div className="flex items-center gap-2 min-w-0 flex-1 overflow-hidden">
+                        <Html5Icon className="w-4 h-4 shrink-0" />
+                        <span className="text-xs sm:text-sm font-semibold text-foreground truncate shrink min-w-0" title={fileName}>
+                            {fileName}
+                        </span>
+                        <span className="text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-orange-500/15 text-orange-600 dark:text-orange-400 border border-orange-500/25 shrink-0">
+                            HTML
+                        </span>
+                        {artifact.sizeBytes ? (
+                            <span className="text-[11px] text-muted-foreground/60 shrink-0 whitespace-nowrap">
+                                {humanSize(artifact.sizeBytes)}
+                            </span>
+                        ) : null}
+                    </div>
+
+                    <div className="flex items-center gap-1 shrink-0">
+                        {/* Copy HTML source */}
+                        <button
+                            type="button"
+                            onClick={() => {
+                                navigator.clipboard.writeText(htmlRaw || '');
+                                setCopied('html');
+                                setTimeout(() => setCopied(null), 2000);
+                            }}
+                            className={cn(
+                                "p-1.5 rounded-lg border transition-all cursor-pointer",
+                                copied === 'html'
+                                    ? "bg-emerald-500/15 text-emerald-600 border-emerald-500/30"
+                                    : "border-border/60 hover:bg-muted text-foreground/80"
+                            )}
+                            title={copied === 'html' ? "HTML code copied to clipboard!" : "Copy raw HTML source code"}
+                        >
+                            {copied === 'html' ? (
+                                <Check className="w-3.5 h-3.5 text-emerald-500" />
+                            ) : (
+                                <Copy className="w-3.5 h-3.5" />
+                            )}
+                        </button>
+
+                        {/* Share Button (Compact Link) */}
+                        <button
+                            type="button"
+                            onClick={handleShare}
+                            disabled={sharing}
+                            className={cn(
+                                "p-1.5 rounded-lg border transition-all cursor-pointer",
+                                copiedShare
+                                    ? "bg-emerald-500/15 text-emerald-600 border-emerald-500/30"
+                                    : "border-border/60 hover:bg-muted text-foreground/80"
+                            )}
+                            title={copiedShare ? "Link copied to clipboard!" : "Share report (compact public link)"}
+                        >
+                            {copiedShare ? (
+                                <Check className="w-3.5 h-3.5 text-emerald-500" />
+                            ) : sharing ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />
+                            ) : (
+                                <Share2 className="w-3.5 h-3.5" />
+                            )}
+                        </button>
+
+                        {/* Open in new tab */}
+                        <button
+                            type="button"
+                            onClick={() => {
+                                if (!htmlRaw) return;
+                                const blob = new Blob([htmlRaw], { type: 'text/html;charset=utf-8' });
+                                const blobUrl = URL.createObjectURL(blob);
+                                window.open(blobUrl, '_blank');
+                            }}
+                            className="p-1.5 rounded-lg border border-border/60 hover:bg-muted transition-colors cursor-pointer text-foreground/80"
+                            title="Open interactive report in full browser tab"
+                        >
+                            <ExternalLink className="w-3.5 h-3.5" />
+                        </button>
+
+                        {/* Download */}
+                        <button
+                            type="button"
+                            onClick={handleDownload}
+                            disabled={downloading}
+                            className="p-1.5 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-2xs disabled:opacity-60 cursor-pointer"
+                            title="Download HTML file"
+                        >
+                            {downloading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+                        </button>
+
+                        {/* Close button */}
+                        {onClose && (
+                            <button
+                                type="button"
+                                onClick={onClose}
+                                className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors ml-0.5 cursor-pointer"
+                                title="Close preview"
+                            >
+                                <X className="w-4 h-4" />
+                            </button>
+                        )}
+                    </div>
+                </div>
+
+                {/* Content Area — High fidelity interactive HTML report rendered directly */}
+                <div className="flex-1 w-full h-full overflow-hidden bg-white">
+                    <iframe
+                        srcDoc={htmlRaw || ''}
+                        className="w-full h-full border-0 bg-white"
+                        sandbox="allow-scripts allow-popups allow-modals"
+                        title={fileName}
+                    />
+                </div>
+            </div>
+        );
+    }
+
+    // ── PDF preview (standalone viewer with compact controls) ─────────────────────
+    if (isPdf && pdfUrl) {
+        return (
+            <div className="flex flex-col h-full bg-background overflow-hidden">
+                <div className="flex items-center justify-between px-3.5 py-2 border-b border-border/40 bg-muted/10 shrink-0 gap-2">
+                    <div className="flex items-center gap-2 min-w-0 flex-1 overflow-hidden">
+                        <FileText className="w-4 h-4 text-rose-500 shrink-0" />
+                        <span className="text-xs sm:text-sm font-semibold text-foreground truncate shrink min-w-0" title={fileName}>
+                            {fileName}
+                        </span>
+                        <span className="text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-500 shrink-0">
+                            PDF
+                        </span>
+                        {artifact.sizeBytes ? (
+                            <span className="text-[11px] text-muted-foreground/60 shrink-0 whitespace-nowrap">
+                                {humanSize(artifact.sizeBytes)}
+                            </span>
+                        ) : null}
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                        <button
+                            type="button"
+                            onClick={handleShare}
+                            disabled={sharing}
+                            className={cn(
+                                "p-1.5 rounded-lg border transition-all cursor-pointer",
+                                copiedShare
+                                    ? "bg-emerald-500/15 text-emerald-600 border-emerald-500/30"
+                                    : "border-border/60 hover:bg-muted text-foreground/80"
+                            )}
+                            title={copiedShare ? "Link copied to clipboard!" : "Share PDF"}
+                        >
+                            {copiedShare ? (
+                                <Check className="w-3.5 h-3.5 text-emerald-500" />
+                            ) : sharing ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                                <Share2 className="w-3.5 h-3.5" />
+                            )}
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => window.open(pdfUrl, '_blank')}
+                            className="p-1.5 rounded-lg border border-border hover:bg-muted transition-colors cursor-pointer text-foreground/80"
+                            title="Open PDF in new tab"
+                        >
+                            <ExternalLink className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                            type="button"
+                            onClick={handleDownload}
+                            disabled={downloading}
+                            className="p-1.5 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-2xs disabled:opacity-60 cursor-pointer"
+                            title="Download PDF"
+                        >
+                            {downloading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+                        </button>
+                        {onClose && (
+                            <button
+                                type="button"
+                                onClick={onClose}
+                                className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors ml-0.5 cursor-pointer"
+                                title="Close preview"
+                            >
+                                <X className="w-4 h-4" />
+                            </button>
+                        )}
+                    </div>
+                </div>
+                <div className="flex-1 w-full h-full overflow-hidden bg-muted/10 p-2">
+                    <iframe src={pdfUrl} className="w-full h-full border-0 rounded-lg" title={fileName} />
                 </div>
             </div>
         );
@@ -362,14 +639,27 @@ export function FilePreviewView({ artifact }: FilePreviewViewProps) {
                             <span className="text-xs text-muted-foreground/60">{humanSize(artifact.sizeBytes)}</span>
                         )}
                     </div>
-                    <button
-                        onClick={handleDownload}
-                        disabled={downloading}
-                        className="flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
-                    >
-                        <Download className="w-3.5 h-3.5" />
-                        Download
-                    </button>
+                    <div className="flex items-center gap-1.5">
+                        <button
+                            type="button"
+                            onClick={handleDownload}
+                            disabled={downloading}
+                            className="flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors cursor-pointer"
+                        >
+                            <Download className="w-3.5 h-3.5" />
+                            Download
+                        </button>
+                        {onClose && (
+                            <button
+                                type="button"
+                                onClick={onClose}
+                                className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors ml-1 cursor-pointer"
+                                title="Close preview"
+                            >
+                                <X className="w-4 h-4" />
+                            </button>
+                        )}
+                    </div>
                 </div>
                 <div className="flex-1 flex items-center justify-center overflow-auto p-4 bg-muted/10 rounded-lg border border-border/40">
                     <img src={imageUrl} alt={fileName} className="max-w-full max-h-[500px] object-contain rounded-md shadow-sm" />
@@ -397,32 +687,45 @@ export function FilePreviewView({ artifact }: FilePreviewViewProps) {
                     <div className="flex items-center gap-2">
                         {isJson && sheets.length > 0 && (
                             <button
+                                type="button"
                                 onClick={() => setViewMode('table')}
-                                className="flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md border border-border hover:bg-muted transition-colors"
+                                className="flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md border border-border hover:bg-muted transition-colors cursor-pointer"
                             >
                                 <TableIcon className="w-3.5 h-3.5" />
                                 Table View
                             </button>
                         )}
                         <button
+                            type="button"
                             onClick={() => {
                                 navigator.clipboard.writeText(textRaw || jsonRaw || '');
                                 setCopied('raw');
                                 setTimeout(() => setCopied(null), 2000);
                             }}
-                            className="flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md border border-border hover:bg-muted transition-colors"
+                            className="flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md border border-border hover:bg-muted transition-colors cursor-pointer"
                         >
                             {copied === 'raw' ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
                             {copied === 'raw' ? 'Copied' : 'Copy'}
                         </button>
                         <button
+                            type="button"
                             onClick={handleDownload}
                             disabled={downloading}
-                            className="flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+                            className="flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors cursor-pointer"
                         >
                             <Download className="w-3.5 h-3.5" />
                             Download
                         </button>
+                        {onClose && (
+                            <button
+                                type="button"
+                                onClick={onClose}
+                                className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors ml-1 cursor-pointer"
+                                title="Close preview"
+                            >
+                                <X className="w-4 h-4" />
+                            </button>
+                        )}
                     </div>
                 </div>
 
@@ -440,122 +743,154 @@ export function FilePreviewView({ artifact }: FilePreviewViewProps) {
 
     return (
         <div className="flex flex-col h-full bg-background">
-            {/* Top Toolbar */}
-            <div className="flex flex-col gap-2.5 px-4 py-3 border-b border-border/40 bg-muted/10 shrink-0">
-                <div className="flex items-center justify-between gap-3 flex-wrap">
-                    {/* File Meta */}
-                    <div className="flex items-center gap-2 min-w-0">
-                        <div className="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-500 flex items-center justify-center shrink-0">
-                            <FileIcon className="w-4 h-4" />
-                        </div>
-                        <div className="flex flex-col min-w-0">
-                            <div className="flex items-center gap-2">
-                                <span className="text-sm font-semibold text-foreground truncate max-w-[200px]" title={fileName}>
-                                    {fileName}
-                                </span>
-                                <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-500 shrink-0">
-                                    {ext || 'DATA'}
-                                </span>
-                            </div>
-                            <div className="flex items-center gap-2 text-[11px] text-muted-foreground/60">
-                                <span>{totalRows.toLocaleString()} rows</span>
-                                <span>·</span>
-                                <span>{colCount} cols</span>
-                                {artifact.sizeBytes && (
-                                    <>
-                                        <span>·</span>
-                                        <span>{humanSize(artifact.sizeBytes)}</span>
-                                    </>
-                                )}
-                            </div>
-                        </div>
+            {/* Unified Single Header Toolbar */}
+            <div className="flex items-center justify-between px-3.5 py-2 border-b border-border/40 bg-card/60 backdrop-blur-xs shrink-0 gap-2">
+                {/* File Meta */}
+                <div className="flex items-center gap-2 min-w-0 flex-1 overflow-hidden">
+                    <div className="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-500 flex items-center justify-center shrink-0">
+                        <FileIcon className="w-3.5 h-3.5" />
                     </div>
-
-                    {/* Actions */}
-                    <div className="flex items-center gap-1.5 shrink-0 ml-auto">
-                        {isJson && (
-                            <button
-                                onClick={() => setViewMode('raw')}
-                                className="flex items-center gap-1 text-[11px] font-medium px-2 py-1.5 rounded-md border border-border/60 hover:bg-muted/60 transition-colors"
-                                title="View Raw JSON"
-                            >
-                                <Code className="w-3.5 h-3.5 text-muted-foreground" />
-                                JSON
-                            </button>
-                        )}
-                        <button
-                            onClick={handleCopyCsv}
-                            className="flex items-center gap-1 text-[11px] font-medium px-2 py-1.5 rounded-md border border-border/60 hover:bg-muted/60 transition-colors"
-                            title="Copy table as CSV"
-                        >
-                            {copied === 'csv' ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5 text-muted-foreground" />}
-                            {copied === 'csv' ? 'Copied' : 'CSV'}
-                        </button>
-                        <button
-                            onClick={handleCopyTsv}
-                            className="flex items-center gap-1 text-[11px] font-medium px-2 py-1.5 rounded-md border border-border/60 hover:bg-muted/60 transition-colors"
-                            title="Copy TSV (Paste to Excel)"
-                        >
-                            {copied === 'tsv' ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5 text-muted-foreground" />}
-                            {copied === 'tsv' ? 'Copied' : 'TSV'}
-                        </button>
-                        <button
-                            onClick={handleDownload}
-                            disabled={downloading}
-                            className="flex items-center gap-1.5 text-[11px] font-medium px-3 py-1.5 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-2xs disabled:opacity-60"
-                        >
-                            {downloading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
-                            Download
-                        </button>
+                    <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-xs sm:text-sm font-semibold text-foreground truncate" title={fileName}>
+                            {fileName}
+                        </span>
+                        <span className="text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-500 shrink-0">
+                            {ext || 'DATA'}
+                        </span>
+                        <span className="hidden sm:inline-flex items-center text-[11px] text-muted-foreground/60 whitespace-nowrap">
+                            {totalRows.toLocaleString()} rows · {colCount} cols {artifact.sizeBytes ? `· ${humanSize(artifact.sizeBytes)}` : ''}
+                        </span>
                     </div>
                 </div>
 
-                {/* Second row: Excel Sheet Switcher & Search Bar */}
-                <div className="flex items-center justify-between gap-3 flex-wrap">
-                    {/* Sheets tabs (if multi-sheet) */}
-                    {sheets.length > 1 ? (
-                        <div className="flex items-center gap-1 overflow-x-auto py-0.5 max-w-md [&::-webkit-scrollbar]:h-1">
-                            <Layers className="w-3.5 h-3.5 text-muted-foreground/50 shrink-0 mr-1" />
-                            {sheets.map((s, idx) => (
-                                <button
-                                    key={s.name}
-                                    onClick={() => setActiveSheetIdx(idx)}
-                                    className={cn(
-                                        'text-xs px-2.5 py-1 rounded-md font-medium whitespace-nowrap transition-colors',
-                                        activeSheetIdx === idx
-                                            ? 'bg-primary/15 text-primary font-semibold'
-                                            : 'text-muted-foreground/60 hover:text-foreground hover:bg-muted/40'
-                                    )}
-                                >
-                                    {s.name} ({s.rows.length})
-                                </button>
-                            ))}
-                        </div>
-                    ) : (
-                        <div />
-                    )}
-
-                    {/* Filter / Search input */}
-                    <div className="relative flex-1 sm:max-w-xs ml-auto">
-                        <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/50" />
+                {/* Actions & Integrated Search */}
+                <div className="flex items-center gap-1.5 shrink-0">
+                    {/* Compact Integrated Search Filter */}
+                    <div className="relative w-28 sm:w-36 md:w-44 transition-all">
+                        <Search className="w-3 h-3 absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground/50 pointer-events-none" />
                         <input
                             type="text"
                             value={searchQuery}
                             onChange={e => setSearchQuery(e.target.value)}
                             placeholder="Filter rows..."
-                            className="w-full pl-8 pr-7 py-1 text-xs bg-background border border-border/60 rounded-md focus:outline-none focus:ring-1 focus:ring-primary/40 text-foreground placeholder:text-muted-foreground/40"
+                            className="w-full h-7 pl-6 pr-5 text-[11px] bg-muted/20 hover:bg-muted/30 focus:bg-background border border-border/50 rounded-md focus:outline-none focus:ring-1 focus:ring-primary/40 text-foreground placeholder:text-muted-foreground/40 transition-colors"
                         />
                         {searchQuery && (
                             <button
+                                type="button"
                                 onClick={() => setSearchQuery('')}
-                                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground/40 hover:text-foreground transition-colors"
+                                className="absolute right-1.5 top-1/2 -translate-y-1/2 text-muted-foreground/40 hover:text-foreground transition-colors cursor-pointer"
+                                title="Clear filter"
                             >
-                                <X className="w-3.5 h-3.5" />
+                                <X className="w-3 h-3" />
                             </button>
                         )}
                     </div>
+
+                    {isJson && (
+                        <button
+                            type="button"
+                            onClick={() => setViewMode('raw')}
+                            className="h-7 flex items-center gap-1 text-[11px] font-medium px-2 rounded-md border border-border/60 hover:bg-muted/60 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                            title="View Raw JSON"
+                        >
+                            <Code className="w-3 h-3" />
+                            <span className="hidden sm:inline">JSON</span>
+                        </button>
+                    )}
+
+                    {/* Quick copy buttons */}
+                    <div className="hidden sm:flex items-center border border-border/60 rounded-md overflow-hidden h-7 bg-background/50">
+                        <button
+                            type="button"
+                            onClick={handleCopyCsv}
+                            className="h-full px-2 text-[11px] font-medium hover:bg-muted/60 text-muted-foreground hover:text-foreground transition-colors border-r border-border/40 cursor-pointer flex items-center gap-1"
+                            title="Copy table as CSV"
+                        >
+                            {copied === 'csv' ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3 text-muted-foreground/60" />}
+                            <span>CSV</span>
+                        </button>
+                        <button
+                            type="button"
+                            onClick={handleCopyTsv}
+                            className="h-full px-2 text-[11px] font-medium hover:bg-muted/60 text-muted-foreground hover:text-foreground transition-colors cursor-pointer flex items-center gap-1"
+                            title="Copy TSV (Paste to Excel)"
+                        >
+                            {copied === 'tsv' ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3 text-muted-foreground/60" />}
+                            <span>TSV</span>
+                        </button>
+                    </div>
+
+                    {/* Share Button */}
+                    <button
+                        type="button"
+                        onClick={handleShare}
+                        disabled={sharing}
+                        className={cn(
+                            "h-7 flex items-center gap-1 text-[11px] font-medium px-2 rounded-md border transition-all cursor-pointer",
+                            copiedShare
+                                ? "bg-emerald-500/15 text-emerald-600 border-emerald-500/30"
+                                : "border-border/60 hover:bg-muted/60 text-muted-foreground hover:text-foreground"
+                        )}
+                        title={copiedShare ? "Link copied!" : "Share link"}
+                    >
+                        {copiedShare ? (
+                            <Check className="w-3 h-3 text-emerald-500" />
+                        ) : sharing ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                        ) : (
+                            <Share2 className="w-3 h-3" />
+                        )}
+                        <span className="hidden md:inline">{copiedShare ? 'Copied' : 'Share'}</span>
+                    </button>
+
+                    {/* Primary Download Button */}
+                    <button
+                        type="button"
+                        onClick={handleDownload}
+                        disabled={downloading}
+                        className="h-7 flex items-center gap-1.5 text-[11px] font-medium px-2.5 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-2xs disabled:opacity-60 cursor-pointer"
+                        title="Download file"
+                    >
+                        {downloading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />}
+                        <span className="hidden xs:inline">Download</span>
+                    </button>
+
+                    {/* Close button */}
+                    {onClose && (
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            className="h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors ml-0.5 cursor-pointer"
+                            title="Close preview"
+                        >
+                            <X className="w-3.5 h-3.5" />
+                        </button>
+                    )}
                 </div>
             </div>
+
+            {/* Excel Sheet Switcher Sub-Bar (only displayed when multi-sheet) */}
+            {sheets.length > 1 && (
+                <div className="flex items-center gap-1.5 px-3.5 py-1.5 border-b border-border/30 bg-muted/15 overflow-x-auto text-xs shrink-0 [&::-webkit-scrollbar]:h-1">
+                    <Layers className="w-3.5 h-3.5 text-muted-foreground/50 shrink-0 mr-1" />
+                    {sheets.map((s, idx) => (
+                        <button
+                            key={s.name}
+                            type="button"
+                            onClick={() => setActiveSheetIdx(idx)}
+                            className={cn(
+                                'text-[11px] px-2.5 py-0.5 rounded-md font-medium whitespace-nowrap transition-colors cursor-pointer',
+                                activeSheetIdx === idx
+                                    ? 'bg-primary/15 text-primary font-semibold shadow-2xs'
+                                    : 'text-muted-foreground/70 hover:text-foreground hover:bg-muted/40'
+                            )}
+                        >
+                            {s.name} <span className="opacity-60 text-[10px]">({s.rows.length})</span>
+                        </button>
+                    ))}
+                </div>
+            )}
 
             {/* Table Area */}
             <div className="flex-1 overflow-auto relative [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-thumb]:bg-muted-foreground/20 [&::-webkit-scrollbar-thumb]:rounded-full">
@@ -569,8 +904,9 @@ export function FilePreviewView({ artifact }: FilePreviewViewProps) {
                         <Search className="w-8 h-8 stroke-[1.5] mb-2 opacity-40" />
                         <p className="text-sm">No rows matching "{searchQuery}"</p>
                         <button
+                            type="button"
                             onClick={() => setSearchQuery('')}
-                            className="text-xs text-primary underline mt-1"
+                            className="text-xs text-primary underline mt-1 cursor-pointer"
                         >
                             Clear search filter
                         </button>
@@ -578,9 +914,9 @@ export function FilePreviewView({ artifact }: FilePreviewViewProps) {
                 ) : (
                     <table className="w-full text-left border-collapse text-xs">
                         <thead className="sticky top-0 z-10 bg-background/95 backdrop-blur-xs shadow-2xs">
-                            <tr className="border-b border-border/60 bg-muted/40">
+                            <tr className="border-b border-border/50 bg-muted/30">
                                 {/* Row Index # */}
-                                <th className="w-12 px-2.5 py-2 font-mono text-[10px] text-muted-foreground/50 text-right border-r border-border/20 select-none">
+                                <th className="w-12 px-2.5 py-2 font-mono text-[10px] text-muted-foreground/50 text-right border-r border-border/20 select-none bg-muted/40">
                                     #
                                 </th>
                                 {activeSheet.headers.map((col, idx) => {
@@ -615,7 +951,7 @@ export function FilePreviewView({ artifact }: FilePreviewViewProps) {
                                 })}
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-border/20">
+                        <tbody className="divide-y divide-border/15">
                             {paginatedRows.map((row, rowIdx) => {
                                 const globalRowIndex = (page - 1) * pageSize + rowIdx + 1;
                                 const isSelected = selectedRow?.index === globalRowIndex;
@@ -624,27 +960,31 @@ export function FilePreviewView({ artifact }: FilePreviewViewProps) {
                                         key={rowIdx}
                                         onClick={() => setSelectedRow(isSelected ? null : { index: globalRowIndex, data: row })}
                                         className={cn(
-                                            'hover:bg-muted/30 cursor-pointer transition-colors',
-                                            isSelected && 'bg-primary/10 hover:bg-primary/15'
+                                            'h-9 transition-colors cursor-pointer group',
+                                            isSelected
+                                                ? 'bg-primary/10 hover:bg-primary/15'
+                                                : 'odd:bg-background even:bg-muted/10 hover:bg-muted/30'
                                         )}
                                     >
-                                        <td className="w-12 px-2.5 py-1.5 font-mono text-[10px] text-muted-foreground/40 text-right border-r border-border/20 select-none">
+                                        <td className="px-2.5 py-1.5 font-mono text-[10px] text-muted-foreground/40 text-right border-r border-border/10 select-none group-hover:text-muted-foreground/70">
                                             {globalRowIndex}
                                         </td>
-                                        {activeSheet.headers.map((_, colIdx) => {
-                                            const val = row[colIdx];
-                                            const isNull = val === null || val === undefined || val === '';
-                                            const str = isNull ? '' : String(val);
+                                        {activeSheet.headers.map((_, cIdx) => {
+                                            const cellVal = row[cIdx];
+                                            const isNull = cellVal === null || cellVal === undefined || cellVal === '';
+                                            const isNum = !isNull && !isNaN(Number(cellVal));
                                             return (
                                                 <td
-                                                    key={colIdx}
-                                                    className="px-3 py-1.5 text-foreground/80 max-w-[240px] truncate border-r border-border/10 last:border-r-0 font-mono text-[11px]"
-                                                    title={str}
+                                                    key={cIdx}
+                                                    className={cn(
+                                                        'px-3 py-1.5 border-r border-border/10 last:border-r-0 max-w-xs truncate',
+                                                        isNum ? 'text-right font-mono text-[11px] tabular-nums text-foreground/90' : 'text-foreground/90'
+                                                    )}
                                                 >
                                                     {isNull ? (
-                                                        <span className="text-muted-foreground/30 italic text-[10px]">null</span>
+                                                        <span className="text-muted-foreground/30 italic text-[11px]">null</span>
                                                     ) : (
-                                                        str
+                                                        String(cellVal)
                                                     )}
                                                 </td>
                                             );
@@ -657,94 +997,96 @@ export function FilePreviewView({ artifact }: FilePreviewViewProps) {
                 )}
             </div>
 
-            {/* Row Detail Drawer (if row clicked) */}
-            {selectedRow && (
-                <div className="border-t border-border/60 bg-muted/20 px-4 py-3 shrink-0 max-h-48 overflow-y-auto">
-                    <div className="flex items-center justify-between pb-2 mb-2 border-b border-border/30">
-                        <span className="text-xs font-semibold text-foreground">
-                            Row #{selectedRow.index} Details
-                        </span>
-                        <button
-                            onClick={() => setSelectedRow(null)}
-                            className="text-xs text-muted-foreground/60 hover:text-foreground transition-colors"
-                        >
-                            ✕ Close
-                        </button>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                        {activeSheet.headers.map((col, idx) => {
-                            const val = selectedRow.data[idx];
-                            return (
-                                <div key={idx} className="flex flex-col bg-background/60 border border-border/30 rounded p-2">
-                                    <span className="text-[10px] font-mono text-muted-foreground/60 truncate">{col}</span>
-                                    <span className="text-xs font-mono text-foreground mt-0.5 break-all select-all">
-                                        {val === null || val === undefined || val === '' ? (
-                                            <span className="italic text-muted-foreground/30 text-[10px]">null</span>
-                                        ) : (
-                                            String(val)
-                                        )}
-                                    </span>
-                                </div>
-                            );
-                        })}
-                    </div>
-                </div>
-            )}
-
-            {/* Pagination Footer */}
-            <div className="flex items-center justify-between px-4 py-2 border-t border-border/40 bg-muted/10 text-xs shrink-0 select-none">
-                <div className="text-muted-foreground/70 text-[11px]">
-                    Showing <span className="font-semibold text-foreground">{(page - 1) * pageSize + 1}</span>–
-                    <span className="font-semibold text-foreground">{Math.min(page * pageSize, filteredRows.length)}</span> of{' '}
-                    <span className="font-semibold text-foreground">{filteredRows.length.toLocaleString()}</span> rows
-                    {searchQuery && (
-                        <span className="text-muted-foreground/50 ml-1">
-                            (filtered from {totalRows.toLocaleString()})
+            {/* Bottom Status / Pagination Bar */}
+            <div className="flex items-center justify-between px-3.5 py-1.5 border-t border-border/40 bg-muted/10 shrink-0 text-xs text-muted-foreground flex-wrap gap-2">
+                <div className="flex items-center gap-2">
+                    <span className="text-[11px]">
+                        Showing {sortedRows.length === 0 ? 0 : (page - 1) * pageSize + 1}–
+                        {Math.min(page * pageSize, sortedRows.length)} of {sortedRows.length} rows
+                    </span>
+                    {filteredRows.length !== activeSheet.rows.length && (
+                        <span className="text-muted-foreground/50 text-[10px]">
+                            (filtered from {activeSheet.rows.length})
                         </span>
                     )}
                 </div>
 
-                <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground/70">
-                        <span>Per page:</span>
+                <div className="flex items-center gap-3 ml-auto">
+                    {/* Page size picker */}
+                    <div className="flex items-center gap-1">
+                        <span className="text-[11px]">Rows:</span>
                         <select
                             value={pageSize}
-                            onChange={e => {
-                                setPageSize(Number(e.target.value));
-                                setPage(1);
-                            }}
-                            className="bg-background border border-border/60 rounded px-1.5 py-0.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary/40"
+                            onChange={e => setPageSize(Number(e.target.value))}
+                            className="bg-background border border-border/60 rounded px-1.5 py-0.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary/40 cursor-pointer"
                         >
-                            <option value={25}>25</option>
-                            <option value={50}>50</option>
-                            <option value={100}>100</option>
-                            <option value={500}>500</option>
+                            {[25, 50, 100, 200].map(s => (
+                                <option key={s} value={s}>{s}</option>
+                            ))}
                         </select>
                     </div>
 
+                    {/* Pagination controls */}
                     <div className="flex items-center gap-1">
                         <button
+                            type="button"
                             onClick={() => setPage(p => Math.max(1, p - 1))}
-                            disabled={page <= 1}
-                            className="p-1 rounded border border-border/60 hover:bg-muted/60 disabled:opacity-30 disabled:pointer-events-none transition-colors"
-                            title="Previous Page"
+                            disabled={page === 1}
+                            className="p-1 rounded border border-border/60 hover:bg-muted disabled:opacity-30 disabled:pointer-events-none transition-colors cursor-pointer"
                         >
                             <ChevronLeft className="w-3.5 h-3.5" />
                         </button>
-                        <span className="text-[11px] text-muted-foreground/80 px-1">
+                        <span className="text-[11px] px-1 font-mono">
                             {page} / {totalPages}
                         </span>
                         <button
+                            type="button"
                             onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                            disabled={page >= totalPages}
-                            className="p-1 rounded border border-border/60 hover:bg-muted/60 disabled:opacity-30 disabled:pointer-events-none transition-colors"
-                            title="Next Page"
+                            disabled={page === totalPages}
+                            className="p-1 rounded border border-border/60 hover:bg-muted disabled:opacity-30 disabled:pointer-events-none transition-colors cursor-pointer"
                         >
                             <ChevronRight className="w-3.5 h-3.5" />
                         </button>
                     </div>
                 </div>
             </div>
+
+            {/* Selected Row Drawer / Inspection (if row selected) */}
+            {selectedRow && (
+                <div className="border-t border-border/40 bg-card p-3 max-h-48 overflow-auto shrink-0 shadow-lg">
+                    <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                            <span className="text-xs font-semibold text-foreground">
+                                Row #{selectedRow.index} Details
+                            </span>
+                            <span className="text-[10px] text-muted-foreground/60">
+                                ({activeSheet.headers.length} columns)
+                            </span>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => setSelectedRow(null)}
+                            className="p-1 rounded text-muted-foreground/50 hover:text-foreground transition-colors cursor-pointer"
+                        >
+                            <X className="w-3.5 h-3.5" />
+                        </button>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 text-xs">
+                        {activeSheet.headers.map((col, cIdx) => (
+                            <div key={cIdx} className="bg-muted/30 rounded p-1.5 border border-border/20">
+                                <div className="text-[10px] font-medium text-muted-foreground/70 truncate" title={col}>
+                                    {col}
+                                </div>
+                                <div className="font-mono text-[11px] text-foreground truncate mt-0.5 select-all" title={String(selectedRow.data[cIdx] ?? '')}>
+                                    {selectedRow.data[cIdx] !== null && selectedRow.data[cIdx] !== undefined
+                                        ? String(selectedRow.data[cIdx])
+                                        : <span className="text-muted-foreground/30 italic">null</span>}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

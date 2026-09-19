@@ -24,6 +24,7 @@ interface ArtifactViewProps {
     isPinned?: boolean;
     onQuickSend?: (message: string) => void;
     cachedAt?: number | null;
+    isExpanded?: boolean;
 }
 
 // ─── Executive summary view ─────────────────────────────────────────────────
@@ -284,7 +285,7 @@ function SaveForm({ defaultTitle, onConfirm, onCancel, isPending }: {
 
 // ─── Main artifact component ──────────────────────────────────────────────────
 
-export function ArtifactView({ artifact, connectionId, variant = 'chat', onExpand, onPin, isPinned = false, onQuickSend, cachedAt }: ArtifactViewProps) {
+export function ArtifactView({ artifact, connectionId, variant = 'chat', onExpand, onPin, isPinned = false, onQuickSend, cachedAt, isExpanded = false }: ArtifactViewProps) {
     // Loading placeholder — show skeleton while tool is executing
     if (artifact.loading) {
         return (
@@ -315,6 +316,15 @@ export function ArtifactView({ artifact, connectionId, variant = 'chat', onExpan
     const isClarification = artType === 'clarification';
     const isSpecial = isChart || isStatBlock || isFile || isClarification;
 
+    // Fast-path: Claude-style download pill card for file exports
+    if (isFile) {
+        return (
+            <div className="my-1.5">
+                <FileView artifact={artifact} onView={onExpand} isOpen={isExpanded} />
+            </div>
+        );
+    }
+
     const isAnswered = Boolean(artifact.answered || artifact.answer);
     const [isClarificationCollapsed, setIsClarificationCollapsed] = useState<boolean>(() => isClarification ? isAnswered : false);
 
@@ -325,23 +335,32 @@ export function ArtifactView({ artifact, connectionId, variant = 'chat', onExpan
     }, [isClarification, isAnswered]);
 
     const rows = artifact.rows ?? [];
-    const cols = artifact.columns ?? [];
+    const cols = useMemo(() => {
+        const rawCols = artifact.columns;
+        if (Array.isArray(rawCols) && rawCols.length > 0) {
+            return rawCols.map(c => typeof c === 'string' ? { name: c } : c);
+        }
+        if (rows.length > 0 && typeof rows[0] === 'object' && rows[0] !== null) {
+            return Object.keys(rows[0]).map(name => ({ name }));
+        }
+        return [];
+    }, [artifact.columns, rows]);
 
     const defaultMode = useMemo<ChartType>(() => {
         if (isChart) return 'chart';
         if (isStatBlock) return 'stat_block';
-        if (isFile) return 'file';
         if (isClarification) return 'clarification';
         // Generic query results (run_query) always start in table view so the
         // user immediately sees their data. Chart toggle buttons (bar / line /
         // pie) remain available for manual switch.
         return 'table';
-    }, [isChart, isStatBlock, isFile, isClarification]);
+    }, [isChart, isStatBlock, isClarification]);
 
     const [mode, setMode] = useState<ChartType>(defaultMode);
     const [copied, setCopied] = useState(false);
     const chartRef = useRef<HTMLDivElement>(null);
     const [expandedRow, setExpandedRow] = useState<Record<string, unknown> | null>(null);
+    const [visibleRowsCount, setVisibleRowsCount] = useState<number>(50);
 
     // Save state
     const [saveTarget, setSaveTarget] = useState<'query' | 'chart' | null>(null);
@@ -408,7 +427,7 @@ export function ArtifactView({ artifact, connectionId, variant = 'chat', onExpan
         headerText = headerText || artifact.fileName || 'File';
         if (artifact.fileType) headerMeta = `· ${artifact.fileType.toUpperCase()}`;
     } else if (isClarification) {
-        headerText = headerText || 'Clarification Needed';
+        headerText = headerText || 'Clarification';
     } else {
         headerText = headerText || `${rows.length} row${rows.length !== 1 ? 's' : ''}`;
         headerMeta = cols.length > 0 ? `· ${cols.length} col${cols.length !== 1 ? 's' : ''}` : '';
@@ -456,7 +475,7 @@ export function ArtifactView({ artifact, connectionId, variant = 'chat', onExpan
             >
                 <div className="flex items-center gap-2 min-w-0">
                     {isClarification && (
-                        <HelpCircle className={cn('w-3.5 h-3.5 shrink-0', isAnswered ? 'text-emerald-500' : 'text-blue-500')} />
+                        <HelpCircle className={cn('w-3.5 h-3.5 shrink-0', isAnswered ? 'text-emerald-500' : 'text-primary')} />
                     )}
                     <span className="text-xs font-semibold text-foreground truncate">
                         {isClarification && isAnswered ? 'Clarification Answered' : headerText}
@@ -465,17 +484,6 @@ export function ArtifactView({ artifact, connectionId, variant = 'chat', onExpan
                         <span className="text-[11px] text-muted-foreground font-normal truncate">
                             · &quot;{artifact.answer}&quot;
                         </span>
-                    )}
-                    {isClarification && (
-                        isAnswered ? (
-                            <span className="text-[9px] font-bold uppercase tracking-wider bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 px-1.5 py-0.5 rounded shrink-0">
-                                Resolved
-                            </span>
-                        ) : (
-                            <span className="text-[9px] font-bold uppercase tracking-wider bg-blue-500/10 text-blue-500 px-1.5 py-0.5 rounded shrink-0">
-                                Action Needed
-                            </span>
-                        )
                     )}
                     {!isClarification && headerMeta && (
                         <span className="text-[10px] text-muted-foreground/60 tabular-nums shrink-0">{headerMeta}</span>
@@ -601,7 +609,7 @@ export function ArtifactView({ artifact, connectionId, variant = 'chat', onExpan
                     {/* ── Standalone artifact types ───────────────────────────── */}
                     {isChart && <ChartView artifact={artifact} height={200} />}
                     {isStatBlock && <StatBlockView artifact={artifact} />}
-                    {isFile && <FileView artifact={artifact} onView={onExpand} />}
+                    {isFile && <FileView artifact={artifact} onView={onExpand} isOpen={isExpanded} />}
                     {isClarification && (
                         <ClarificationView
                             artifact={artifact}
@@ -632,7 +640,7 @@ export function ArtifactView({ artifact, connectionId, variant = 'chat', onExpan
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {rows.slice(0, 50).map((row, ri) => (
+                                    {rows.slice(0, visibleRowsCount).map((row, ri) => (
                                         <tr
                                             key={ri}
                                             className={cn(
@@ -643,7 +651,14 @@ export function ArtifactView({ artifact, connectionId, variant = 'chat', onExpan
                                         >
                                             {cols.map(c => {
                                                 const val = row[c.name];
-                                                const str = val === null || val === undefined ? null : String(val);
+                                                let str: string | null = null;
+                                                if (val === null || val === undefined) {
+                                                    str = null;
+                                                } else if (typeof val === 'object') {
+                                                    str = JSON.stringify(val);
+                                                } else {
+                                                    str = String(val);
+                                                }
                                                 return (
                                                     <td key={c.name}
                                                         className="px-2 py-1 text-foreground font-normal max-w-[160px] truncate"
@@ -659,10 +674,30 @@ export function ArtifactView({ artifact, connectionId, variant = 'chat', onExpan
                                     ))}
                                 </tbody>
                             </table>
-                            {rows.length > 50 && !artifact.streaming && (
-                                <p className="text-center text-xs text-muted-foreground py-2">
-                                    Showing 50 of {rows.length} rows
-                                </p>
+                            {rows.length > visibleRowsCount && !artifact.streaming && (
+                                <div className="flex items-center justify-between px-3 py-2 border-t border-border/30 bg-muted/15 text-xs">
+                                    <span className="text-muted-foreground text-[11px]">
+                                        Showing {visibleRowsCount} of {rows.length} rows
+                                    </span>
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => setVisibleRowsCount(prev => Math.min(prev + 50, rows.length))}
+                                            className="px-2 py-0.5 rounded bg-muted/60 hover:bg-muted text-foreground font-medium text-[11px] transition-colors cursor-pointer"
+                                        >
+                                            +50 more
+                                        </button>
+                                        {rows.length > visibleRowsCount + 50 && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setVisibleRowsCount(rows.length)}
+                                                className="px-2 py-0.5 rounded bg-muted/60 hover:bg-muted text-foreground font-medium text-[11px] transition-colors cursor-pointer"
+                                            >
+                                                Show all ({rows.length})
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
                             )}
                             {artifact.streaming && (
                                 <div className="flex items-center justify-center gap-2 py-2">
@@ -687,7 +722,14 @@ export function ArtifactView({ artifact, connectionId, variant = 'chat', onExpan
                                 <div className="grid grid-cols-1 gap-1 max-h-48 overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-muted-foreground/20 [&::-webkit-scrollbar-thumb]:rounded-full">
                                     {cols.map(c => {
                                         const val = expandedRow[c.name];
-                                        const str = val === null || val === undefined ? null : String(val);
+                                        let str: string | null = null;
+                                        if (val === null || val === undefined) {
+                                            str = null;
+                                        } else if (typeof val === 'object') {
+                                            str = JSON.stringify(val);
+                                        } else {
+                                            str = String(val);
+                                        }
                                         return (
                                             <div key={c.name} className="flex gap-2 text-xs min-w-0">
                                                 <span className="shrink-0 w-28 text-muted-foreground font-mono truncate text-right">{c.name}</span>

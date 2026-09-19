@@ -242,79 +242,76 @@ function MarkdownTable({
     };
 
     return (
-        <div className="my-3 max-w-full overflow-x-auto">
-            <div className="inline-block min-w-0 rounded-lg border border-border/60 bg-card shadow-2xs overflow-hidden align-middle">
-                <table className="text-xs border-collapse">
-                    <thead className="bg-muted/60">
-                        <tr>
-                            {headers.map((h, j) => {
-                                const isLast = j === headers.length - 1;
-                                const align = alignments[j] ?? 'left';
+        <div className="my-3 w-full max-w-full overflow-x-auto rounded-xl border border-border/60 bg-card/60 shadow-2xs">
+            <table className="w-full text-xs border-collapse">
+                <thead className="bg-muted/50 border-b border-border/40">
+                    <tr>
+                        {headers.map((h, j) => {
+                            const isLast = j === headers.length - 1;
+                            const align = alignments[j] ?? 'left';
+                            return (
+                                <th
+                                    key={j}
+                                    className={cn(
+                                        "px-4 py-2.5 font-semibold text-foreground/90 text-xs tracking-tight",
+                                        align === 'right' && "text-right",
+                                        align === 'center' && "text-center",
+                                        align === 'left' && "text-left"
+                                    )}
+                                >
+                                    {isLast ? (
+                                        <div className={cn("inline-flex items-center gap-1.5", align === 'right' && "justify-end")}>
+                                            <span>{renderCell(h, `${tableKey}-th-${j}`)}</span>
+                                            <button
+                                                type="button"
+                                                onClick={handleCopy}
+                                                className={cn(
+                                                    "inline-flex items-center justify-center p-1 rounded transition-colors cursor-pointer",
+                                                    copied
+                                                        ? "text-emerald-500"
+                                                        : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                                                )}
+                                                title={copied ? "Copied" : "Copy table"}
+                                                aria-label="Copy table"
+                                            >
+                                                {copied ? (
+                                                    <Check className="w-3.5 h-3.5 text-emerald-500" />
+                                                ) : (
+                                                    <Copy className="w-3.5 h-3.5" />
+                                                )}
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        renderCell(h, `${tableKey}-th-${j}`)
+                                    )}
+                                </th>
+                            );
+                        })}
+                    </tr>
+                </thead>
+                <tbody className="divide-y divide-border/25">
+                    {rows.map((row, ri) => (
+                        <tr key={ri} className="hover:bg-muted/20 transition-colors">
+                            {row.map((cell, ci) => {
+                                const align = alignments[ci] ?? 'left';
                                 return (
-                                    <th
-                                        key={j}
+                                    <td
+                                        key={ci}
                                         className={cn(
-                                            "px-4 py-2 font-semibold text-foreground border-b border-border/60 whitespace-nowrap",
-                                            align === 'right' && "text-right",
+                                            "px-4 py-2.5 text-foreground/90 font-normal text-[13px] leading-relaxed break-words whitespace-normal align-top",
+                                            align === 'right' && "text-right font-mono text-[12.5px] tabular-nums whitespace-nowrap",
                                             align === 'center' && "text-center",
                                             align === 'left' && "text-left"
                                         )}
                                     >
-                                        {isLast ? (
-                                            <div className={cn("inline-flex items-center gap-1.5", align === 'right' && "justify-end")}>
-                                                <span>{renderCell(h, `${tableKey}-th-${j}`)}</span>
-                                                <button
-                                                    type="button"
-                                                    onClick={handleCopy}
-                                                    className={cn(
-                                                        "inline-flex items-center justify-center p-1 rounded transition-colors cursor-pointer",
-                                                        copied
-                                                            ? "text-emerald-500"
-                                                            : "text-muted-foreground hover:text-foreground hover:bg-muted"
-                                                    )}
-                                                    title={copied ? "Copied" : "Copy table"}
-                                                    aria-label="Copy table"
-                                                >
-                                                    {copied ? (
-                                                        <Check className="w-3.5 h-3.5 text-emerald-500" />
-                                                    ) : (
-                                                        <Copy className="w-3.5 h-3.5" />
-                                                    )}
-                                                </button>
-                                            </div>
-                                        ) : (
-                                            renderCell(h, `${tableKey}-th-${j}`)
-                                        )}
-                                    </th>
+                                        {renderCell(cell, `${tableKey}-td-${ri}-${ci}`)}
+                                    </td>
                                 );
                             })}
                         </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border/20">
-                        {rows.map((row, ri) => (
-                            <tr key={ri} className="hover:bg-muted/20 transition-colors">
-                                {row.map((cell, ci) => {
-                                    const align = alignments[ci] ?? 'left';
-                                    return (
-                                        <td
-                                            key={ci}
-                                            className={cn(
-                                                "px-4 py-2 text-foreground font-normal max-w-[280px] truncate font-mono text-[12px]",
-                                                align === 'right' && "text-right",
-                                                align === 'center' && "text-center",
-                                                align === 'left' && "text-left"
-                                            )}
-                                            title={cell}
-                                        >
-                                            {renderCell(cell, `${tableKey}-td-${ri}-${ci}`)}
-                                        </td>
-                                    );
-                                })}
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
+                    ))}
+                </tbody>
+            </table>
         </div>
     );
 }
@@ -631,8 +628,8 @@ export function MarkdownText({ text, className, onTableClick, connectionId, avai
             continue;
         }
 
-        // Horizontal rule
-        if (/^---+$/.test(line.trim())) {
+        // Horizontal rule or divider line (e.g. ---, ___, ===, ═══, ───)
+        if (/^([─═\-_=*])\1{2,}$/.test(line.trim())) {
             elements.push(<hr key={`hr${i}`} className="my-3 border-border/40" />);
             i++;
             continue;
@@ -647,7 +644,7 @@ export function MarkdownText({ text, className, onTableClick, connectionId, avai
 
         // Normal paragraph
         elements.push(
-            <p key={`p${i}`} className="text-[15px] leading-relaxed">
+            <p key={`p${i}`} className="text-[15px] leading-relaxed break-words [overflow-wrap:anywhere]">
                 {render(line, `p${i}`)}
             </p>
         );

@@ -168,6 +168,7 @@ export interface PlanStep {
 }
 
 export interface AgentArtifact {
+    id?: string;
     type: string;
     sql?: string;
     rows?: Record<string, unknown>[];
@@ -269,6 +270,11 @@ export interface AgentArtifact {
     previewType?: 'table' | 'chart' | 'stat_block' | 'file' | string;
     /** Number of rows in the artifact (file + table artifacts) */
     rowCount?: number;
+    /** File report version (e.g. 1, 2, 3) */
+    version?: number;
+    reportVersion?: number;
+    /** Superseded versions of this file if regenerated/edited */
+    previousVersions?: AgentArtifact[];
 
     // ─── Suggestions artifact (type === 'suggestions') ────────────────────
     suggestions?: AnalysisSuggestion[];
@@ -421,6 +427,10 @@ export interface AgentRequest {
     thinking?: boolean;
     projectId?: string | null;
     fileIds?: string[];
+    clientTime?: string;
+    client_time?: string;
+    clientTimezone?: string;
+    client_timezone?: string;
 }
 
 export interface DurableRunCreated {
@@ -455,9 +465,9 @@ export interface BudgetExhaustedEvent { reason: string; message: string; usage?:
 export interface CancelledEvent { message?: string }
 export interface AgentTimeoutEvent { duration_secs: number; message: string }
 export interface DecisionEvent { iteration: number; tools_chosen: string[]; reasoning?: string | null; context_tokens?: number }
-export interface ArtifactStartEvent { toolCallId: string; type: string; title: string }
-export interface ArtifactEvent { type: string; sql?: string; rows?: Record<string, unknown>[]; columns?: Array<{ name: string }>; title?: string; streaming?: boolean; previewType?: string;[k: string]: unknown }
-export interface ArtifactRowsEvent { rows: Record<string, unknown>[]; done: boolean }
+export interface ArtifactStartEvent { id?: string; toolCallId?: string; type: string; title: string }
+export interface ArtifactEvent { id?: string; type: string; sql?: string; rows?: Record<string, unknown>[]; columns?: Array<{ name: string }>; title?: string; streaming?: boolean; previewType?: string;[k: string]: unknown }
+export interface ArtifactRowsEvent { artifactId?: string; rows: Record<string, unknown>[]; done: boolean }
 export interface DeltaEvent { text: string; chat_id?: string }
 export interface DoneEvent {
     usage?: {

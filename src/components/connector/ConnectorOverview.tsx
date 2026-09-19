@@ -41,7 +41,7 @@ export function ConnectorOverview({ onNavigate }: ConnectorOverviewProps) {
                 <div>
                     <h3 className="text-xl font-semibold tracking-tight">Connector Overview</h3>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                        High-level system telemetry, active host proxies, and recent database queries.
+                        System telemetry, active host proxies, and recent database queries.
                     </p>
                 </div>
                 <Button
@@ -99,7 +99,7 @@ export function ConnectorOverview({ onNavigate }: ConnectorOverviewProps) {
                         {onlineConnectors > 0
                             ? `${onlineConnectors} ${onlineConnectors === 1 ? 'host' : 'hosts'} online`
                             : totalConnectors > 0
-                            ? 'sw-agent offline'
+                            ? 'connector offline'
                             : 'No connectors added'}
                     </p>
                 </div>

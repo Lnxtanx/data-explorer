@@ -223,7 +223,7 @@ The system is a **defense-in-depth stack**:
 
 | Layer | Where | What it blocks | Failure mode |
 |---|---|---|---|
-| Request rate limit | `backend/middleware/rateLimit.js` (atomic `increment_rate_limit` RPC) | `aiLimiter` 20 req/min on AI endpoints; payment/verify/webhook/auth limiters | **Fail-open** to in-memory counters if DB is down |
+| Request rate limit | `backend/middleware/rateLimit.js` (atomic `increment_rate_limit` RPC) | `apiLimiter` 100 req/min on API/AI endpoints; payment/verify/webhook/auth limiters | **Fail-open** to in-memory counters if DB is down |
 | Gateway quota | `backend/middleware/ai-quota.js` | `429` when `daily_remaining === 0`; `429` when `credits_remaining === 0 && credits_balance === 0` | **Fail-open** sentinel `-1` on DB errors (deliberate: don't lock out users during DB outage) |
 | Python pre-flight | `guard.py` | model allow-list, concurrency slot, monthly + daily headroom | **Fail-closed** if quota record missing (`rpc_failed`) |
 | In-loop budget | `AgentBudget` | credit ceiling, `max_steps=25`, wall-clock timeout | Early termination w/ SSE |

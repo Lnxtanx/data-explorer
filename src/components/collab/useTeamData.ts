@@ -18,7 +18,13 @@ export function useTeamData() {
     const { user } = useAuth();
     const queryClient = useQueryClient();
 
-    const [selectedTeamId, setSelectedTeamId] = useState('');
+    const [selectedTeamId, setSelectedTeamId] = useState<string>(() => {
+        try {
+            return localStorage.getItem('sw_active_team_id') || '';
+        } catch {
+            return '';
+        }
+    });
     const [isCreatingTeam, setIsCreatingTeam] = useState(false);
     const [newTeamName, setNewTeamName] = useState('');
     const [email, setEmail] = useState('');
@@ -32,18 +38,55 @@ export function useTeamData() {
     const [renameValue, setRenameValue] = useState('');
     const [deleteConfirmText, setDeleteConfirmText] = useState('');
 
+    const handleSelectTeam = useCallback((teamId: string) => {
+        setSelectedTeamId(teamId);
+        try {
+            if (teamId) {
+                localStorage.setItem('sw_active_team_id', teamId);
+            } else {
+                localStorage.removeItem('sw_active_team_id');
+            }
+        } catch {}
+    }, []);
+
     // ─── Queries ──────────────────────────────────────────────────────────
 
     const { data: teams = [], isLoading: teamsLoading } = useQuery({
         queryKey: queryKeys.teams,
         queryFn: async () => {
             const res = await listTeams();
-            if (res.teams.length > 0 && !selectedTeamId) setSelectedTeamId(res.teams[0].id);
             return res.teams;
         },
         enabled: !!user,
         refetchOnWindowFocus: true,
     });
+
+    // Auto-select active team whenever teams data is loaded or changes
+    useEffect(() => {
+        if (!teams || teams.length === 0) {
+            if (selectedTeamId) handleSelectTeam('');
+            return;
+        }
+
+        const isCurrentValid = selectedTeamId && teams.some(t => t.id === selectedTeamId);
+        if (!isCurrentValid) {
+            let targetId = '';
+            try {
+                const savedId = localStorage.getItem('sw_active_team_id');
+                if (savedId && teams.some(t => t.id === savedId)) {
+                    targetId = savedId;
+                }
+            } catch {}
+
+            if (!targetId && teams.length > 0) {
+                targetId = teams[0].id;
+            }
+
+            if (targetId) {
+                handleSelectTeam(targetId);
+            }
+        }
+    }, [teams, selectedTeamId, handleSelectTeam]);
 
     const selectedTeam = useMemo(() => teams.find(t => t.id === selectedTeamId), [teams, selectedTeamId]);
 
@@ -141,7 +184,7 @@ export function useTeamData() {
                 const conn = connectors.find(c => c.agent_id === s.agent_id);
                 list.push({
                     id: s.id, agent_id: s.agent_id,
-                    machine_label: s.machine_label || 'SW-Agent',
+                    machine_label: s.machine_label || 'Connector',
                     is_online: conn?.is_online, is_shared: true,
                     share_id: s.id, shared_by_name: s.shared_by_name ?? null, is_own: false,
                 });
@@ -292,7 +335,7 @@ export function useTeamData() {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: queryKeys.teams });
             queryClient.invalidateQueries({ queryKey: queryKeys.projects });
-            setSelectedTeamId('');
+            handleSelectTeam('');
             toast.success(`You left ${selectedTeam?.name || 'the team'}`);
         },
         onError: (err: any) => toast.error(err.message || 'Failed to leave team'),
@@ -304,7 +347,7 @@ export function useTeamData() {
             queryClient.invalidateQueries({ queryKey: queryKeys.teams });
             queryClient.invalidateQueries({ queryKey: queryKeys.projects });
             queryClient.invalidateQueries({ queryKey: connectorKeys.list });
-            setSelectedTeamId('');
+            handleSelectTeam('');
             toast.success('Team deleted');
         },
         onError: (err: any) => toast.error(err.message || 'Failed to delete team'),
@@ -329,7 +372,7 @@ export function useTeamData() {
             setNewTeamName('');
             setIsCreatingTeam(false);
             await queryClient.invalidateQueries({ queryKey: queryKeys.teams });
-            setSelectedTeamId(team.id);
+            handleSelectTeam(team.id);
             toast.success('Team created successfully!');
         } catch (error: any) {
             toast.error(error?.message || 'Failed to create team');
@@ -406,7 +449,7 @@ export function useTeamData() {
     };
 
     return {
-        user, queryClient, selectedTeamId, setSelectedTeamId,
+        user, queryClient, selectedTeamId, setSelectedTeamId: handleSelectTeam,
         isCreatingTeam, setIsCreatingTeam, newTeamName, setNewTeamName,
         email, setEmail, lastInvite, setLastInvite,
         copiedLink, inviteRole, setInviteRole,

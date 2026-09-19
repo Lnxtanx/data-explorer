@@ -22,10 +22,12 @@ import {
     RefreshCw,
     RotateCcw,
     ShieldCheck,
+    Sparkles,
     Users,
     Zap,
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { PremiumAvatar } from '@/components/ui/PremiumAvatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -79,7 +81,6 @@ interface PlansSettingsProps {
 const TEAM_PLAN_ID = 'team_monthly';
 const TEAM_SEAT_MIN = 2;
 const TEAM_SEAT_MAX = 1000;
-const TEAM_SEAT_PRICE_USD = 15;
 
 const PLAN_META: Record<string, { icon: ElementType; tone: string; border: string; bg: string }> = {
     free:          { icon: Layers3,     tone: 'text-slate-600 dark:text-slate-400', border: 'border-slate-500/20', bg: 'bg-slate-500/10' },
@@ -143,7 +144,7 @@ function statusMeta(status: string) {
     }
 }
 
-export function PlansSettings({ user }: PlansSettingsProps) {
+export function PlansSettings({ user, onOpenCollaboration }: PlansSettingsProps) {
     const { user: authUser } = useAuth();
     const { profile } = useUserProfile();
     const activeUser = authUser ?? user;
@@ -209,8 +210,9 @@ export function PlansSettings({ user }: PlansSettingsProps) {
     );
 
     const teamPlan = allPlans.find((p) => p.id === TEAM_PLAN_ID) ?? null;
-    const seatPriceUsd = teamPlan?.seat_price_usd ?? TEAM_SEAT_PRICE_USD;
-    const teamTotalUsd = (teamSeatCount || 0) * seatPriceUsd;
+    const seatPriceUsd = typeof teamPlan?.seat_price_usd === 'number' ? teamPlan.seat_price_usd : null;
+    const teamPricingKnown = seatPriceUsd !== null && seatPriceUsd > 0;
+    const teamTotalUsd = teamPricingKnown ? (teamSeatCount || 0) * seatPriceUsd : null;
 
     const currentPlanId = subscription?.plan_id ?? 'free';
     // Prefer the full plan from the available-plans list (has price/limits/models).
@@ -256,6 +258,12 @@ export function PlansSettings({ user }: PlansSettingsProps) {
     const displayName = rawDisplayName
         .replace(/[^\w\s\-\.\u00C0-\u017F]/gu, '')
         .trim() || 'User';
+
+    const cleanFirstName = displayName.split(/\s+/)[0]?.trim();
+    const defaultTeamName =
+        cleanFirstName && cleanFirstName.toLowerCase() !== 'user' && cleanFirstName.length >= 2
+            ? `${cleanFirstName}'s Team`
+            : 'My Team';
 
     const avatarUrl =
         profile?.avatar_url ||
@@ -369,7 +377,7 @@ export function PlansSettings({ user }: PlansSettingsProps) {
         try {
             let team = ownedTeam;
             if (!team) {
-                const name = (teamName.trim() || `${profile?.full_name?.split(' ')[0] || 'My'} Team`).slice(0, 60);
+                const name = (teamName.trim() || defaultTeamName).slice(0, 60);
                 setTeamBusy('create');
                 const { team: created } = await createTeam({ name, intent: 'team_plan_purchase' });
                 team = created;
@@ -394,8 +402,9 @@ export function PlansSettings({ user }: PlansSettingsProps) {
 
     const handleAddTeamSeats = async () => {
         const delta = Number(teamSeatCount);
-        if (!Number.isInteger(delta) || delta < TEAM_SEAT_MIN || delta > TEAM_SEAT_MAX) {
-            toast.error(`Enter a whole number of seats between ${TEAM_SEAT_MIN} and ${TEAM_SEAT_MAX}.`);
+        const minSeats = teamSubActive ? 1 : TEAM_SEAT_MIN;
+        if (!Number.isInteger(delta) || delta < minSeats || delta > TEAM_SEAT_MAX) {
+            toast.error(`Enter a whole number of seats between ${minSeats} and ${TEAM_SEAT_MAX}.`);
             return;
         }
         if (!ownedTeam) return;
@@ -441,7 +450,7 @@ export function PlansSettings({ user }: PlansSettingsProps) {
             <div className="flex items-center justify-between">
                 <div>
                     <h3 className="text-lg font-semibold tracking-tight text-foreground">Plans &amp; Billing</h3>
-                    <p className="text-sm text-muted-foreground">Manage your subscription, plan limits, and billing history</p>
+                    <p className="text-sm text-muted-foreground">Manage subscription, billing history and invoices</p>
                 </div>
             </div>
 
@@ -449,18 +458,28 @@ export function PlansSettings({ user }: PlansSettingsProps) {
             <div className="rounded-xl border bg-card p-5 space-y-4">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex items-center gap-3.5">
-                        <Avatar className="h-10 w-10 shrink-0 rounded-lg border shadow-xs">
-                            <AvatarImage src={avatarUrl} className="object-cover rounded-lg" />
-                            <AvatarFallback className="bg-primary/10 text-primary font-semibold text-xs rounded-lg">
-                                {initials}
-                            </AvatarFallback>
-                        </Avatar>
+                        <PremiumAvatar
+                            avatarUrl={avatarUrl}
+                            initials={initials}
+                            planId={currentPlanId}
+                            isPremium={isPaid}
+                            size="md"
+                            shape="rounded"
+                        />
                         <div>
                             <div className="flex items-center gap-2">
                                 <h4 className="text-base font-semibold text-foreground">
                                     {currentPlan?.name ?? 'Free Plan'}
                                 </h4>
-                                <Badge variant="outline" className={cn('text-[11px] font-medium px-2 py-0.5 rounded-full', statusBadge.className)}>
+                                <Badge
+                                    variant="outline"
+                                    className={cn(
+                                        'text-[11px] font-medium px-2 py-0.5 rounded-full',
+                                        isPaid && (currentPlanId === 'team_monthly' || currentPlanId === 'pro_monthly')
+                                            ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-semibold shadow-xs'
+                                            : statusBadge.className,
+                                    )}
+                                >
                                     {statusBadge.label}
                                 </Badge>
                             </div>
@@ -596,7 +615,14 @@ export function PlansSettings({ user }: PlansSettingsProps) {
                                                         {formatDate(payment.createdAt)}
                                                     </TableCell>
                                                     <TableCell className="py-2.5 text-muted-foreground">
-                                                        {allPlans.find((p) => p.id === payment.planId)?.name ?? RETIRED_PLAN_NAMES[payment.planId] ?? payment.planId}
+                                                        <div className="flex items-center gap-1.5 flex-wrap">
+                                                            <span>{allPlans.find((p) => p.id === payment.planId)?.name ?? RETIRED_PLAN_NAMES[payment.planId] ?? payment.planId}</span>
+                                                            {payment.metadata?.team?.seatCount ? (
+                                                                <Badge variant="secondary" className="px-1.5 py-0 h-4 text-[10px] font-normal">
+                                                                    {payment.metadata.team.seatCount} seats
+                                                                </Badge>
+                                                            ) : null}
+                                                        </div>
                                                     </TableCell>
                                                     <TableCell className="py-2.5 font-medium text-foreground">
                                                         {formatAmount(payment.amount, payment.currency)}
@@ -674,7 +700,14 @@ export function PlansSettings({ user }: PlansSettingsProps) {
                                                     {formatDate(inv.issued_at)}
                                                 </TableCell>
                                                 <TableCell className="py-2.5 text-muted-foreground">
-                                                    {allPlans.find((p) => p.id === inv.plan_id)?.name ?? inv.plan_id}
+                                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                                        <span>{allPlans.find((p) => p.id === inv.plan_id)?.name ?? inv.plan_id}</span>
+                                                        {inv.metadata?.seat_count ? (
+                                                            <Badge variant="secondary" className="px-1.5 py-0 h-4 text-[10px] font-normal">
+                                                                {String(inv.metadata.seat_count)} seats
+                                                            </Badge>
+                                                        ) : null}
+                                                    </div>
                                                 </TableCell>
                                                 <TableCell className="px-4 py-2.5 text-right font-medium text-foreground">
                                                     {formatMoneyFromPaise(inv.net_paise || inv.amount_paise)}
@@ -723,10 +756,8 @@ export function PlansSettings({ user }: PlansSettingsProps) {
                 <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto p-6">
                     <DialogHeader>
                         <DialogTitle>Choose a Plan</DialogTitle>
-                        <DialogDescription>
-                            {isPaid
-                                ? `Your current plan is active and non-refundable until the billing period ends. Plan changes are only available after this period ends.`
-                                : 'Select the plan that best fits your workflow. Paid plans are non-refundable and locked until the period ends.'}
+                        <DialogDescription className="sr-only">
+                            Choose a plan for your account or team.
                         </DialogDescription>
                     </DialogHeader>
 
@@ -799,12 +830,21 @@ export function PlansSettings({ user }: PlansSettingsProps) {
                                                         {(plan.allowed_modes?.length ?? 2) === 1 ? 'mode' : 'modes'}
                                                     </span>
                                                 </div>
-                                                {plan.features.slice(0, 2).map((feat) => (
-                                                    <div key={feat} className="flex items-center gap-2 text-muted-foreground">
-                                                        <Check className="h-3.5 w-3.5 text-primary shrink-0" />
-                                                        <span className="truncate">{feat}</span>
-                                                    </div>
-                                                ))}
+                                                {plan.features
+                                                    .filter((feat) => {
+                                                        const lower = feat.toLowerCase();
+                                                        if (lower.includes('credit')) return false;
+                                                        if (lower.includes('mode')) return false;
+                                                        if (lower.includes('concurrent') || lower.includes('agent')) return false;
+                                                        return true;
+                                                    })
+                                                    .slice(0, 2)
+                                                    .map((feat) => (
+                                                        <div key={feat} className="flex items-center gap-2 text-muted-foreground">
+                                                            <Check className="h-3.5 w-3.5 text-primary shrink-0" />
+                                                            <span className="truncate">{feat}</span>
+                                                        </div>
+                                                    ))}
                                             </div>
                                         </div>
 
@@ -834,10 +874,7 @@ export function PlansSettings({ user }: PlansSettingsProps) {
                                         </div>
                                         <div>
                                             <div className="flex flex-wrap items-center gap-2">
-                                                <h5 className="text-sm font-semibold text-foreground">Team</h5>
-                                                <Badge variant="outline" className="rounded-full border-primary/20 bg-primary/10 text-primary text-[10px] font-medium">
-                                                    ENTERPRISE / TEAM
-                                                </Badge>
+                                                <h5 className="text-sm font-semibold text-foreground">Team Workspace</h5>
                                                 {teamSubActive && (
                                                     <Badge variant="outline" className="rounded-full border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px] font-medium">
                                                         ACTIVE
@@ -845,13 +882,12 @@ export function PlansSettings({ user }: PlansSettingsProps) {
                                                 )}
                                             </div>
                                             <p className="mt-0.5 max-w-md text-xs text-muted-foreground">
-                                                A workspace for your whole team. One bill on the owner&apos;s account; every member gets
-                                                their own per-seat AI credits. Add seats anytime — adjustments aren&apos;t locked to renewal.
+                                                Collaborative workspace with shared project access and dedicated per-seat AI credits.
                                             </p>
                                         </div>
                                     </div>
                                     <div className="text-right">
-                                        <p className="text-xl font-bold tracking-tight text-foreground">${seatPriceUsd}</p>
+                                        <p className="text-xl font-bold tracking-tight text-foreground">{teamPricingKnown ? `$${seatPriceUsd}` : '$—'}</p>
                                         <p className="text-[11px] text-muted-foreground">per seat / month</p>
                                     </div>
                                 </div>
@@ -886,119 +922,113 @@ export function PlansSettings({ user }: PlansSettingsProps) {
                                     </div>
                                 ) : (
                                     <>
-                                {/* Seat selector */}
-                                <div className="mt-4 flex flex-wrap items-center gap-3">
-                                    <div className="flex items-center gap-1 rounded-lg border border-border/70 bg-background/70 p-0.5">
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            className="h-7 w-7 rounded-md px-0"
-                                            aria-label="Fewer seats"
-                                            disabled={teamSeatCount <= TEAM_SEAT_MIN || !!teamBusy}
-                                            onClick={() => setTeamSeatCount((c) => Math.max(TEAM_SEAT_MIN, c - 1))}
-                                        >
-                                            <Minus className="h-3.5 w-3.5" />
-                                        </Button>
-                                        <Input
-                                            type="number"
-                                            min={TEAM_SEAT_MIN}
-                                            max={TEAM_SEAT_MAX}
-                                            value={teamSeatCount}
-                                            onChange={(e) => setTeamSeatCount(Number(e.target.value))}
-                                            disabled={!!teamBusy}
-                                            className="h-7 w-16 rounded-md text-center text-sm font-semibold [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                                            aria-label="Number of seats"
-                                        />
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            className="h-7 w-7 rounded-md px-0"
-                                            aria-label="More seats"
-                                            disabled={teamSeatCount >= TEAM_SEAT_MAX || !!teamBusy}
-                                            onClick={() => setTeamSeatCount((c) => Math.min(TEAM_SEAT_MAX, c + 1))}
-                                        >
-                                            <Plus className="h-3.5 w-3.5" />
-                                        </Button>
-                                    </div>
-
-                                    {!teamSubActive && (
-                                        <>
-                                            <div className="flex flex-wrap gap-1">
-                                                {[2, 5, 10, 25].map((n) => (
-                                                    <button
-                                                        key={n}
-                                                        type="button"
-                                                        disabled={!!teamBusy}
-                                                        onClick={() => setTeamSeatCount(n)}
-                                                        className={cn(
-                                                            'rounded-md px-2 py-1 text-[11px] font-medium transition-colors',
-                                                            teamSeatCount === n
-                                                                ? 'bg-primary/15 text-primary'
-                                                                : 'bg-muted/50 text-muted-foreground hover:bg-muted',
-                                                        )}
-                                                    >
-                                                        {n} seats
-                                                    </button>
-                                                ))}
-                                            </div>
-                                            <div className="ml-auto text-right">
-                                                <p className="text-sm font-semibold tracking-tight text-foreground">
-                                                    ${teamTotalUsd.toFixed(2)}
-                                                    <span className="text-[11px] font-normal text-muted-foreground"> /mo</span>
-                                                </p>
-                                            </div>
-                                        </>
-                                    )}
-                                    {teamSubActive && (
-                                        <div className="ml-auto text-right">
-                                            <p className="text-sm font-semibold text-foreground">+{teamSeatCount} seat{teamSeatCount === 1 ? '' : 's'}</p>
-                                            <p className="text-[11px] text-muted-foreground">prorated to this period — paid now</p>
-                                        </div>
-                                    )}
-                                </div>
-
-                                {!teamSubActive && (
-                                    <div className="mt-4 space-y-2.5">
-                                        {!ownedTeam && (
-                                            <div className="flex flex-wrap items-center gap-2">
-                                                <Building2 className="h-4 w-4 text-muted-foreground" />
+                                        {/* Seat selector */}
+                                        <div className="mt-4 flex flex-wrap items-center gap-3">
+                                            <div className="flex items-center gap-1 rounded-lg border border-border/70 bg-background/70 p-0.5">
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="h-7 w-7 rounded-md px-0 cursor-pointer"
+                                                    aria-label="Fewer seats"
+                                                    disabled={teamSeatCount <= (teamSubActive ? 1 : TEAM_SEAT_MIN) || !!teamBusy}
+                                                    onClick={() => setTeamSeatCount((c) => Math.max(teamSubActive ? 1 : TEAM_SEAT_MIN, c - 1))}
+                                                >
+                                                    <Minus className="h-3.5 w-3.5" />
+                                                </Button>
                                                 <Input
-                                                    value={teamName}
-                                                    onChange={(e) => setTeamName(e.target.value)}
+                                                    type="number"
+                                                    min={teamSubActive ? 1 : TEAM_SEAT_MIN}
+                                                    max={TEAM_SEAT_MAX}
+                                                    value={teamSeatCount}
+                                                    onChange={(e) => setTeamSeatCount(Math.max(teamSubActive ? 1 : TEAM_SEAT_MIN, Number(e.target.value)))}
                                                     disabled={!!teamBusy}
-                                                    placeholder={`${profile?.full_name?.split(' ')[0] || 'My'} Team`}
-                                                    className="h-8 w-60 text-sm"
-                                                    aria-label="Workspace name"
+                                                    className="h-7 w-16 rounded-md text-center text-sm font-semibold [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                                                    aria-label="Number of seats"
                                                 />
-                                                <span className="text-[11px] text-muted-foreground">Workspace name — rename it later</span>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="h-7 w-7 rounded-md px-0 cursor-pointer"
+                                                    aria-label="More seats"
+                                                    disabled={teamSeatCount >= TEAM_SEAT_MAX || !!teamBusy}
+                                                    onClick={() => setTeamSeatCount((c) => Math.min(TEAM_SEAT_MAX, c + 1))}
+                                                >
+                                                    <Plus className="h-3.5 w-3.5" />
+                                                </Button>
+                                            </div>
+
+                                            {!teamSubActive && (
+                                                <>
+                                                    <div className="flex flex-wrap gap-1">
+                                                        {[2, 5, 10, 25].map((n) => (
+                                                            <button
+                                                                key={n}
+                                                                type="button"
+                                                                disabled={!!teamBusy}
+                                                                onClick={() => setTeamSeatCount(n)}
+                                                                className={cn(
+                                                                    'rounded-md px-2 py-1 text-[11px] font-medium transition-colors cursor-pointer',
+                                                                    teamSeatCount === n
+                                                                        ? 'bg-primary/15 text-primary'
+                                                                        : 'bg-muted/50 text-muted-foreground hover:bg-muted',
+                                                                )}
+                                                            >
+                                                                {n} seats
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                    <div className="ml-auto text-right">
+                                                        <p className="text-sm font-semibold tracking-tight text-foreground">
+                                                            {teamTotalUsd !== null ? `$${teamTotalUsd.toFixed(2)}` : '$—'}
+                                                            <span className="text-[11px] font-normal text-muted-foreground"> /mo</span>
+                                                        </p>
+                                                    </div>
+                                                </>
+                                            )}
+                                            {teamSubActive && (
+                                                <div className="ml-auto text-right">
+                                                    <p className="text-sm font-semibold text-foreground">+{teamSeatCount} seat{teamSeatCount === 1 ? '' : 's'}</p>
+                                                    <p className="text-[11px] text-muted-foreground">prorated to this period — paid now</p>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {!teamSubActive && (
+                                            <div className="mt-4 pt-3.5 border-t border-border/50 flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+                                                {!ownedTeam && (
+                                                    <div className="relative flex-1 min-w-[200px]">
+                                                        <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/60" />
+                                                        <Input
+                                                            value={teamName}
+                                                            onChange={(e) => setTeamName(e.target.value)}
+                                                            disabled={!!teamBusy}
+                                                            placeholder={defaultTeamName}
+                                                            className="h-8 pl-8 text-xs bg-background/80"
+                                                            aria-label="Workspace name"
+                                                        />
+                                                    </div>
+                                                )}
+                                                <Button
+                                                    size="sm"
+                                                    className="h-8 px-4 text-xs font-medium shrink-0 gap-1.5 cursor-pointer"
+                                                    onClick={handleBuyTeam}
+                                                    disabled={!!teamBusy || !teamPricingKnown}
+                                                >
+                                                    {teamBusy === 'create' || teamBusy === 'order' ? (
+                                                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                                    ) : (
+                                                        <Users className="h-3.5 w-3.5" />
+                                                    )}
+                                                    {teamBusy === 'create'
+                                                        ? 'Creating workspace...'
+                                                        : teamBusy === 'order'
+                                                            ? 'Starting checkout...'
+                                                            : ownedTeam
+                                                                ? `Buy ${teamSeatCount} seats for ${ownedTeam.name}`
+                                                                : `Create workspace & buy ${teamSeatCount} seats`}
+                                                </Button>
                                             </div>
                                         )}
-                                        <Button
-                                            size="sm"
-                                            className="h-8 text-xs gap-1.5"
-                                            onClick={handleBuyTeam}
-                                            disabled={!!teamBusy}
-                                        >
-                                            {teamBusy === 'create' || teamBusy === 'order' ? (
-                                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                            ) : (
-                                                <Users className="h-3.5 w-3.5" />
-                                            )}
-                                            {teamBusy === 'create'
-                                                ? 'Creating workspace...'
-                                                : teamBusy === 'order'
-                                                    ? 'Starting checkout...'
-                                                    : ownedTeam
-                                                        ? `Buy ${teamSeatCount} seats for ${ownedTeam.name}`
-                                                        : `Create workspace & buy ${teamSeatCount} seats`}
-                                        </Button>
-                                        <p className="text-[11px] text-muted-foreground">
-                                            {ownedTeam
-                                                ? `You own "${ownedTeam.name}" — the seat bill lands on your account.`
-                                                : 'You become the workspace owner; billing happens on your account.'}
-                                        </p>
-                                    </div>
-                                )}
 
                                 {teamSubActive && ownedTeam && (
                                     <div className="mt-4 flex flex-wrap items-center gap-3">
@@ -1014,7 +1044,7 @@ export function PlansSettings({ user }: PlansSettingsProps) {
                                             variant="outline"
                                             className="h-8 text-xs gap-1"
                                             onClick={handleAddTeamSeats}
-                                            disabled={!!teamBusy}
+                                            disabled={!!teamBusy || !teamPricingKnown}
                                         >
                                             {teamBusy === 'add' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
                                             Add {teamSeatCount} seat{teamSeatCount === 1 ? '' : 's'}

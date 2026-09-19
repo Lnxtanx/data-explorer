@@ -9,14 +9,15 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-// ─── 17 Tools from backend-ai/src/tools/data_explorer/de_registry.py ─────────
+// ─── 18 Tools from backend-ai/src/tools/data_explorer/de_registry.py ─────────
 
 const TOOL_CONFIG: Record<string, { label: string; icon: React.ElementType; color?: string }> = {
     // Core (1)
     run_query: { label: 'Query Database', icon: Database, color: 'text-blue-500' },
 
-    // Export (1)
+    // Export (2)
     export: { label: 'Export Data', icon: Download, color: 'text-emerald-500' },
+    get_report_html: { label: 'View Report', icon: FileText, color: 'text-orange-500' },
 
     // Always-on (5)
     ask_clarification: { label: 'Ask Clarification', icon: HelpCircle, color: 'text-amber-500' },
@@ -39,6 +40,13 @@ const TOOL_CONFIG: Record<string, { label: string; icon: React.ElementType; colo
 
     // Thinking pseudo-tool
     thinking: { label: 'Thinking', icon: Sparkles, color: 'text-indigo-400' },
+
+    // Dashboard AI Tools
+    get_schema_context: { label: 'Get Schema Context', icon: Code2, color: 'text-indigo-500' },
+    save_dashboard: { label: 'Save Dashboard', icon: BarChart2, color: 'text-primary' },
+    edit_panel: { label: 'Edit Panel', icon: BarChart2, color: 'text-amber-500' },
+    add_panel: { label: 'Add Panel', icon: BarChart2, color: 'text-emerald-500' },
+    remove_panel: { label: 'Remove Panel', icon: BarChart2, color: 'text-rose-500' },
 
     // Legacy / historical session fallbacks
     list_tables: { label: 'List Tables', icon: Database, color: 'text-blue-500' },
@@ -71,10 +79,26 @@ export function getToolKeyParam(name: string, input?: Record<string, unknown>): 
         const clean = String(input.sql).replace(/\s+/g, ' ').trim();
         return clean.length > 35 ? clean.slice(0, 35) + '…' : clean;
     }
+    if (name === 'save_dashboard' && input.title) {
+        const title = String(input.title).trim();
+        return title.length > 35 ? title.slice(0, 35) + '…' : title;
+    }
+    if ((name === 'edit_panel' || name === 'remove_panel') && (input.panel_key || input.panelKey)) {
+        return String(input.panel_key || input.panelKey);
+    }
+    if (name === 'add_panel' && (input.title || input.panel_key)) {
+        return String(input.title || input.panel_key);
+    }
+    if (name === 'get_schema_context') {
+        return input.table_names ? String(input.table_names) : null;
+    }
     if (name === 'export') {
         const fmt = input.format ? String(input.format).toUpperCase() : 'FILE';
         const file = input.filename ? ` (${input.filename})` : '';
         return `${fmt}${file}`;
+    }
+    if (name === 'get_report_html' && input.name) {
+        return String(input.name);
     }
     if ((name === 'web_search' || name === 'search_memory') && input.query) {
         const q = String(input.query).trim();

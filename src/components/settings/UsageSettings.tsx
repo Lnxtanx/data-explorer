@@ -4,14 +4,14 @@
  * rounded-xl border bg-card panels, text-[11px] labels, tabular numbers).
  */
 
-import { useEffect, useState, useCallback } from 'react';
-import { RefreshCw, Loader2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { getAIUsage, type AIQuotaStatus } from '@/lib/api/auth';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useAIUsage } from '@/hooks/useAIUsage';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/components/auth/AuthProvider';
-import { logger } from '@/lib/logger';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -61,43 +61,21 @@ function getPctColor(pct: number): string {
 
 export function UsageSettings() {
     const { user, signInWithGoogle, signInWithGithub } = useAuth();
-    const [usage, setUsage]         = useState<AIQuotaStatus | null>(null);
-    const [loading, setLoading]     = useState(true);
-    const [error, setError]         = useState<string | null>(null);
-    const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-    const [now, setNow]             = useState(() => new Date());
+    const {
+        data: usage,
+        isLoading,
+        isFetching,
+        error: queryError,
+        refetch,
+        dataUpdatedAt,
+    } = useAIUsage(!!user);
+
+    const [now, setNow] = useState(() => new Date());
 
     useEffect(() => {
         const id = setInterval(() => setNow(new Date()), 30_000);
         return () => clearInterval(id);
     }, []);
-
-    const fetchData = useCallback(async () => {
-        if (!user) {
-            setLoading(false);
-            return;
-        }
-        setLoading(true);
-        setError(null);
-        try {
-            const usageData = await getAIUsage();
-            setUsage(usageData);
-            setLastUpdated(new Date());
-        } catch (err: any) {
-            logger.error('[UsageSettings] Failed to fetch usage data:', err);
-            setError(err?.message || 'Failed to load usage data');
-        } finally {
-            setLoading(false);
-        }
-    }, [user]);
-
-    useEffect(() => {
-        if (user) {
-            fetchData();
-        } else {
-            setLoading(false);
-        }
-    }, [user, fetchData]);
 
     // ── Derived Values ──────────────────────────────────────────────────────
 
@@ -105,6 +83,11 @@ export function UsageSettings() {
     const monthUsed = usage?.credits_used_month || 0;
     const monthPct = monthLimit > 0 ? Math.min(100, (monthUsed / monthLimit) * 100) : 0;
     const monthRemaining = usage?.credits_remaining ?? Math.max(0, monthLimit - monthUsed);
+
+    const dayLimit = usage?.credit_limit_daily || 0;
+    const dayUsed = usage?.credits_used_day || 0;
+    const dayPct = dayLimit > 0 ? Math.min(100, (dayUsed / dayLimit) * 100) : 0;
+    const dayRemaining = Math.max(0, dayLimit - dayUsed);
 
     const tomorrowMidnight = (() => {
         const d = new Date(now);
@@ -116,8 +99,8 @@ export function UsageSettings() {
     const planInfo = PLAN_META[planKey] ?? { label: planKey, badgeClass: 'bg-primary/10 text-primary border-primary/25' };
 
     function lastUpdatedLabel() {
-        if (!lastUpdated) return '';
-        const diffS = Math.floor((now.getTime() - lastUpdated.getTime()) / 1000);
+        if (!dataUpdatedAt) return 'just now';
+        const diffS = Math.floor((now.getTime() - dataUpdatedAt) / 1000);
         if (diffS < 10)  return 'just now';
         if (diffS < 60)  return `${diffS}s ago`;
         return `${Math.floor(diffS / 60)}m ago`;
@@ -176,29 +159,104 @@ export function UsageSettings() {
         );
     }
 
-    // ── Loading & Error States ────────────────────────────────────────────────
+    // ── Loading Skeleton State (Only shown when cold without cache) ──────────
 
-    if (loading && !usage) {
+    if (isLoading && !usage) {
         return (
-            <div className="p-6 w-full">
-                <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground py-20">
-                    <Loader2 className="w-4 h-4 animate-spin text-primary" />
-                    Loading usage data…
+            <div className="p-6 w-full space-y-6 animate-pulse">
+                {/* Header Skeleton */}
+                <div className="flex items-center justify-between">
+                    <div>
+                        <h3 className="text-lg font-semibold tracking-tight text-foreground">AI Credit Usage</h3>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <Skeleton className="h-5 w-14 rounded-full" />
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            disabled
+                            className="h-8 w-8 p-0 rounded-lg text-muted-foreground"
+                        >
+                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        </Button>
+                    </div>
+                </div>
+
+                {/* Monthly Credits Card Skeleton */}
+                <div className="rounded-xl border bg-card p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                        <Skeleton className="h-3 w-24" />
+                        <Skeleton className="h-3 w-16" />
+                    </div>
+                    <div className="flex items-baseline gap-2">
+                        <Skeleton className="h-7 w-20" />
+                        <Skeleton className="h-4 w-24" />
+                    </div>
+                    <Skeleton className="h-1.5 w-full rounded-full" />
+                    <div className="flex items-center justify-between">
+                        <Skeleton className="h-3 w-28" />
+                        <Skeleton className="h-3 w-20" />
+                    </div>
+                </div>
+
+                {/* Daily Credits Card Skeleton */}
+                <div className="rounded-xl border bg-card p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                        <Skeleton className="h-3 w-24" />
+                        <Skeleton className="h-3 w-16" />
+                    </div>
+                    <div className="flex items-baseline gap-2">
+                        <Skeleton className="h-7 w-20" />
+                        <Skeleton className="h-4 w-24" />
+                    </div>
+                    <Skeleton className="h-1.5 w-full rounded-full" />
+                    <div className="flex items-center justify-between">
+                        <Skeleton className="h-3 w-28" />
+                        <Skeleton className="h-3 w-20" />
+                    </div>
+                </div>
+
+                {/* Stat Cells Grid Skeleton */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <div className="rounded-lg bg-muted/40 border border-border/50 p-3 space-y-2">
+                        <Skeleton className="h-3 w-28" />
+                        <Skeleton className="h-5 w-16" />
+                        <Skeleton className="h-3 w-36" />
+                    </div>
+                    <div className="rounded-lg bg-muted/40 border border-border/50 p-3 space-y-2">
+                        <Skeleton className="h-3 w-20" />
+                        <Skeleton className="h-5 w-20" />
+                        <Skeleton className="h-3 w-24" />
+                    </div>
+                </div>
+
+                {/* Footer Skeleton */}
+                <div className="pt-1 text-center">
+                    <Skeleton className="h-3 w-24 mx-auto" />
                 </div>
             </div>
         );
     }
 
-    if (error && !usage) {
+    // ── Error State (Only when no cached data exists) ────────────────────────
+
+    if (queryError && !usage) {
         return (
-            <div className="p-6 w-full">
+            <div className="p-6 w-full space-y-6">
+                <div className="flex items-center justify-between">
+                    <div>
+                        <h3 className="text-lg font-semibold tracking-tight text-foreground">AI Credit Usage</h3>
+                    </div>
+                </div>
                 <div className="rounded-xl border bg-card p-4 space-y-2">
-                    <p className="text-xs font-semibold text-foreground">{error}</p>
+                    <p className="text-xs font-semibold text-foreground">
+                        {(queryError as any)?.message || 'Failed to load usage data'}
+                    </p>
                     <p className="text-[11px] text-muted-foreground">
                         Could not retrieve the latest usage statistics from the server.
                     </p>
                     <Button
-                        onClick={fetchData}
+                        onClick={() => refetch()}
                         size="sm"
                         variant="outline"
                         className="h-7 text-xs rounded-lg mt-1"
@@ -220,10 +278,7 @@ export function UsageSettings() {
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h3 className="text-lg font-semibold tracking-tight text-foreground">Usage</h3>
-                    <p className="text-sm text-muted-foreground">
-                        AI credit usage and execution limits across all databases
-                    </p>
+                    <h3 className="text-lg font-semibold tracking-tight text-foreground">AI Credit Usage</h3>
                 </div>
                 <div className="flex items-center gap-2">
                     <Badge
@@ -235,12 +290,12 @@ export function UsageSettings() {
                     <Button
                         variant="ghost"
                         size="sm"
-                        onClick={fetchData}
-                        disabled={loading}
+                        onClick={() => refetch()}
+                        disabled={isFetching}
                         className="h-8 w-8 p-0 rounded-lg hover:bg-muted/70 text-muted-foreground hover:text-foreground"
                         title="Refresh usage statistics"
                     >
-                        <RefreshCw className={cn('w-3.5 h-3.5', loading && 'animate-spin')} />
+                        <RefreshCw className={cn('w-3.5 h-3.5', isFetching && 'animate-spin')} />
                     </Button>
                 </div>
             </div>
@@ -269,33 +324,56 @@ export function UsageSettings() {
                 </div>
                 <div className="flex items-center justify-between text-[11px] text-muted-foreground">
                     <span className="tabular-nums">{fmtNum(monthRemaining)} credits remaining</span>
-                    <span>{fmtNum(usage.credits_used_day)} used today</span>
+                    <span>{fmtNum(dayUsed)} used today</span>
                 </div>
             </div>
 
-            {/* Stat cells — same pattern as billing metrics */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                <StatCell
-                    label="Today"
-                    value={`${fmtNum(usage.credits_used_day)} / ${fmtNum(usage.credit_limit_daily)}`}
-                    hint={`Resets in ${timeUntil(tomorrowMidnight)}`}
-                />
+            {/* Daily credits — full card with progress bar, styled identically to Monthly */}
+            <div className="rounded-xl border bg-card p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                    <p className="text-[11px] font-medium text-muted-foreground">Daily credits</p>
+                    <span className={cn('text-[11px]', getPctColor(dayPct))}>
+                        {Math.round(dayPct)}% used
+                    </span>
+                </div>
+                <div className="flex items-baseline gap-1.5">
+                    <span className="text-2xl font-bold tracking-tight text-foreground tabular-nums">
+                        {fmtNum(dayUsed)}
+                    </span>
+                    <span className="text-sm text-muted-foreground tabular-nums">
+                        / {fmtNum(dayLimit)} credits
+                    </span>
+                </div>
+                <div className="relative h-1.5 w-full rounded-full overflow-hidden bg-muted/70">
+                    <div
+                        className={cn('h-full rounded-full transition-all duration-500 ease-out', getBarColor(dayPct))}
+                        style={{ width: `${Math.max(dayPct, dayUsed > 0 ? 2 : 0)}%` }}
+                    />
+                </div>
+                <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                    <span className="tabular-nums">{fmtNum(dayRemaining)} credits remaining</span>
+                    <span>Resets in {timeUntil(tomorrowMidnight)}</span>
+                </div>
+            </div>
+
+            {/* Stat cells — Concurrent agents & Plan */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 <StatCell
                     label="Concurrent agents"
                     value={`${usage.concurrent_slots} / ${usage.concurrent_limit}`}
                     hint="Parallel execution capacity"
                 />
                 <StatCell
-                    label="Max tokens / run"
-                    value={fmtNum(usage.max_tokens_per_run)}
-                    hint={`Up to ${fmtNum(usage.max_agent_duration_secs / 60)} min per run`}
+                    label="Plan tier"
+                    value={planInfo.label}
+                    hint={planKey === 'free' ? 'Free tier quotas' : 'Active subscription'}
                 />
             </div>
 
             {/* Footer */}
             <div className="pt-1 text-center">
                 <p className="text-[11px] text-muted-foreground/50">
-                    Updated {lastUpdatedLabel()} · Usage is synchronized live with your database
+                    Updated {lastUpdatedLabel()}
                 </p>
             </div>
         </div>

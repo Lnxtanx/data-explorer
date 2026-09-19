@@ -155,6 +155,10 @@ async function _createDurableRun(
                 projectId:        request.projectId ?? null,
                 mentioned_tables: request.mentionedTables ?? [],
                 mentionedTables:  request.mentionedTables ?? [],
+                client_time:      request.client_time || request.clientTime || new Date().toISOString(),
+                clientTime:       request.clientTime || request.client_time || new Date().toISOString(),
+                client_timezone:  request.client_timezone || request.clientTimezone || (typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'UTC'),
+                clientTimezone:   request.clientTimezone || request.client_timezone || (typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'UTC'),
             }),
         });
     } catch (err) {

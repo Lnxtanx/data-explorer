@@ -90,6 +90,8 @@ export interface PaymentHistoryItem {
     status: 'pending' | 'processing' | 'success' | 'failed' | 'refunded';
     paymentMethod?: string | null;
     createdAt: string;
+    metadata?: Record<string, any> | null;
+    teamId?: string | null;
 }
 
 export interface PaymentHistoryResponse {

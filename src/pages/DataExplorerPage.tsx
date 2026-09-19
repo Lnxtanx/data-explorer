@@ -9,6 +9,13 @@ import { ConnectionSelector } from '@/components/data-explorer/ConnectionSelecto
 import { useAuth } from '@/components/auth/AuthProvider';
 import { Loader2, ChevronRight, LogIn } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import {
+  DEFAULT_VIEW_MODE_KEY,
+  VIEW_MODE_SESSION_KEY,
+  VIEW_MODE_CHANGED_EVENT,
+  isViewMode,
+  type ViewMode,
+} from '@/lib/view-mode';
 import { TableInfo } from '@/lib/api/data/explorer/types';
 import { useConnections } from '@/lib/api/data/connection';
 import { toast } from 'sonner';
@@ -39,10 +46,27 @@ export default function DataExplorerPage() {
   const [hasShownSelectToast, setHasShownSelectToast] = useState(false);
   const [showConnectorDialog, setShowConnectorDialog] = useState(false);
   const [connectorDialogTab, setConnectorDialogTab] = useState<'overview' | 'connectors' | 'databases' | 'logs' | 'settings' | 'health' | 'connect'>('connect');
+  const [isAiPanelOpen, setIsAiPanelOpen] = useState(false);
 
   const { data: connections, isSuccess: connectionsLoaded, refetch: refetchConnections } = useConnections();
 
-  const [isAiMode, setIsAiMode] = useState(false);
+  const [mode, setMode] = useState<ViewMode>(() => {
+    if (typeof window === 'undefined') return 'explorer';
+
+    const urlView = new URLSearchParams(window.location.search).get('view');
+    if (isViewMode(urlView)) return urlView;
+
+    const defaultMode = localStorage.getItem(DEFAULT_VIEW_MODE_KEY);
+    if (isViewMode(defaultMode)) return defaultMode;
+
+    const savedSession = localStorage.getItem(VIEW_MODE_SESSION_KEY);
+    if (isViewMode(savedSession)) return savedSession;
+
+    // Backward-compat: old boolean session key
+    if (localStorage.getItem('sw-data-explorer:is-ai-mode') === 'true') return 'ai';
+
+    return 'explorer';
+  });
   const [aiContextTable, setAiContextTable] = useState<string | null>(null);
   const [selectedTable, setSelectedTable] = useState<{ table: TableInfo | null; schema: string }>({
     table: null,
@@ -55,11 +79,23 @@ export default function DataExplorerPage() {
   const [isProcessingInvite, setIsProcessingInvite] = useState(false);
 
   useEffect(() => {
-    // Auto-select first active discovered database if available and no connection is set
-    if (connectionsLoaded && connections && connections.length > 0 && !connectionId) {
+    if (!connectionsLoaded || !connections) return;
+
+    if (connections.length === 0) {
+      if (connectionId) {
+        setConnectionId(null);
+      }
+      return;
+    }
+
+    // Validate stored connectionId against live connections list
+    const isCurrentValid = connectionId ? connections.some(c => c.id === connectionId) : false;
+    if (!isCurrentValid) {
       const activeConn = connections.find(c => c.is_online) || connections[0];
       if (activeConn) {
         setConnectionId(activeConn.id);
+      } else {
+        setConnectionId(null);
       }
     }
   }, [connectionsLoaded, connections, connectionId]);
@@ -71,6 +107,49 @@ export default function DataExplorerPage() {
       localStorage.removeItem(STORAGE_KEY);
     }
   }, [connectionId]);
+
+  useEffect(() => {
+    localStorage.setItem(VIEW_MODE_SESSION_KEY, mode);
+
+    const params = new URLSearchParams(window.location.search);
+    const currentView = params.get('view');
+    if (mode === 'ai' && currentView !== 'ai') {
+      params.set('view', 'ai');
+      window.history.replaceState({}, document.title, `${window.location.pathname}?${params.toString()}`);
+    } else if (mode === 'dashboard' && currentView !== 'dashboard') {
+      params.set('view', 'dashboard');
+      window.history.replaceState({}, document.title, `${window.location.pathname}?${params.toString()}`);
+    } else if (mode === 'explorer' && (currentView === 'ai' || currentView === 'dashboard')) {
+      params.delete('view');
+      params.delete('chat');
+      params.delete('project');
+      const newQuery = params.toString();
+      window.history.replaceState({}, document.title, newQuery ? `${window.location.pathname}?${newQuery}` : window.location.pathname);
+    }
+  }, [mode]);
+
+  useEffect(() => {
+    if (mode !== 'dashboard') {
+      setIsAiPanelOpen(false);
+    }
+  }, [mode]);
+
+  useEffect(() => {
+    if (!authLoading && !user && mode !== 'explorer') {
+      setMode('explorer');
+    }
+  }, [authLoading, user, mode]);
+
+  useEffect(() => {
+    const handleModeChange = (e: Event) => {
+      const customEvent = e as CustomEvent<ViewMode>;
+      if (isViewMode(customEvent.detail)) {
+        setMode(customEvent.detail);
+      }
+    };
+    window.addEventListener(VIEW_MODE_CHANGED_EVENT, handleModeChange);
+    return () => window.removeEventListener(VIEW_MODE_CHANGED_EVENT, handleModeChange);
+  }, []);
 
   useEffect(() => {
     if (user && !connectionId && !hasShownSelectToast && connectionsLoaded && connections && connections.length > 0) {
@@ -207,8 +286,8 @@ export default function DataExplorerPage() {
       <NotificationBanner />
       <div className="h-screen flex bg-background">
         <DataExplorerLayout
-          isAiMode={isAiMode}
-          onCloseAI={() => setIsAiMode(false)}
+          mode={mode}
+          onModeChange={setMode}
           connectionId={connectionId}
           onConnectionChange={handleConnectionChange}
           onOpenSettings={() => {
@@ -219,17 +298,8 @@ export default function DataExplorerPage() {
             setSettingsSection('plans');
             setShowSettings(true);
           }}
-          onOpenAI={() => {
-            if (!user) {
-              toast.error('Authentication Required', {
-                description: 'Please sign in to use Resona AI features.',
-              });
-              return;
-            }
-            setIsAiMode((prev) => !prev);
-          }}
           onTableSelectChange={handleTableSelectChange}
-          headerContent={
+          headerContent={({ exportButton }) => (
             <div className="flex items-center justify-between px-4 h-10 border-b border-border bg-card w-full shrink-0">
               <div className="flex items-center gap-2 min-w-0 flex-1">
                 <div className="flex items-center shrink-0">
@@ -251,21 +321,23 @@ export default function DataExplorerPage() {
                 <div id="table-actions-portal" className="flex items-center gap-1 ml-2" />
               </div>
 
-              <div className="flex items-center gap-2 shrink-0">
-                {selectedTable.table && (
-                  <button
-                    onClick={() => {
-                      setAiContextTable(selectedTable.table?.name || null);
-                      setIsAiMode(true);
-                    }}
-                    className="flex items-center gap-1.5 h-7 px-2 rounded-md text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors"
-                    title="Ask Resona AI about this table"
+              <div className="flex items-center gap-1.5 shrink-0">
+                {/* Resona AI Side Panel Toggle (Dashboard AI only) */}
+                {mode === 'dashboard' && (
+                  <Button
+                    variant={isAiPanelOpen ? 'secondary' : 'outline'}
+                    size="icon"
+                    onClick={() => setIsAiPanelOpen(!isAiPanelOpen)}
+                    className="h-7 w-7 cursor-pointer shadow-none transition-all duration-150 select-none"
+                    title={isAiPanelOpen ? 'Close Dashboard AI' : 'Open Dashboard AI'}
                   >
-                    <img src="/resona.png" alt="Resona AI" className="w-4 h-4" />
-                  </button>
+                    <img src="/resona.png" alt="Dashboard AI" className="w-4 h-4 object-contain" />
+                  </Button>
                 )}
-                {/* Export Button Portal Target (placed after Resona AI on top right) */}
-                <div id="table-export-portal" className="flex items-center" />
+
+                {/* Export Button - Preserved at last */}
+                {exportButton}
+                <div id="table-export-portal" className="hidden" />
                 {!user && !authLoading && (
                   <Button
                     onClick={() => {
@@ -282,14 +354,17 @@ export default function DataExplorerPage() {
                 )}
               </div>
             </div>
-          }
+          )}
           onOpenAIForTable={(tableName: string) => {
             setAiContextTable(tableName);
-            setIsAiMode(true);
+            setMode('ai');
           }}
           onOpenConnectWizard={() => handleOpenConnector('connect')}
           aiContextTable={aiContextTable}
           aiContextSchema={selectedTable.schema}
+          isAiPanelOpen={isAiPanelOpen}
+          onCloseAiPanel={() => setIsAiPanelOpen(false)}
+          onOpenAiPanel={() => setIsAiPanelOpen(true)}
         />
       </div>
 

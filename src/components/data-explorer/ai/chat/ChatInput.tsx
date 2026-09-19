@@ -13,15 +13,24 @@ import { ContextWindowBar } from './ContextWindowBar';
 
 // ─── Mention Overlay ──────────────────────────────────────────────────────────
 
-function MentionOverlay({ text, interimSpeech, availableTables, className, style, scrollTop, connectionId }: {
-    text: string; interimSpeech?: string; availableTables: string[]; className?: string; style?: React.CSSProperties; scrollTop: number; connectionId: string | null;
+function MentionOverlay({
+    text, interimSpeech, availableTables, className, style, scrollTop, connectionId,
+}: {
+    text: string;
+    interimSpeech?: string;
+    availableTables: string[];
+    className?: string;
+    style?: React.CSSProperties;
+    scrollTop: number;
+    connectionId: string | null;
+    isCompact?: boolean;
 }) {
     const parts = text.split(/(@\w+)/g);
     return (
-        <div className="absolute inset-0 pointer-events-none select-none overflow-hidden z-[5] rounded-xl">
+        <div className="absolute inset-0 pointer-events-none select-none overflow-hidden z-[5]">
             <div
                 className={cn(
-                    'w-full min-h-full py-3.5 pr-[180px] text-[15px] leading-[24px] font-sans antialiased whitespace-pre-wrap break-words text-foreground',
+                    'w-full min-h-full px-3.5 pt-2.5 pb-1 font-sans antialiased whitespace-pre-wrap break-words text-foreground text-[14px] sm:text-[14.5px] leading-[22px]',
                     className,
                 )}
                 style={{ ...style, transform: `translateY(-${scrollTop}px)` }}
@@ -109,6 +118,7 @@ export interface ChatInputProps {
     contextMeta?: ContextMeta | null;
     localMessageCount?: number;
     tokenCount?: number | null;
+    isEmptyState?: boolean;
 }
 
 export function ChatInput({
@@ -121,12 +131,8 @@ export function ChatInput({
     quotaError, quotaWarning, onOpenPlans, uploadError, isUploading,
     agentWarnings, onDismissWarning,
     contextMeta, localMessageCount, tokenCount,
+    isEmptyState = false,
 }: ChatInputProps) {
-    let leftPadOffset = 44;
-    if (connectionId) leftPadOffset += 34;
-    if (dashboardCount > 0) leftPadOffset += 46;
-    if (onToggleWorkspace) leftPadOffset += 34;
-
     const [warningDismissed, setWarningDismissed] = useState(false);
     // Auto-undismiss when the warning level changes (e.g. goes from 75% to 90%)
     const warningKey = quotaWarning ? `${quotaWarning.level}-${quotaWarning.message.slice(0, 20)}` : null;
@@ -147,102 +153,111 @@ export function ChatInput({
         }
     };
 
-    return (
-        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-background via-background/98 to-transparent pt-4 pb-4 px-4">
-            <div className="max-w-3xl mx-auto relative">
-                {/* Quota exhaustion banner — amber, disables input */}
-                {quotaError && (
-                    <div className="flex items-start gap-2 mb-2 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 rounded-xl px-3 py-2.5 text-xs text-amber-800 dark:text-amber-200">
-                        <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5 text-amber-500" />
-                        <span className="flex-1 leading-relaxed">{quotaError}</span>
-                        {onOpenPlans && (
-                            <button
-                                onClick={onOpenPlans}
-                                className="shrink-0 font-medium underline underline-offset-2 hover:text-amber-600 dark:hover:text-amber-100 transition-colors whitespace-nowrap"
-                            >
-                                View plans
-                            </button>
-                        )}
-                    </div>
-                )}
-                {/* Quota warning banner — yellow (75%) or orange (90%), dismissible */}
-                {!quotaError && quotaWarning && !warningDismissed && (
-                    <div className={`flex items-start gap-2 mb-2 rounded-xl px-3 py-2 text-xs border ${
-                        quotaWarning.level === 'critical'
-                            ? 'bg-orange-50 dark:bg-orange-950/30 border-orange-200 dark:border-orange-800/50 text-orange-800 dark:text-orange-200'
-                            : 'bg-yellow-50 dark:bg-yellow-950/30 border-yellow-200 dark:border-yellow-800/40 text-yellow-800 dark:text-yellow-200'
-                    }`}>
-                        <AlertTriangle className={`w-3.5 h-3.5 shrink-0 mt-0.5 ${
-                            quotaWarning.level === 'critical' ? 'text-orange-500' : 'text-yellow-500'
-                        }`} />
-                        <span className="flex-1 leading-relaxed">{quotaWarning.message}</span>
-                        {onOpenPlans && (
-                            <button
-                                onClick={onOpenPlans}
-                                className="shrink-0 font-medium underline underline-offset-2 opacity-70 hover:opacity-100 transition-opacity whitespace-nowrap"
-                            >
-                                Upgrade
-                            </button>
-                        )}
+    // Shared Warning and Notification Banners
+    const banners = (
+        <>
+            {/* Quota exhaustion banner — amber, disables input */}
+            {quotaError && (
+                <div className="flex items-start gap-2 mb-2 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 rounded-xl px-3 py-2.5 text-xs text-amber-800 dark:text-amber-200">
+                    <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5 text-amber-500" />
+                    <span className="flex-1 leading-relaxed">{quotaError}</span>
+                    {onOpenPlans && (
                         <button
-                            onClick={() => setWarningDismissed(true)}
-                            className="shrink-0 ml-0.5 opacity-40 hover:opacity-80 transition-opacity"
-                            title="Dismiss"
+                            onClick={onOpenPlans}
+                            className="shrink-0 font-medium underline underline-offset-2 hover:text-amber-600 dark:hover:text-amber-100 transition-colors whitespace-nowrap"
                         >
-                            <X className="w-3 h-3" />
+                            View plans
                         </button>
-                    </div>
-                )}
-                {/* Upload error banner — transient, auto-dismisses */}
-                {uploadError && (
-                    <div className="flex items-start gap-2 mb-2 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800/50 rounded-xl px-3 py-2 text-xs text-red-800 dark:text-red-200">
-                        <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5 text-red-500" />
-                        <span className="flex-1 leading-relaxed">{uploadError}</span>
-                    </div>
-                )}
-                {/* Agent warnings (e.g. oscillation, circuit breaker, quota) - Claude-style input banner */}
-                {agentWarnings && agentWarnings.length > 0 && (
-                    <div className="space-y-1.5 mb-2">
-                        {agentWarnings.map((warning) => {
-                            const isCritical = warning.kind === 'circuit_breaker' || warning.code === 'circuit_breaker' || warning.kind === 'budget_exhausted';
-                            const isOscillation = warning.kind === 'oscillation' || warning.code === 'oscillation' || warning.code === 'loop_oscillation';
-                            return (
-                                <div
-                                    key={warning.id}
-                                    className={cn(
-                                        'flex items-start gap-2 rounded-xl px-3 py-2 text-xs border',
-                                        isCritical
-                                            ? 'bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800/50 text-red-800 dark:text-red-200'
-                                            : isOscillation
-                                            ? 'bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800/50 text-amber-800 dark:text-amber-200'
-                                            : 'bg-yellow-50 dark:bg-yellow-950/30 border-yellow-200 dark:border-yellow-800/40 text-yellow-800 dark:text-yellow-200'
-                                    )}
-                                >
-                                    <AlertTriangle className={cn('w-3.5 h-3.5 shrink-0 mt-0.5', isCritical ? 'text-red-500' : 'text-amber-500')} />
-                                    <span className="flex-1 leading-relaxed">{warning.message}</span>
-                                    {onDismissWarning && (
-                                        <button
-                                            onClick={() => onDismissWarning(warning.id)}
-                                            className="shrink-0 ml-0.5 opacity-40 hover:opacity-80 transition-opacity"
-                                            title="Dismiss"
-                                        >
-                                            <X className="w-3 h-3" />
-                                        </button>
-                                    )}
-                                </div>
-                            );
-                        })}
-                    </div>
-                )}
-                <div className="relative flex flex-col w-full bg-background border border-border rounded-xl shadow-sm focus-within:border-border/70 transition-colors">
+                    )}
+                </div>
+            )}
+            {/* Quota warning banner — yellow (75%) or orange (90%), dismissible */}
+            {!quotaError && quotaWarning && !warningDismissed && (
+                <div className={`flex items-start gap-2 mb-2 rounded-xl px-3 py-2 text-xs border ${
+                    quotaWarning.level === 'critical'
+                        ? 'bg-orange-50 dark:bg-orange-950/30 border-orange-200 dark:border-orange-800/50 text-orange-800 dark:text-orange-200'
+                        : 'bg-yellow-50 dark:bg-yellow-950/30 border-yellow-200 dark:border-yellow-800/40 text-yellow-800 dark:text-yellow-200'
+                }`}>
+                    <AlertTriangle className={`w-3.5 h-3.5 shrink-0 mt-0.5 ${
+                        quotaWarning.level === 'critical' ? 'text-orange-500' : 'text-yellow-500'
+                    }`} />
+                    <span className="flex-1 leading-relaxed">{quotaWarning.message}</span>
+                    {onOpenPlans && (
+                        <button
+                            onClick={onOpenPlans}
+                            className="shrink-0 font-medium underline underline-offset-2 opacity-70 hover:opacity-100 transition-opacity whitespace-nowrap"
+                        >
+                            Upgrade
+                        </button>
+                    )}
+                    <button
+                        onClick={() => setWarningDismissed(true)}
+                        className="shrink-0 ml-0.5 opacity-40 hover:opacity-80 transition-opacity"
+                        title="Dismiss"
+                    >
+                        <X className="w-3 h-3" />
+                    </button>
+                </div>
+            )}
+            {/* Upload error banner — transient, auto-dismisses */}
+            {uploadError && (
+                <div className="flex items-start gap-2 mb-2 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800/50 rounded-xl px-3 py-2 text-xs text-red-800 dark:text-red-200">
+                    <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5 text-red-500" />
+                    <span className="flex-1 leading-relaxed">{uploadError}</span>
+                </div>
+            )}
+            {/* Agent warnings (e.g. oscillation, circuit breaker, quota) */}
+            {agentWarnings && agentWarnings.length > 0 && (
+                <div className="space-y-1.5 mb-2">
+                    {agentWarnings.map((warning) => {
+                        const isCritical = warning.kind === 'circuit_breaker' || warning.code === 'circuit_breaker' || warning.kind === 'budget_exhausted';
+                        const isOscillation = warning.kind === 'oscillation' || warning.code === 'oscillation' || warning.code === 'loop_oscillation';
+                        return (
+                            <div
+                                key={warning.id}
+                                className={cn(
+                                    'flex items-start gap-2 rounded-xl px-3 py-2 text-xs border',
+                                    isCritical
+                                        ? 'bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800/50 text-red-800 dark:text-red-200'
+                                        : isOscillation
+                                        ? 'bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800/50 text-amber-800 dark:text-amber-200'
+                                        : 'bg-yellow-50 dark:bg-yellow-950/30 border-yellow-200 dark:border-yellow-800/40 text-yellow-800 dark:text-yellow-200'
+                                )}
+                            >
+                                <AlertTriangle className={cn('w-3.5 h-3.5 shrink-0 mt-0.5', isCritical ? 'text-red-500' : 'text-amber-500')} />
+                                <span className="flex-1 leading-relaxed">{warning.message}</span>
+                                {onDismissWarning && (
+                                    <button
+                                        onClick={() => onDismissWarning(warning.id)}
+                                        className="shrink-0 ml-0.5 opacity-40 hover:opacity-80 transition-opacity"
+                                        title="Dismiss"
+                                    >
+                                        <X className="w-3 h-3" />
+                                    </button>
+                                )}
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+        </>
+    );
 
-                    {/* Attached files */}
+    // ─────────────────────────────────────────────────────────────────────────────
+    // EMPTY STATE: Spacious Card Centered Layout
+    // ─────────────────────────────────────────────────────────────────────────────
+    if (isEmptyState) {
+        return (
+            <div className="w-full relative">
+                {banners}
+                <div className="relative flex flex-col w-full bg-background border border-border/80 rounded-2xl shadow-sm focus-within:border-border/90 focus-within:ring-1 focus-within:ring-primary/20 transition-all">
+                    {/* Attached files chips */}
                     {attachedFiles.length > 0 && (
-                        <div className="flex flex-wrap gap-2 px-3 pt-3 pb-1">
+                        <div className="flex flex-wrap gap-2 px-3.5 pt-3 pb-1">
                             {attachedFiles.map((file, i) => (
                                 <div key={i} className="flex items-center gap-2 bg-muted/50 border border-border/50 rounded-lg pl-2 pr-1 py-1 text-xs">
                                     <FileText className="w-3.5 h-3.5 text-muted-foreground" />
-                                    <span className="truncate max-w-[100px] font-medium">{file.name}</span>
+                                    <span className="truncate max-w-[120px] font-medium">{file.name}</span>
                                     <button
                                         className="h-4 w-4 flex items-center justify-center rounded-full hover:bg-muted text-muted-foreground"
                                         onClick={() => onRemoveFile(i)}
@@ -254,13 +269,44 @@ export function ChatInput({
                         </div>
                     )}
 
-                    {/* Textarea row */}
-                    <div className="relative flex items-end w-full">
+                    {/* Textarea with mention overlay */}
+                    <div className="relative w-full">
+                        <MentionOverlay
+                            text={input}
+                            interimSpeech={interimSpeech}
+                            availableTables={availableTables}
+                            scrollTop={scrollTop}
+                            connectionId={connectionId ?? null}
+                            isCompact={false}
+                        />
+                        <textarea
+                            ref={textareaRef}
+                            id="ai-chat-textarea"
+                            value={input}
+                            onChange={onInput}
+                            onKeyDown={onKeyDown}
+                            onScroll={onScroll}
+                            placeholder={quotaError ? 'Credit limit reached — upgrade to continue' : 'Ask about your data… (use @ to reference tables)'}
+                            className="w-full min-h-[34px] sm:min-h-[38px] max-h-[160px] resize-none border-0 focus-visible:outline-none focus:ring-0 px-3.5 pt-2.5 pb-1 bg-transparent text-transparent text-[14px] sm:text-[14.5px] leading-[22px] font-sans antialiased font-normal shadow-none placeholder:text-muted-foreground/70 caret-foreground break-words scrollbar-none [&::-webkit-scrollbar]:hidden selection:bg-blue-500/30 selection:text-transparent"
+                            rows={1}
+                        />
+                    </div>
+
+                    {/* Action buttons toolbar */}
+                    <div className="flex items-center justify-between px-2 pb-2 pt-0.5 gap-2">
                         {/* Left action buttons */}
-                        <div className="absolute left-2 bottom-[14px] z-10 flex items-center gap-0.5">
-                            <input type="file" ref={fileInputRef} onChange={onFileSelect} className="hidden" multiple accept=".pdf,.docx,.xlsx,.xls,.csv,.tsv,.pptx,.txt,.md,.json,.sql,.py,.ts,.js,.tsx,.jsx,.yaml,.yml,.xml,.html,.css,.sh,.env,.log,.toml,.rs,.go,.java" />
+                        <div className="flex items-center gap-0.5">
+                            <input
+                                type="file"
+                                ref={fileInputRef}
+                                onChange={onFileSelect}
+                                className="hidden"
+                                multiple
+                                accept=".pdf,.docx,.xlsx,.xls,.csv,.tsv,.pptx,.txt,.md,.json,.sql,.py,.ts,.js,.tsx,.jsx,.yaml,.yml,.xml,.html,.css,.sh,.env,.log,.toml,.rs,.go,.java"
+                            />
                             <button
-                                className="h-8 w-8 flex items-center justify-center rounded-lg bg-muted/50 hover:bg-muted text-muted-foreground transition-colors"
+                                type="button"
+                                className="h-8 w-8 flex items-center justify-center rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
                                 onClick={() => fileInputRef.current?.click()}
                                 title="Attach file"
                             >
@@ -268,18 +314,21 @@ export function ChatInput({
                             </button>
                             {connectionId && (
                                 <button
-                                    className="h-8 w-8 flex items-center justify-center rounded-lg bg-muted/50 hover:bg-muted text-muted-foreground transition-colors"
+                                    type="button"
+                                    className="h-8 w-8 flex items-center justify-center rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
                                     onClick={onMentionTrigger}
-                                    title="Mention Table"
+                                    title="Mention Table (@)"
                                 >
                                     <AtSign className="w-4 h-4" />
                                 </button>
                             )}
                             {dashboardCount > 0 && (
                                 <button
+                                    type="button"
                                     className={cn('h-8 flex items-center gap-1 px-2 rounded-lg transition-colors text-xs',
                                         showDashboard ? 'text-primary bg-primary/10' : 'text-muted-foreground hover:text-foreground')}
                                     onClick={onToggleDashboard}
+                                    title="Dashboard"
                                 >
                                     <LayoutDashboard className="w-3.5 h-3.5" />
                                     <span className="tabular-nums">{dashboardCount}</span>
@@ -287,6 +336,7 @@ export function ChatInput({
                             )}
                             {onToggleWorkspace && (
                                 <button
+                                    type="button"
                                     className={cn('h-8 flex items-center gap-1 px-2 rounded-lg transition-colors text-xs',
                                         showWorkspace ? 'text-primary bg-primary/10' : 'text-muted-foreground hover:text-foreground')}
                                     onClick={onToggleWorkspace}
@@ -297,32 +347,8 @@ export function ChatInput({
                             )}
                         </div>
 
-                        {/* Textarea with mention overlay */}
-                        <div className="relative w-full min-h-[52px] rounded-xl border border-border/40 bg-muted/20 focus-within:border-primary/30 transition-all duration-200">
-                            <MentionOverlay
-                                text={input}
-                                interimSpeech={interimSpeech}
-                                availableTables={availableTables}
-                                scrollTop={scrollTop}
-                                style={{ paddingLeft: leftPadOffset }}
-                                connectionId={connectionId ?? null}
-                            />
-                            <textarea
-                                ref={textareaRef}
-                                id="ai-chat-textarea"
-                                value={input}
-                                onChange={onInput}
-                                onKeyDown={onKeyDown}
-                                onScroll={onScroll}
-                                placeholder={quotaError ? 'Credit limit reached — upgrade to continue' : 'Ask about your data… (use @ to reference tables)'}
-                                className="w-full min-h-[52px] resize-none border-0 focus-visible:outline-none focus:ring-0 py-3.5 pr-[180px] bg-transparent text-transparent text-[15px] leading-[24px] font-sans antialiased font-normal shadow-none placeholder:text-muted-foreground/70 caret-foreground break-words scrollbar-none [&::-webkit-scrollbar]:hidden selection:bg-blue-500/30 selection:text-transparent"
-                                rows={1}
-                                style={{ paddingLeft: leftPadOffset }}
-                            />
-                        </div>
-
                         {/* Right action buttons */}
-                        <div className="absolute right-2 bottom-[14px] z-10 flex items-center gap-1">
+                        <div className="flex items-center gap-1">
                             {agentMode && (
                                 <div className="mr-1">
                                     <ModeSelector mode={mode} thinking={thinking} onModeChange={onModeChange} onThinkingChange={onThinkingChange} disabled={isStreaming} />
@@ -331,13 +357,16 @@ export function ChatInput({
                             {!isStreaming && <MicButton onTranscript={handleTranscript} disabled={isStreaming} />}
                             {isStreaming ? (
                                 <button
+                                    type="button"
                                     onClick={onAbort}
                                     className="h-8 w-8 flex items-center justify-center rounded-lg bg-muted hover:bg-muted/80 text-foreground transition-colors"
+                                    title="Stop generation"
                                 >
                                     <Square className="w-3.5 h-3.5 fill-current" />
                                 </button>
                             ) : isUploading ? (
                                 <button
+                                    type="button"
                                     disabled
                                     className="h-8 w-8 flex items-center justify-center rounded-lg bg-muted text-muted-foreground cursor-wait"
                                 >
@@ -345,45 +374,230 @@ export function ChatInput({
                                 </button>
                             ) : (
                                 <button
+                                    type="button"
                                     onClick={onSend}
                                     disabled={(!input.trim() && attachedFiles.length === 0) || !!quotaError}
                                     className={cn('h-8 w-8 flex items-center justify-center rounded-lg transition-colors',
                                         (input.trim() || attachedFiles.length > 0) && !quotaError
-                                            ? 'bg-foreground text-background hover:bg-foreground/90'
-                                            : 'text-muted-foreground/50 cursor-default')}
+                                            ? 'bg-foreground text-background hover:bg-foreground/90 shadow-xs'
+                                            : 'text-muted-foreground/40 cursor-default')}
+                                    title="Send message"
                                 >
                                     <Send className="w-3.5 h-3.5" />
                                 </button>
                             )}
                         </div>
+                    </div>
 
-                        {/* Mention picker */}
-                        {mentionQuery !== null && (
-                            <MentionPicker
-                                query={mentionQuery}
-                                tables={availableTables}
-                                dbName={dbName}
-                                onSelect={onMentionSelect}
-                                onClose={onMentionClose}
+                    {/* Mention picker */}
+                    {mentionQuery !== null && (
+                        <MentionPicker
+                            query={mentionQuery}
+                            tables={availableTables}
+                            dbName={dbName}
+                            onSelect={onMentionSelect}
+                            onClose={onMentionClose}
+                        />
+                    )}
+                </div>
+
+                {/* Empty State Footer Disclaimer */}
+                <p className="text-center text-[11px] text-muted-foreground/75 mt-3 select-none">
+                    Resona AI is AI and can make mistakes. Please double-check cited sources.{" "}
+                    <a
+                        href="https://docs.schemaweaver.vivekmind.com"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="underline underline-offset-2 hover:text-foreground transition-colors font-medium ml-0.5"
+                    >
+                        Docs
+                    </a>
+                </p>
+            </div>
+        );
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // ACTIVE STATE: Sleek Compact Bottom Pill Bar (Image 2 Claude Style)
+    // ─────────────────────────────────────────────────────────────────────────────
+    return (
+        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-background via-background/98 to-transparent pt-3 pb-3 px-4 z-20">
+            <div className="max-w-3xl mx-auto relative">
+                {banners}
+
+                {/* Active Chat Input Card */}
+                <div className="relative flex flex-col w-full bg-background border border-border/80 rounded-2xl shadow-xs focus-within:border-border/90 focus-within:ring-1 focus-within:ring-primary/20 transition-all">
+                    {/* Attached files chips */}
+                    {attachedFiles.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 px-3.5 pt-2.5 pb-0.5">
+                            {attachedFiles.map((file, i) => (
+                                <div key={i} className="flex items-center gap-1.5 bg-muted/60 border border-border/60 rounded-lg pl-2 pr-1 py-0.5 text-xs shadow-2xs">
+                                    <FileText className="w-3 h-3 text-muted-foreground" />
+                                    <span className="truncate max-w-[120px] font-medium text-[11px]">{file.name}</span>
+                                    <button
+                                        className="h-3.5 w-3.5 flex items-center justify-center rounded-full hover:bg-muted text-muted-foreground"
+                                        onClick={() => onRemoveFile(i)}
+                                    >
+                                        <X className="w-2.5 h-2.5" />
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {/* Textarea with mention overlay */}
+                    <div className="relative w-full">
+                        <MentionOverlay
+                            text={input}
+                            interimSpeech={interimSpeech}
+                            availableTables={availableTables}
+                            scrollTop={scrollTop}
+                            connectionId={connectionId ?? null}
+                        />
+                        <textarea
+                            ref={textareaRef}
+                            id="ai-chat-textarea"
+                            value={input}
+                            onChange={onInput}
+                            onKeyDown={onKeyDown}
+                            onScroll={onScroll}
+                            placeholder={quotaError ? 'Credit limit reached — upgrade to continue' : 'Reply to Resona AI…'}
+                            className="w-full min-h-[26px] max-h-[160px] resize-none border-0 focus-visible:outline-none focus:ring-0 px-3.5 pt-2.5 pb-1 bg-transparent text-transparent text-[14px] sm:text-[14.5px] leading-[22px] font-sans antialiased font-normal shadow-none placeholder:text-muted-foreground/70 caret-foreground break-words scrollbar-none [&::-webkit-scrollbar]:hidden selection:bg-blue-500/30 selection:text-transparent"
+                            rows={1}
+                        />
+                    </div>
+
+                    {/* Action buttons toolbar */}
+                    <div className="flex items-center justify-between px-2 pb-2 pt-0.5 gap-2">
+                        {/* Left Action Buttons */}
+                        <div className="flex items-center gap-0.5">
+                            <input
+                                type="file"
+                                ref={fileInputRef}
+                                onChange={onFileSelect}
+                                className="hidden"
+                                multiple
+                                accept=".pdf,.docx,.xlsx,.xls,.csv,.tsv,.pptx,.txt,.md,.json,.sql,.py,.ts,.js,.tsx,.jsx,.yaml,.yml,.xml,.html,.css,.sh,.env,.log,.toml,.rs,.go,.java"
                             />
-                        )}
+                            <button
+                                type="button"
+                                className="h-8 w-8 flex items-center justify-center rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                                onClick={() => fileInputRef.current?.click()}
+                                title="Attach file"
+                            >
+                                <Plus className="w-4 h-4" />
+                            </button>
+                            {connectionId && (
+                                <button
+                                    type="button"
+                                    className="h-8 w-8 flex items-center justify-center rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                                    onClick={onMentionTrigger}
+                                    title="Mention Table (@)"
+                                >
+                                    <AtSign className="w-3.5 h-3.5" />
+                                </button>
+                            )}
+                            {dashboardCount > 0 && (
+                                <button
+                                    type="button"
+                                    className={cn('h-8 flex items-center gap-1 px-2 rounded-lg transition-colors text-xs',
+                                        showDashboard ? 'text-primary bg-primary/10' : 'text-muted-foreground hover:text-foreground')}
+                                    onClick={onToggleDashboard}
+                                    title="Dashboard"
+                                >
+                                    <LayoutDashboard className="w-3.5 h-3.5" />
+                                    <span className="tabular-nums text-[11px]">{dashboardCount}</span>
+                                </button>
+                            )}
+                            {onToggleWorkspace && (
+                                <button
+                                    type="button"
+                                    className={cn('h-8 flex items-center gap-1 px-2 rounded-lg transition-colors text-xs',
+                                        showWorkspace ? 'text-primary bg-primary/10' : 'text-muted-foreground hover:text-foreground')}
+                                    onClick={onToggleWorkspace}
+                                    title="Workspace"
+                                >
+                                    <FolderOpen className="w-3.5 h-3.5" />
+                                </button>
+                            )}
+                        </div>
+
+                        {/* Right Action Buttons */}
+                        <div className="flex items-center gap-1">
+                            {agentMode && (
+                                <div className="mr-0.5 scale-95 origin-right">
+                                    <ModeSelector mode={mode} thinking={thinking} onModeChange={onModeChange} onThinkingChange={onThinkingChange} disabled={isStreaming} />
+                                </div>
+                            )}
+                            {!isStreaming && <MicButton onTranscript={handleTranscript} disabled={isStreaming} />}
+                            {isStreaming ? (
+                                <button
+                                    type="button"
+                                    onClick={onAbort}
+                                    className="h-8 w-8 flex items-center justify-center rounded-lg bg-muted hover:bg-muted/80 text-foreground transition-colors"
+                                    title="Stop generation"
+                                >
+                                    <Square className="w-3.5 h-3.5 fill-current" />
+                                </button>
+                            ) : isUploading ? (
+                                <button
+                                    type="button"
+                                    disabled
+                                    className="h-8 w-8 flex items-center justify-center rounded-lg bg-muted text-muted-foreground cursor-wait"
+                                >
+                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                </button>
+                            ) : (
+                                <button
+                                    type="button"
+                                    onClick={onSend}
+                                    disabled={(!input.trim() && attachedFiles.length === 0) || !!quotaError}
+                                    className={cn('h-8 w-8 flex items-center justify-center rounded-lg transition-colors',
+                                        (input.trim() || attachedFiles.length > 0) && !quotaError
+                                            ? 'bg-foreground text-background hover:bg-foreground/90 shadow-2xs'
+                                            : 'text-muted-foreground/40 cursor-default')}
+                                    title="Send message"
+                                >
+                                    <Send className="w-3.5 h-3.5" />
+                                </button>
+                            )}
+                        </div>
                     </div>
 
-                    </div>
+                    {/* Mention picker */}
+                    {mentionQuery !== null && (
+                        <MentionPicker
+                            query={mentionQuery}
+                            tables={availableTables}
+                            dbName={dbName}
+                            onSelect={onMentionSelect}
+                            onClose={onMentionClose}
+                        />
+                    )}
+                </div>
 
-                <div className="relative flex items-center justify-center mt-2 min-h-[18px] text-[11px] text-muted-foreground px-1 select-none">
-                    {agentMode && (
-                        <div className="absolute left-1">
+                {/* Footer disclaimer & ContextWindowBar (Claude Style) */}
+                <div className="flex items-center justify-between gap-2 mt-1.5 px-1.5 min-h-[18px] text-[11px] text-muted-foreground select-none">
+                    <p className="text-[11px] text-muted-foreground/70 leading-tight">
+                        Resona AI can make mistakes. Check sources.{" "}
+                        <a
+                            href="https://docs.schemaweaver.vivekmind.com"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="underline underline-offset-2 hover:text-foreground transition-colors font-medium ml-0.5"
+                        >
+                            Docs
+                        </a>
+                    </p>
+                    <div className="flex items-center shrink-0 min-w-0 ml-auto">
+                        {agentMode && (
                             <ContextWindowBar
                                 contextMeta={contextMeta ?? null}
                                 localMessageCount={localMessageCount}
                                 tokenCount={tokenCount}
                             />
-                        </div>
-                    )}
-                    <p>
-                        Resona AI can make mistakes. Verify important results.
-                    </p>
+                        )}
+                    </div>
                 </div>
             </div>
         </div>

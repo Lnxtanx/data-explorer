@@ -66,17 +66,15 @@ export function WorkspacePanel({ connectionId, sessionId, onClose, refreshTrigge
     const [expandedId, setExpandedId] = useState<string | null>(null);
     const [loadedContents, setLoadedContents] = useState<Record<string, string>>({});
     const [loadingFile, setLoadingFile] = useState<string | null>(null);
-    const [activeTab, setActiveTab] = useState<'session' | 'all'>(sessionId ? 'session' : 'all');
 
-    // ── Fetch file list ──────────────────────────────────────────────────────
-
+    // ── Fetch file list (strictly scoped to this chat session) ────────────────
     const fetchFiles = async () => {
         setLoading(true);
         setError(null);
         try {
             const params = new URLSearchParams();
             if (connectionId) params.set('connection_id', connectionId);
-            if (activeTab === 'session' && sessionId) {
+            if (sessionId) {
                 params.set('session_id', sessionId);
             }
             const url = `/api/workspace${params.toString() ? `?${params}` : ''}`;
@@ -89,7 +87,7 @@ export function WorkspacePanel({ connectionId, sessionId, onClose, refreshTrigge
         }
     };
 
-    useEffect(() => { fetchFiles(); }, [connectionId, sessionId, activeTab, refreshTrigger]);
+    useEffect(() => { fetchFiles(); }, [connectionId, sessionId, refreshTrigger]);
 
     // ── Load file content ────────────────────────────────────────────────────
 
@@ -199,14 +197,14 @@ export function WorkspacePanel({ connectionId, sessionId, onClose, refreshTrigge
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-border/40 shrink-0">
                 <div className="flex items-center gap-2">
-                    <FolderOpen className="w-4 h-4 text-primary/70" />
+                    <FolderOpen className="w-4 h-4 text-primary" />
                     <span className="text-sm font-semibold text-foreground">Workspace</span>
-                    <span className="text-[10px] text-muted-foreground/50 tabular-nums">{files.length}</span>
+                    <span className="text-[11px] text-muted-foreground/60 tabular-nums">({files.length})</span>
                 </div>
                 <div className="flex items-center gap-1">
                     <button
                         onClick={fetchFiles}
-                        className="p-1.5 rounded text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+                        className="p-1.5 rounded text-muted-foreground/50 hover:text-muted-foreground transition-colors cursor-pointer"
                         title="Refresh"
                     >
                         <RefreshCw className={cn('w-3.5 h-3.5', loading && 'animate-spin')} />
@@ -214,41 +212,14 @@ export function WorkspacePanel({ connectionId, sessionId, onClose, refreshTrigge
                     {onClose && (
                         <button
                             onClick={onClose}
-                            className="p-1.5 rounded text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+                            className="p-1.5 rounded text-muted-foreground/50 hover:text-muted-foreground transition-colors cursor-pointer"
+                            title="Close workspace"
                         >
                             <X className="w-3.5 h-3.5" />
                         </button>
                     )}
                 </div>
             </div>
-
-            {/* Tabs */}
-            {sessionId && (
-                <div className="flex border-b border-border/40 shrink-0 bg-muted/5">
-                    <button
-                        onClick={() => setActiveTab('session')}
-                        className={cn(
-                            "flex-1 px-4 py-2 text-[10px] font-semibold uppercase tracking-wider transition-colors border-b-2",
-                            activeTab === 'session' 
-                                ? "text-primary border-primary bg-primary/5" 
-                                : "text-muted-foreground/50 border-transparent hover:text-muted-foreground"
-                        )}
-                    >
-                        Current Chat
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('all')}
-                        className={cn(
-                            "flex-1 px-4 py-2 text-[10px] font-semibold uppercase tracking-wider transition-colors border-b-2",
-                            activeTab === 'all' 
-                                ? "text-primary border-primary bg-primary/5" 
-                                : "text-muted-foreground/50 border-transparent hover:text-muted-foreground"
-                        )}
-                    >
-                        All History
-                    </button>
-                </div>
-            )}
 
             {/* Content */}
             <div className="flex-1 overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-muted-foreground/20 [&::-webkit-scrollbar-thumb]:rounded-full">
@@ -260,17 +231,19 @@ export function WorkspacePanel({ connectionId, sessionId, onClose, refreshTrigge
                 ) : error ? (
                     <div className="flex flex-col items-center justify-center py-12 gap-2 px-4">
                         <span className="text-xs text-red-500/70">{error}</span>
-                        <button onClick={fetchFiles} className="text-xs text-primary/70 hover:text-primary transition-colors">
+                        <button onClick={fetchFiles} className="text-xs text-primary/70 hover:text-primary transition-colors cursor-pointer">
                             Retry
                         </button>
                     </div>
                 ) : files.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-16 gap-3 px-6 text-center">
-                        <FolderOpen className="w-10 h-10 text-muted-foreground/20" />
+                        <div className="w-12 h-12 rounded-xl bg-muted/30 border border-border/40 flex items-center justify-center">
+                            <FolderOpen className="w-6 h-6 text-muted-foreground/40" />
+                        </div>
                         <div>
-                            <p className="text-sm font-medium text-muted-foreground/60">Your workspace is empty</p>
-                            <p className="text-xs text-muted-foreground/40 mt-1 max-w-[200px]">
-                                Ask the agent to build a report, export data, or save notes and it will appear here automatically.
+                            <p className="text-sm font-semibold text-foreground">No files in this chat yet</p>
+                            <p className="text-xs text-muted-foreground/60 mt-1 max-w-[220px] leading-relaxed mx-auto">
+                                Reports, charts, and data exported in this chat will appear here automatically.
                             </p>
                         </div>
                     </div>

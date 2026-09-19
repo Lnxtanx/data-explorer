@@ -14,6 +14,8 @@ import {
     type AIProject,
 } from '../lib/api/projects';
 
+export type { AIProject };
+
 // ─── Query Keys ───────────────────────────────────────────────────────────────
 
 export const projectQueryKeys = {

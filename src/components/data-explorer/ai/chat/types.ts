@@ -21,4 +21,5 @@ export type LocalMessage = {
     isMine?: boolean;
     authorName?: string | null;
     authorEmail?: string | null;
+    createdAt?: string | number;
 };

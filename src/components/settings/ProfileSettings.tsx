@@ -4,10 +4,12 @@
  * User profile section showing account information.
  */
 
-import { Mail, Calendar, Shield, LogOut, Github, CheckCircle2 } from 'lucide-react';
+import { Mail, Calendar, Shield, LogOut, Github, CheckCircle2, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { PremiumAvatar } from '@/components/ui/PremiumAvatar';
 import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
 import { useUserProfile } from '@/hooks/useUserProfile';
 import type { User } from '@supabase/supabase-js';
 import { useAuth } from '@/components/auth/AuthProvider';
@@ -138,12 +140,13 @@ export function ProfileSettings({ user, signOut, signInWithGoogle, signInWithGit
     <div className="h-full overflow-y-auto">
       <div className="p-8">
         <div className="flex items-start gap-6">
-          <Avatar className="w-20 h-20 border shadow-sm rounded-2xl">
-            <AvatarImage src={avatarUrl} className="object-cover" />
-            <AvatarFallback className="bg-primary/5 text-primary text-xl font-bold">
-              {initials}
-            </AvatarFallback>
-          </Avatar>
+          <PremiumAvatar
+            avatarUrl={avatarUrl}
+            initials={initials}
+            planId={planId}
+            size="xl"
+            shape="rounded"
+          />
 
           <div className="flex-1 min-w-0">
             <h3 className="text-2xl font-semibold tracking-tight truncate">{displayName}</h3>

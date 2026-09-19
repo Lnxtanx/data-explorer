@@ -6,6 +6,7 @@ import { queryClient } from "@/lib/queryClient";
 import { AuthProvider } from "@/components/auth/AuthProvider";
 import { ThemeProvider } from "next-themes";
 import DataExplorerPage from "./pages/DataExplorerPage";
+import PublicReportViewer from "./pages/PublicReportViewer";
 import { useEffect, useState } from "react";
 import { initCsrfToken } from "./lib/api/client";
 import { restoreExplorerCache } from "./lib/persist";
@@ -50,6 +51,7 @@ export default function App() {
             <AuthProvider>
               <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
                 <Routes>
+                  <Route path="/share/r/:shareId" element={<PublicReportViewer />} />
                   <Route path="/" element={<DataExplorerPage />} />
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>

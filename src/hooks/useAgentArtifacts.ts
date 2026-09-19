@@ -1,3 +1,4 @@
+
 // =============================================================================
 // useAgentArtifacts.ts — Pure state reducers for artifact streaming events.
 //
@@ -13,7 +14,7 @@ export function applyArtifactStart(
     artifacts: AgentArtifact[],
     evt: ArtifactStartEvent,
 ): AgentArtifact[] {
-    return [...artifacts, { type: evt.type, title: evt.title, loading: true }];
+    return [...artifacts, { id: evt.id, type: evt.type, title: evt.title, loading: true }];
 }
 
 export function applyArtifact(
@@ -31,6 +32,31 @@ export function applyArtifact(
             return updated;
         }
     }
+
+    // Deduplicate / version file artifacts with the same canonical filename.
+    // If the agent re-exports the same file (e.g. user_chat_ranking.html) across iterations,
+    // update the existing card in-place and store superseded versions in `previousVersions`.
+    if (evt.type === 'file') {
+        const evtName = ((evt as any).fileName || (evt as any).filename || evt.title || '').trim().toLowerCase();
+        if (evtName) {
+            const existingIdx = artifacts.findIndex(a => {
+                if (a.type !== 'file') return false;
+                const aName = (a.fileName || (a as any).filename || a.title || '').trim().toLowerCase();
+                return aName === evtName;
+            });
+            if (existingIdx !== -1) {
+                const updated = [...artifacts];
+                const prev = updated[existingIdx];
+                const prevVersions = (prev as any).previousVersions || [];
+                updated[existingIdx] = {
+                    ...evt,
+                    previousVersions: [...prevVersions, prev],
+                };
+                return updated;
+            }
+        }
+    }
+
     return [...artifacts, evt];
 }
 
@@ -38,13 +64,27 @@ export function applyArtifactRows(
     artifacts: AgentArtifact[],
     evt: ArtifactRowsEvent,
 ): AgentArtifact[] {
-    const lastIdx = artifacts.length - 1;
-    if (lastIdx < 0) return artifacts;
-    const last    = artifacts[lastIdx];
+    if (artifacts.length === 0) return artifacts;
+
+    let targetIdx = -1;
+    if (evt.artifactId) {
+        targetIdx = artifacts.findIndex(a => a.id === evt.artifactId);
+    }
+    if (targetIdx === -1) {
+        for (let i = artifacts.length - 1; i >= 0; i--) {
+            if (artifacts[i].streaming || artifacts[i].type === 'table' || artifacts[i].type === 'query') {
+                targetIdx = i;
+                break;
+            }
+        }
+    }
+    if (targetIdx === -1) targetIdx = artifacts.length - 1;
+
+    const target = artifacts[targetIdx];
     const updated = [...artifacts];
-    updated[lastIdx] = {
-        ...last,
-        rows:      [...(last.rows ?? []), ...evt.rows],
+    updated[targetIdx] = {
+        ...target,
+        rows:      [...(target.rows ?? []), ...evt.rows],
         streaming: !evt.done,
     };
     return updated;

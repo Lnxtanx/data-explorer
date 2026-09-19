@@ -40,7 +40,7 @@ export function ConnectionsPanel({ sharedConnections, isRefreshingDbs, handleRef
                         <p className="text-xs font-semibold text-foreground">No databases shared yet</p>
                         <p className="text-xs text-muted-foreground max-w-[280px] mx-auto leading-relaxed">
                             Databases become shared when you link an AI project in the <b className="font-medium text-foreground">Share Projects</b> tab
-                            or when an admin shares an SW-Agent in the <b className="font-medium text-foreground">SW-Agents</b> tab.
+                            or when an admin shares a Connector in the <b className="font-medium text-foreground">Connectors</b> tab.
                         </p>
                     </div>
                 ) : (

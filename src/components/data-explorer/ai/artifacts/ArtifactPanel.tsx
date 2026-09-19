@@ -33,11 +33,20 @@ export function ArtifactPanel({ artifact, onClose }: ArtifactPanelProps) {
     const artType = artifact.type as string;
     const isChart = artType === 'chart' || artifact.previewType === 'chart';
     const isStatBlock = artType === 'stat_block' || artifact.previewType === 'stat_block';
-    const isFile = artType === 'file';
+    const isFile = artType === 'file' || Boolean(artifact.fileType) || Boolean(artifact.fileName) || Boolean((artifact as any).format) || Boolean(artifact.downloadUrl) || Boolean(artifact.key);
     const isSpecial = isChart || isStatBlock || isFile;
 
     const rows = artifact.rows ?? [];
-    const cols = artifact.columns ?? [];
+    const cols = useMemo(() => {
+        const rawCols = artifact.columns;
+        if (Array.isArray(rawCols) && rawCols.length > 0) {
+            return rawCols.map(c => typeof c === 'string' ? { name: c } : c);
+        }
+        if (rows.length > 0 && typeof rows[0] === 'object' && rows[0] !== null) {
+            return Object.keys(rows[0]).map(name => ({ name }));
+        }
+        return [];
+    }, [artifact.columns, rows]);
 
     const defaultMode = useMemo<ChartType>(() => {
         if (isChart) return 'chart';
@@ -98,63 +107,57 @@ export function ArtifactPanel({ artifact, onClose }: ArtifactPanelProps) {
 
     return (
         <div className="flex flex-col h-full bg-background">
-            {/* Panel header */}
-            <div className="flex items-center justify-between px-4 py-3 border-b border-border/40 bg-muted/20 shrink-0">
-                <div className="flex items-center gap-2 text-sm text-foreground min-w-0">
-                    {isFile ? (
-                        <FileSpreadsheet className="w-4 h-4 text-emerald-500 shrink-0" />
-                    ) : (
+            {/* Panel header — only rendered for non-file artifacts (tables, charts, stat blocks). FilePreviewView renders its own unified header with controls and close button */}
+            {!isFile && (
+                <div className="flex items-center justify-between px-4 py-3 border-b border-border/40 bg-muted/20 shrink-0">
+                    <div className="flex items-center gap-2 text-sm text-foreground min-w-0">
                         <Database className="w-4 h-4 text-muted-foreground shrink-0" />
-                    )}
-                    <span className="font-medium truncate">{headerText}</span>
-                </div>
-                <div className="flex items-center gap-1 shrink-0">
-                    {viewOptions.map(v => (
-                        <button key={v.id} onClick={() => setMode(v.id)}
-                            className={cn('p-1.5 rounded transition-colors',
-                                mode === v.id ? 'bg-primary/10 text-primary' : 'text-muted-foreground/50 hover:text-muted-foreground')}>
-                            <v.icon className="w-4 h-4" />
-                        </button>
-                    ))}
-                    {artifact.sql && (
+                        <span className="font-medium truncate">{headerText}</span>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                        {viewOptions.map(v => (
+                            <button key={v.id} onClick={() => setMode(v.id)}
+                                className={cn('p-1.5 rounded transition-colors',
+                                    mode === v.id ? 'bg-primary/10 text-primary' : 'text-muted-foreground/50 hover:text-muted-foreground')}>
+                                <v.icon className="w-4 h-4" />
+                            </button>
+                        ))}
+                        {artifact.sql && (
+                            <button
+                                onClick={() => { navigator.clipboard.writeText(artifact.sql!); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
+                                className="p-1.5 rounded text-muted-foreground/50 hover:text-muted-foreground transition-colors">
+                                {copied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
+                            </button>
+                        )}
                         <button
-                            onClick={() => { navigator.clipboard.writeText(artifact.sql!); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
-                            className="p-1.5 rounded text-muted-foreground/50 hover:text-muted-foreground transition-colors">
-                            {copied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
+                            onClick={handleExport}
+                            className="text-[11px] font-medium px-2 py-1 rounded text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+                        >
+                            Export
                         </button>
-                    )}
-                    {!isFile && (
-                        <>
-                            <button
-                                onClick={handleExport}
-                                className="text-[11px] font-medium px-2 py-1 rounded text-muted-foreground/50 hover:text-muted-foreground transition-colors"
-                            >
-                                Export
-                            </button>
-                            <button
-                                onClick={() => exportHtml(artifact, headerText)}
-                                className="text-[11px] font-medium px-2 py-1 rounded text-muted-foreground/50 hover:text-muted-foreground transition-colors"
-                            >
-                                HTML
-                            </button>
-                            <button
-                                onClick={() => exportPdf(artifact, headerText)}
-                                className="text-[11px] font-medium px-2 py-1 rounded text-muted-foreground/50 hover:text-muted-foreground transition-colors"
-                            >
-                                PDF
-                            </button>
-                        </>
-                    )}
-                    <button onClick={onClose} className="p-1.5 rounded text-muted-foreground/50 hover:text-muted-foreground transition-colors ml-1">
-                        <X className="w-4 h-4" />
-                    </button>
+                        <button
+                            onClick={() => exportHtml(artifact, headerText)}
+                            className="text-[11px] font-medium px-2 py-1 rounded text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+                        >
+                            HTML
+                        </button>
+                        <button
+                            onClick={() => exportPdf(artifact, headerText)}
+                            className="text-[11px] font-medium px-2 py-1 rounded text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+                        >
+                            PDF
+                        </button>
+                        <button onClick={onClose} className="p-1.5 rounded text-muted-foreground/50 hover:text-muted-foreground transition-colors ml-1">
+                            <X className="w-4 h-4" />
+                        </button>
+                    </div>
                 </div>
-            </div>
+            )}
 
             {/* Body */}
             {isFile ? (
                 <div className="flex-1 overflow-hidden">
-                    <FilePreviewView artifact={artifact} />
+                    <FilePreviewView artifact={artifact} onClose={onClose} />
                 </div>
             ) : (
                 <div className="flex-1 overflow-auto p-4 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-muted-foreground/20 [&::-webkit-scrollbar-thumb]:rounded-full">
@@ -176,13 +179,24 @@ export function ArtifactPanel({ artifact, onClose }: ArtifactPanelProps) {
                             <tbody>
                                 {rows.map((row, ri) => (
                                     <tr key={ri} className="border-b border-border/20 last:border-0 hover:bg-muted/20">
-                                        {cols.map(c => (
-                                            <td key={c.name} className="px-3 py-2 text-foreground/80 whitespace-nowrap">
-                                                {row[c.name] === null || row[c.name] === undefined
-                                                    ? <span className="text-muted-foreground/30 italic text-xs">null</span>
-                                                    : String(row[c.name])}
-                                            </td>
-                                        ))}
+                                        {cols.map(c => {
+                                            const val = row[c.name];
+                                            let str: string | null = null;
+                                            if (val === null || val === undefined) {
+                                                str = null;
+                                            } else if (typeof val === 'object') {
+                                                str = JSON.stringify(val);
+                                            } else {
+                                                str = String(val);
+                                            }
+                                            return (
+                                                <td key={c.name} className="px-3 py-2 text-foreground/80 whitespace-nowrap" title={str ?? ''}>
+                                                    {str === null
+                                                        ? <span className="text-muted-foreground/30 italic text-xs">null</span>
+                                                        : str}
+                                                </td>
+                                            );
+                                        })}
                                     </tr>
                                 ))}
                             </tbody>

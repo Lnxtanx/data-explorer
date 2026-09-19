@@ -124,7 +124,7 @@ export function FeedbackSettings() {
             <div className="space-y-1">
                 <h3 className="text-xl font-semibold">Feedback & Support</h3>
                 <p className="text-sm text-muted-foreground">
-                    Report a bug or suggest a feature to help us improve Data Explorer.
+                    Report an issue, request support, or suggest a feature to help us improve Data Explorer.
                 </p>
             </div>
 
@@ -137,9 +137,10 @@ export function FeedbackSettings() {
                         </SelectTrigger>
                         <SelectContent>
                             <SelectItem value="bug">Bug Report</SelectItem>
+                            <SelectItem value="support">Help & Support Request</SelectItem>
                             <SelectItem value="feature">Feature Request</SelectItem>
                             <SelectItem value="ui">UI/UX Improvement</SelectItem>
-                            <SelectItem value="other">Other</SelectItem>
+                            <SelectItem value="other">General Feedback</SelectItem>
                         </SelectContent>
                     </Select>
                 </div>
@@ -148,7 +149,7 @@ export function FeedbackSettings() {
                     <Label htmlFor="content" className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Description</Label>
                     <Textarea
                         id="content"
-                        placeholder="Please provide details about the issue or feature..."
+                        placeholder="Please provide details about your issue, question, or feature request..."
                         className="min-h-[150px] resize-none focus-visible:ring-primary border-border/60"
                         value={content}
                         onChange={(e) => setContent(e.target.value)}

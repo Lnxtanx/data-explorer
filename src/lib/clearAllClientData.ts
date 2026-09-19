@@ -5,28 +5,15 @@
 
 import { deleteSessionCookie, deleteCookie } from '@/lib/cookies';
 import { clearCsrfToken } from '@/lib/api/client';
+import { clearAllDrafts } from '@/lib/chatDrafts';
 import { logger } from '@/lib/logger';
 
-// Known localStorage key prefixes used by the app.
-// Any key starting with one of these will be removed on logout.
-const SW_LOCAL_STORAGE_PREFIXES = [
-  'sw-',          // sw-data-explorer-cols-*, sw-explorer-*, sw-grid-cache-index, etc.
-  'schema_weaver', // legacy: schema_weaver_user
-  'schema-weaver', // schema-weaver:dashboard-panel
-  'resona_',       // AI model preference
-  'dismissed_',    // notification dismissal state
-];
-
-// Individual keys that don't follow the prefix convention
-const SW_LOCAL_STORAGE_EXACT_KEYS = [
-  'sw_sync_channel',         // cross-tab sync (ephemeral)
-  'sw_onboarding_completed', // onboarding flag
-];
+// Preserved non-sensitive preferences that should survive logout (light/dark theme)
+const PRESERVED_LOCAL_STORAGE_KEYS = new Set(['theme']);
 
 /**
- * Sweep all application-owned keys from localStorage.
- * Uses prefix matching to catch current AND future keys automatically,
- * plus an explicit list for keys that don't follow the sw-* convention.
+ * Sweep ALL application keys from localStorage, leaving zero residual user data,
+ * tokens, session IDs, connection references, or cached items.
  */
 function clearSwLocalStorage(): void {
   try {
@@ -35,12 +22,7 @@ function clearSwLocalStorage(): void {
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
       if (!key) continue;
-
-      const lowerKey = key.toLowerCase();
-      if (
-        SW_LOCAL_STORAGE_PREFIXES.some(prefix => lowerKey.startsWith(prefix)) ||
-        SW_LOCAL_STORAGE_EXACT_KEYS.includes(key)
-      ) {
+      if (!PRESERVED_LOCAL_STORAGE_KEYS.has(key)) {
         keysToRemove.push(key);
       }
     }
@@ -84,22 +66,50 @@ function clearSwCookies(): void {
 
     // Null the in-memory CSRF token held by the API client
     clearCsrfToken();
+
+    // Sweep any other non-httpOnly client cookies
+    if (typeof document !== 'undefined' && document.cookie) {
+      const cookies = document.cookie.split(';');
+      for (const cookie of cookies) {
+        const eqPos = cookie.indexOf('=');
+        const name = eqPos > -1 ? cookie.slice(0, eqPos).trim() : cookie.trim();
+        if (name) {
+          document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`;
+          document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=${window.location.pathname}`;
+        }
+      }
+    }
   } catch (err) {
     logger.warn('[clearAllClientData] Cookie cleanup failed:', err);
   }
 }
 
 /**
+ * Purge browser CacheStorage (VitePWA / ServiceWorker offline and API caches).
+ */
+export async function clearSwCacheStorage(): Promise<void> {
+  try {
+    if (typeof window !== 'undefined' && 'caches' in window) {
+      const cacheKeys = await window.caches.keys();
+      await Promise.all(cacheKeys.map(k => window.caches.delete(k)));
+      if (cacheKeys.length > 0) {
+        logger.info(`[clearAllClientData] Purged ${cacheKeys.length} browser cache(s)`);
+      }
+    }
+  } catch (err) {
+    logger.warn('[clearAllClientData] CacheStorage purge failed:', err);
+  }
+}
+
+/**
  * Nuclear cleanup: wipe ALL client-side application data.
  * Call this from signOut() and from the auth:unauthorized handler.
- *
- * Does NOT clear:
- *  - React Query cache (caller handles via queryClient.clear())
- *  - IndexedDB (caller handles via purgeExplorerCacheDb())
- *  - React state (caller handles via setUser(null))
  */
-export function clearAllClientData(): void {
+export async function clearAllClientData(): Promise<void> {
   clearSwLocalStorage();
   clearSwSessionStorage();
   clearSwCookies();
+  clearAllDrafts();
+  await clearSwCacheStorage();
 }
+

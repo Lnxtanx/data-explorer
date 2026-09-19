@@ -92,10 +92,10 @@ export function CollaborationSettings() {
     return (
         <div className="p-6 space-y-6">
             {/* Header */}
-            <div className="flex items-start justify-between">
+            <div className="flex items-center justify-between">
                 <div>
-                    <h3 className="text-base font-semibold tracking-tight">Teams &amp; Shared Resources</h3>
-                    <p className="text-sm text-muted-foreground">Manage your workspace teams and which projects are shared with them.</p>
+                    <h3 className="text-lg font-semibold tracking-tight text-foreground">Collaboration</h3>
+                    <p className="text-sm text-muted-foreground">Manage teams and shared projects</p>
                 </div>
                 <div className="flex items-center gap-2">
                     <Button
@@ -144,7 +144,9 @@ export function CollaborationSettings() {
                         <p className="text-xs text-muted-foreground max-w-[250px]">Create a team to start sharing your database projects with others.</p>
                     </div>
                     {!isCreatingTeam && (
-                        <Button onClick={() => setIsCreatingTeam(true)} size="sm">Create First Team</Button>
+                        <Button onClick={() => setIsCreatingTeam(true)} size="sm" className="rounded-xl font-medium shadow-xs">
+                            Create First Team
+                        </Button>
                     )}
                 </div>
             ) : (
@@ -155,7 +157,7 @@ export function CollaborationSettings() {
                             <SectionLabel><span className="flex items-center gap-1.5"><Users className="h-3 w-3" /> Active Team</span></SectionLabel>
                             <Select value={selectedTeamId} onValueChange={setSelectedTeamId}>
                                 <SelectTrigger className="bg-background/50 border h-9 font-medium">
-                                    <SelectValue />
+                                    <SelectValue placeholder="Select a team" />
                                 </SelectTrigger>
                                 <SelectContent className="rounded-xl">
                                     {teams.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
@@ -222,7 +224,7 @@ export function CollaborationSettings() {
                     <Tabs defaultValue="members" className="w-full">
                         <TabsList className="bg-muted/50 p-1 rounded-xl mb-4 w-full sm:w-auto">
                             <TabsTrigger value="members" className="rounded-lg px-4 py-1.5 text-xs font-medium">Members</TabsTrigger>
-                            <TabsTrigger value="agents" className="rounded-lg px-4 py-1.5 text-xs font-medium">SW-Agents</TabsTrigger>
+                            <TabsTrigger value="agents" className="rounded-lg px-4 py-1.5 text-xs font-medium">Connectors</TabsTrigger>
                             <TabsTrigger value="projects" className="rounded-lg px-4 py-1.5 text-xs font-medium">Share Projects</TabsTrigger>
                             <TabsTrigger value="connections" className="rounded-lg px-4 py-1.5 text-xs font-medium">Shared DBs</TabsTrigger>
                         </TabsList>

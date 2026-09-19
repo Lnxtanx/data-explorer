@@ -7,38 +7,15 @@
 
 import { useQuery } from '@tanstack/react-query';
 
-export interface AIUsageStatus {
-    plan_id: string;
-    credit_limit_monthly: number;
-    credit_limit_daily: number;
-    credits_used_month: number;
-    credits_used_day: number;
-    credits_used_week: number;
-    credits_remaining: number;
-    daily_remaining: number;
-    credits_balance: number;
-    monthly_pct: number;
-    is_lifetime_cap: boolean;
-    max_tokens_per_run: number;
-    max_agent_duration_secs: number;
-    concurrent_slots: number;
-    concurrent_limit: number;
-    allowed_models: string[];
-    weekly_reset_at: string;  // weekly reset (Sunday 5:30 PM IST)
-}
+import { getAIUsage, type AIQuotaStatus } from '@/lib/api/auth';
 
-import { API_BASE_URL } from '../lib/api/client';
+export type AIUsageStatus = AIQuotaStatus;
 
-async function fetchUsage(): Promise<AIUsageStatus> {
-    const res = await fetch(`${API_BASE_URL}/api/ai/usage`, { credentials: 'include' });
-    if (!res.ok) throw new Error(`Usage fetch failed: ${res.status}`);
-    return res.json() as Promise<AIUsageStatus>;
-}
-
-export function useAIUsage() {
-    return useQuery<AIUsageStatus>({
+export function useAIUsage(enabled: boolean = true) {
+    return useQuery<AIQuotaStatus>({
         queryKey: ['ai-usage'],
-        queryFn: fetchUsage,
+        queryFn: getAIUsage,
+        enabled,
         staleTime: 30_000,          // re-use cached value for 30 s
         refetchInterval: 60_000,    // background refresh every 60 s
         retry: 1,

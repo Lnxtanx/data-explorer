@@ -11,8 +11,17 @@ import {
     ChevronDown,
     ChevronRight,
     FolderMinus,
+    Loader2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 import {
     DropdownMenu,
     DropdownMenuTrigger,
@@ -25,8 +34,10 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useQueryClient } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 import { useAIChatList, useDeleteAIChat, useUpdateAIChat, aiQueryKeys } from '@/hooks/useAIChats';
-import { useProjects, useDeleteProject } from '@/hooks/useProjects';
+import { useProjects, useDeleteProject, useCreateProject } from '@/hooks/useProjects';
+import type { AIProject } from '@/lib/api/projects';
 import { getChatMessages, type AIMessage } from '@/lib/api/ai';
 
 interface AIChatSidebarProps {
@@ -119,9 +130,10 @@ export function AIChatSidebar({
         });
     };
 
-    // Section-level collapse state (default closed per user request)
-    const [isProjectsSectionExpanded, setIsProjectsSectionExpanded] = useState<boolean>(false);
+    // Section-level collapse state (default expanded for quick access)
+    const [isProjectsSectionExpanded, setIsProjectsSectionExpanded] = useState<boolean>(true);
     const [isYourChatsSectionExpanded, setIsYourChatsSectionExpanded] = useState<boolean>(true);
+    const [isCreateProjectOpen, setIsCreateProjectOpen] = useState(false);
 
     // Individual project folder collapse state
     const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
@@ -216,6 +228,20 @@ export function AIChatSidebar({
                     variant="ghost"
                     className={cn(
                         'w-full justify-start h-8 px-2.5 text-[13px] font-normal cursor-pointer',
+                        activeView === 'projects' || activeView === 'project_detail'
+                            ? 'bg-muted/70 text-foreground font-normal'
+                            : 'text-muted-foreground hover:text-foreground hover:bg-muted/40'
+                    )}
+                    onClick={() => onViewChange('projects')}
+                >
+                    <FolderKanban className="w-3.5 h-3.5 mr-2 opacity-60" />
+                    Projects
+                </Button>
+
+                <Button
+                    variant="ghost"
+                    className={cn(
+                        'w-full justify-start h-8 px-2.5 text-[13px] font-normal cursor-pointer',
                         activeView === 'artifacts'
                             ? 'bg-muted/70 text-foreground font-normal'
                             : 'text-muted-foreground hover:text-foreground hover:bg-muted/40'
@@ -231,19 +257,26 @@ export function AIChatSidebar({
             <div className="flex-1 overflow-y-auto px-3 py-2 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-muted-foreground/20 [&::-webkit-scrollbar-thumb]:rounded-full flex flex-col gap-4">
 
                 {/* ── PROJECTS SECTION (COLLAPSIBLE SECTION) ────────────────────── */}
-                {projects && projects.length > 0 && (
-                    <div className="flex flex-col gap-0.5">
-                        <div className="flex items-center justify-between px-1 mb-1">
+                <div className="flex flex-col gap-0.5">
+                    <div className="flex items-center justify-between px-1 mb-1">
+                        <button
+                            onClick={() => setIsProjectsSectionExpanded(prev => !prev)}
+                            className="flex items-center gap-1 text-[11px] font-medium text-muted-foreground hover:text-foreground tracking-wider uppercase cursor-pointer"
+                        >
+                            {isProjectsSectionExpanded ? (
+                                <ChevronDown className="w-3 h-3 opacity-75" />
+                            ) : (
+                                <ChevronRight className="w-3 h-3 opacity-75" />
+                            )}
+                            <span>Projects</span>
+                        </button>
+                        <div className="flex items-center gap-1">
                             <button
-                                onClick={() => setIsProjectsSectionExpanded(prev => !prev)}
-                                className="flex items-center gap-1 text-[11px] font-medium text-muted-foreground hover:text-foreground tracking-wider uppercase cursor-pointer"
+                                onClick={() => setIsCreateProjectOpen(true)}
+                                className="w-5 h-5 rounded flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
+                                title="Create new project"
                             >
-                                {isProjectsSectionExpanded ? (
-                                    <ChevronDown className="w-3 h-3 opacity-75" />
-                                ) : (
-                                    <ChevronRight className="w-3 h-3 opacity-75" />
-                                )}
-                                <span>Projects</span>
+                                <Plus className="w-3.5 h-3.5" />
                             </button>
                             <button
                                 onClick={() => onViewChange('projects')}
@@ -253,8 +286,10 @@ export function AIChatSidebar({
                                 View all
                             </button>
                         </div>
+                    </div>
 
-                        {isProjectsSectionExpanded && (
+                    {isProjectsSectionExpanded && (
+                        projects && projects.length > 0 ? (
                             <div className="flex flex-col gap-0.5">
                                 {projects.map((project) => {
                                     const isExpanded = expandedProjects.has(project.id);
@@ -474,9 +509,18 @@ export function AIChatSidebar({
                                 );
                             })}
                         </div>
-                        )}
-                    </div>
-                )}
+                    ) : (
+                        <div className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-muted/20 border border-dashed border-border/60 mx-1 my-0.5">
+                            <span className="text-xs text-muted-foreground italic">No projects yet</span>
+                            <button
+                                onClick={() => setIsCreateProjectOpen(true)}
+                                className="text-xs text-primary hover:underline font-medium cursor-pointer"
+                            >
+                                + New Project
+                            </button>
+                        </div>
+                    ))}
+                </div>
 
                 {/* ── YOUR CHATS SECTION (STANDALONE CHATS) ───────────────────────── */}
                 <div className="flex flex-col gap-0.5">
@@ -635,6 +679,151 @@ export function AIChatSidebar({
                     )}
                 </div>
             </div>
+
+            <CreateProjectSidebarDialog
+                open={isCreateProjectOpen}
+                onOpenChange={setIsCreateProjectOpen}
+                onCreated={(newProjId) => {
+                    setExpandedProjects(prev => new Set([...prev, newProjId]));
+                    setIsProjectsSectionExpanded(true);
+                    if (onOpenProject) {
+                        onOpenProject(newProjId);
+                    } else {
+                        onViewChange('projects');
+                    }
+                }}
+            />
         </div>
+    );
+}
+
+// ─── Create Project Dialog for Sidebar ────────────────────────────────────────
+
+const PROJECT_COLOR_OPTIONS: AIProject['color'][] = ['blue', 'purple', 'green', 'orange'];
+
+const projectDotClass: Record<AIProject['color'], string> = {
+    blue: 'bg-blue-500',
+    purple: 'bg-purple-500',
+    green: 'bg-emerald-500',
+    orange: 'bg-orange-500',
+};
+
+function CreateProjectSidebarDialog({
+    open,
+    onOpenChange,
+    onCreated,
+}: {
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    onCreated?: (projectId: string) => void;
+}) {
+    const [title, setTitle] = useState('');
+    const [description, setDescription] = useState('');
+    const [color, setColor] = useState<AIProject['color']>('blue');
+    const createProject = useCreateProject();
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!title.trim()) return;
+
+        createProject.mutate(
+            {
+                title: title.trim(),
+                description: description.trim() || undefined,
+                color,
+            },
+            {
+                onSuccess: (res) => {
+                    toast.success('Project created');
+                    setTitle('');
+                    setDescription('');
+                    setColor('blue');
+                    onOpenChange(false);
+                    if (res?.project?.id && onCreated) {
+                        onCreated(res.project.id);
+                    }
+                },
+                onError: (err) => {
+                    toast.error('Failed to create project: ' + err.message);
+                },
+            }
+        );
+    };
+
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent className="sm:max-w-[420px]">
+                <DialogHeader>
+                    <DialogTitle className="text-base font-semibold">Create New Project</DialogTitle>
+                </DialogHeader>
+
+                <form onSubmit={handleSubmit} className="flex flex-col gap-4 mt-2">
+                    <div className="space-y-1.5">
+                        <label className="text-xs font-medium text-foreground">Project Name</label>
+                        <Input
+                            placeholder="e.g. Sales Analytics, Migration..."
+                            value={title}
+                            onChange={(e) => setTitle(e.target.value)}
+                            className="h-9 text-sm"
+                            autoFocus
+                        />
+                    </div>
+
+                    <div className="space-y-1.5">
+                        <label className="text-xs font-medium text-foreground">Description (optional)</label>
+                        <Textarea
+                            placeholder="Brief purpose or context for this project..."
+                            value={description}
+                            onChange={(e) => setDescription(e.target.value)}
+                            className="text-sm resize-none h-20"
+                        />
+                    </div>
+
+                    <div className="space-y-1.5">
+                        <label className="text-xs font-medium text-foreground">Color Tag</label>
+                        <div className="flex items-center gap-2 pt-0.5">
+                            {PROJECT_COLOR_OPTIONS.map((c) => (
+                                <button
+                                    key={c}
+                                    type="button"
+                                    onClick={() => setColor(c)}
+                                    className={cn(
+                                        'w-6 h-6 rounded-full border-2 transition-all cursor-pointer',
+                                        projectDotClass[c],
+                                        color === c ? 'ring-2 ring-primary ring-offset-2 border-transparent scale-110' : 'border-transparent opacity-70 hover:opacity-100'
+                                    )}
+                                    title={c.charAt(0).toUpperCase() + c.slice(1)}
+                                />
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/50 mt-1">
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => onOpenChange(false)}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            type="submit"
+                            size="sm"
+                            disabled={!title.trim() || createProject.isPending}
+                        >
+                            {createProject.isPending ? (
+                                <>
+                                    <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />
+                                    Creating...
+                                </>
+                            ) : (
+                                'Create Project'
+                            )}
+                        </Button>
+                    </div>
+                </form>
+            </DialogContent>
+        </Dialog>
     );
 }

@@ -6,7 +6,7 @@
  */
 
 import type { ElementType } from 'react';
-import { User, CreditCard, Palette, Keyboard, BookOpen, Users, BarChart3, MessageSquare } from 'lucide-react';
+import { User, CreditCard, Palette, BookOpen, Users, BarChart3, MessageSquare } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { SettingsSection } from './types';
 
@@ -18,13 +18,12 @@ interface SettingsSidebarProps {
 
 const SECTIONS: { id: SettingsSection; label: string; icon: ElementType }[] = [
     { id: 'profile', label: 'Profile', icon: User },
-    { id: 'usage', label: 'Usage', icon: BarChart3 },
+    { id: 'usage', label: 'AI Usage', icon: BarChart3 },
     { id: 'plans', label: 'Plans & Billing', icon: CreditCard },
-    { id: 'appearance', label: 'Appearance', icon: Palette },
-    { id: 'shortcuts', label: 'Keyboard Shortcuts', icon: Keyboard },
     { id: 'collaboration', label: 'Collaboration', icon: Users },
+    { id: 'appearance', label: 'Appearance', icon: Palette },
     { id: 'documentation', label: 'Documentation', icon: BookOpen },
-    { id: 'feedback', label: 'Feedback & Support', icon: MessageSquare },
+    { id: 'feedback', label: 'Feedback', icon: MessageSquare },
 ];
 
 export function SettingsSidebar({ activeSection, onSelect }: SettingsSidebarProps) {

@@ -224,8 +224,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         setUser(null);
 
-        // Comprehensive client-side cleanup: localStorage, sessionStorage, cookies, CSRF
-        clearAllClientData();
+        // Comprehensive client-side cleanup: localStorage, sessionStorage, cookies, CSRF, CacheStorage, drafts
+        await clearAllClientData();
 
         // Broadcast logout to other tabs
         broadcastSync({ type: 'logout' });
@@ -339,6 +339,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             if (message.type === 'logout') {
                 const localSession = getSessionCookie();
                 if (!localSession && !isSigningOutRef.current) {
+                    queryClient.clear();
+                    try {
+                        await purgeExplorerCacheDb();
+                    } catch {}
+                    await clearAllClientData();
                     setUser(null);
                     toast.info('Logged out from another tab');
                 }

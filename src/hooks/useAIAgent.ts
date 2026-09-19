@@ -79,19 +79,6 @@ function pushWarning(prev: AgentState, w: Omit<AgentWarning, 'id' | 'at'>): Agen
     return [...existingList, entry].slice(-6);
 }
 
-/** Trigger a browser download from a real file URL (no regex scraping). */
-function triggerDownload(url: string, filename?: string): void {
-    try {
-        const a = document.createElement('a');
-        a.href = url;
-        if (filename) a.download = filename;
-        a.style.display = 'none';
-        document.body.appendChild(a);
-        a.click();
-        setTimeout(() => document.body.removeChild(a), 100);
-    } catch { /* non-fatal: card still links to the file */ }
-}
-
 // Session-scoped record of the in-flight durable run so a refresh can resume
 // the same run (backend replays buffered events → UI re-syncs, no lost turn).
 const PENDING_RUN_KEY    = 'sw_durable_pending_run';
@@ -254,12 +241,9 @@ export function useAIAgent(): UseAIAgentResult {
                     timeline: tl(prev, { kind: 'tool_result', id: evt.id, name: evt.name, success: evt.success, summary: evt.summary, latencyMs: evt.latency_ms }),
                     isReconnecting: false,
                 }));
-                // Auto-download for export tool — structured URL from the
-                // backend (tool_result now carries downloadUrl), not the dead
-                // DOWNLOAD_URL regex over the summary.
-                if (evt.name === 'export' && evt.success && evt.downloadUrl) {
-                    triggerDownload(evt.downloadUrl, evt.filename);
-                }
+                // No auto-download: `export` renders a FileView card with a
+                // Download button. Cross-origin S3 presigned URLs ignore the
+                // anchor `download` attribute and would navigate the tab away.
                 break;
             }
             case 'artifact_start': {
@@ -544,7 +528,7 @@ export function useAIAgent(): UseAIAgentResult {
 
         try {
             await startAgentStream(
-                { ...request, sessionId: request.sessionId ?? sessionIdRef.current },
+                { ...request, sessionId: request.chatId ?? request.sessionId ?? sessionIdRef.current },
                 dispatchEvent,
                 controller.signal,
                 {
@@ -631,7 +615,11 @@ export function useAIAgent(): UseAIAgentResult {
                     },
                     credentials: 'include',
                     signal: controller.signal,
-                    body: JSON.stringify({ answer }),
+                    body: JSON.stringify({
+                        answer,
+                        clientTime: new Date().toISOString(),
+                        clientTimezone: typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'UTC',
+                    }),
                 });
             } catch (err) {
                 if (controller.signal.aborted) return false;

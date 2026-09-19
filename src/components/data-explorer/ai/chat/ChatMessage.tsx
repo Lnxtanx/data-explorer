@@ -1,4 +1,5 @@
-import { Check, Copy, AtSign, FileText, Download, Database } from 'lucide-react';
+import React, { useState } from 'react';
+import { Check, Copy, AtSign, FileText, Download, Database, ChevronDown, ChevronUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { MarkdownText } from '../messages/MarkdownText';
 import { AgentStatusBar } from '../messages/AgentStatusBar';
@@ -28,6 +29,7 @@ interface ChatMessageProps {
     datasetCache: DatasetCache;
     availableTables: string[];
     liveThinking?: string;
+    expandedArtifact?: AgentArtifact | null;
     onCopy: (id: string, text: string) => void;
     onTableClick?: (tableName: string) => void;
     onExpand: (artifact: AgentArtifact) => void;
@@ -45,15 +47,24 @@ function StreamingCursor() {
     );
 }
 
-export function ChatMessage({
+export const ChatMessage = React.memo(function ChatMessage({
     msg, agentMode, agentStatus, phase, phaseDetail, iterations,
     isStreaming, copiedId, connectionId, datasetCache,
-    availableTables, liveThinking, onCopy, onTableClick, onExpand, onPin, isPinnedArtifact, onQuickSend,
+    availableTables, liveThinking, expandedArtifact, onCopy, onTableClick, onExpand, onPin, isPinnedArtifact, onQuickSend,
 }: ChatMessageProps) {
+    const isUser = msg.role === 'user';
+    const [isUserExpanded, setIsUserExpanded] = useState(false);
+    const userLineCount = isUser ? (msg.content || '').split('\n').length : 0;
+    const isUserLong = isUser && ((msg.content || '').length > 240 || userLineCount > 4);
+
     return (
-        <div className={cn('flex w-full group', msg.role === 'user' ? 'justify-end' : 'justify-start')}>
+        <div 
+            id={isUser ? `turn-${msg.id}` : undefined}
+            data-turn-id={isUser ? msg.id : undefined}
+            className={cn('flex w-full group scroll-mt-14', isUser ? 'justify-end' : 'justify-start')}
+        >
             <div className={cn('relative flex flex-col gap-1.5 min-w-0',
-                msg.role === 'user' ? 'items-end max-w-[72%]' : 'items-start w-full')}>
+                isUser ? 'items-end max-w-[85%] sm:max-w-[75%] lg:max-w-[68%]' : 'items-start w-full')}>
 
                 {/* @table pill */}
                 {msg.role === 'user' && msg.mentionedTable && (
@@ -96,39 +107,82 @@ export function ChatMessage({
 
                 {/* User bubble */}
                 {msg.role === 'user' && (
-                    <div className="bg-muted/60 text-foreground px-4 py-2.5 rounded-2xl text-[15px] leading-relaxed">
-                        {/* Attachments (from artifacts or local files list) */}
-                        {((msg.artifacts?.filter(a => (a as any).type === 'attachment') ?? []).length > 0 || (msg.files && msg.files.length > 0)) && (
-                            <div className="flex flex-wrap gap-1.5 mb-2">
-                                {msg.artifacts?.filter(a => (a as any).type === 'attachment').map((att: any, i: number) => (
-                                    <div key={i} className="flex items-center gap-2 bg-background/80 border border-border/60 rounded-lg px-2.5 py-1.5 text-xs shadow-xs">
-                                        <FileText className="w-3.5 h-3.5 text-primary" />
-                                        <div className="flex flex-col text-left">
-                                            <span className="font-medium text-foreground truncate max-w-[140px]">{att.filename || 'Attachment'}</span>
-                                            {att.size_bytes && <span className="text-[10px] text-muted-foreground">{(att.size_bytes / 1024).toFixed(0)} KB</span>}
+                    <div className="flex flex-col items-end w-full">
+                        <div
+                            className={cn(
+                                "bg-muted/60 text-foreground px-4 py-2.5 rounded-2xl text-[15px] leading-relaxed break-words [overflow-wrap:anywhere] relative w-full transition-all duration-200",
+                                !isUserExpanded && isUserLong && "max-h-28 overflow-hidden select-none cursor-pointer hover:bg-muted/70"
+                            )}
+                            onClick={() => {
+                                if (!isUserExpanded && isUserLong) setIsUserExpanded(true);
+                            }}
+                            title={!isUserExpanded && isUserLong ? "Click to expand message" : undefined}
+                        >
+                            {/* Attachments (from artifacts or local files list) */}
+                            {((msg.artifacts?.filter(a => (a as any).type === 'attachment') ?? []).length > 0 || (msg.files && msg.files.length > 0)) && (
+                                <div className="flex flex-wrap gap-1.5 mb-2">
+                                    {msg.artifacts?.filter(a => (a as any).type === 'attachment').map((att: any, i: number) => (
+                                        <div key={i} className="flex items-center gap-2 bg-background/80 border border-border/60 rounded-lg px-2.5 py-1.5 text-xs shadow-xs">
+                                            <FileText className="w-3.5 h-3.5 text-primary" />
+                                            <div className="flex flex-col text-left">
+                                                <span className="font-medium text-foreground truncate max-w-[140px]">{att.filename || 'Attachment'}</span>
+                                                {att.size_bytes && <span className="text-[10px] text-muted-foreground">{(att.size_bytes / 1024).toFixed(0)} KB</span>}
+                                            </div>
+                                            {att.download_url && (
+                                                <a
+                                                    href={att.download_url}
+                                                    target="_blank"
+                                                    rel="noreferrer"
+                                                    download={att.filename}
+                                                    className="ml-1 p-1 hover:bg-muted rounded text-muted-foreground hover:text-foreground transition-colors"
+                                                    title="Download file"
+                                                >
+                                                    <Download className="w-3 h-3" />
+                                                </a>
+                                            )}
                                         </div>
-                                        {att.download_url && (
-                                            <a
-                                                href={att.download_url}
-                                                target="_blank"
-                                                rel="noreferrer"
-                                                download={att.filename}
-                                                className="ml-1 p-1 hover:bg-muted rounded text-muted-foreground hover:text-foreground transition-colors"
-                                                title="Download file"
-                                            >
-                                                <Download className="w-3 h-3" />
-                                            </a>
-                                        )}
-                                    </div>
-                                ))}
-                                {!msg.artifacts?.some(a => (a as any).type === 'attachment') && msg.files?.map((f, i) => (
-                                    <span key={i} className="flex items-center gap-1.5 bg-background/50 border border-border/50 rounded-lg px-2 py-1 text-xs">
-                                        <FileText className="w-3 h-3 text-muted-foreground" />{f}
-                                    </span>
-                                ))}
+                                    ))}
+                                    {!msg.artifacts?.some(a => (a as any).type === 'attachment') && msg.files?.map((f, i) => (
+                                        <span key={i} className="flex items-center gap-1.5 bg-background/50 border border-border/50 rounded-lg px-2 py-1 text-xs">
+                                            <FileText className="w-3 h-3 text-muted-foreground" />{f}
+                                        </span>
+                                    ))}
+                                </div>
+                            )}
+
+                            <div className={cn(isUserExpanded && isUserLong && "max-h-[380px] overflow-y-auto pr-1")}>
+                                <MarkdownText text={msg.content} onTableClick={onTableClick} connectionId={connectionId} availableTables={availableTables} />
                             </div>
+
+                            {/* Fade gradient when collapsed */}
+                            {!isUserExpanded && isUserLong && (
+                                <div className="pointer-events-none absolute bottom-0 inset-x-0 h-10 bg-gradient-to-t from-muted/90 via-muted/60 to-transparent rounded-b-2xl" />
+                            )}
+                        </div>
+
+                        {/* Expand / Collapse toggle button */}
+                        {isUserLong && (
+                            <button
+                                type="button"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    setIsUserExpanded((prev) => !prev);
+                                }}
+                                className="inline-flex items-center gap-1 mt-1 text-[11px] font-medium text-primary hover:text-primary/80 transition-colors px-1 py-0.5 rounded cursor-pointer"
+                            >
+                                {isUserExpanded ? (
+                                    <>
+                                        <ChevronUp className="w-3 h-3" />
+                                        <span>Show less</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <ChevronDown className="w-3 h-3" />
+                                        <span>Show more ({userLineCount > 1 ? `${userLineCount} lines` : `${msg.content.length} chars`})</span>
+                                    </>
+                                )}
+                            </button>
                         )}
-                        <MarkdownText text={msg.content} onTableClick={onTableClick} connectionId={connectionId} availableTables={availableTables} />
                     </div>
                 )}
 
@@ -184,18 +238,30 @@ export function ChatMessage({
                         )}
 
                         {/* Artifacts (rendered after the narrative explanation) */}
-                        {msg.artifacts && msg.artifacts.map((artifact, idx) => (
-                            <ArtifactView
-                                key={idx}
-                                artifact={artifact}
-                                connectionId={connectionId}
-                                onExpand={onExpand}
-                                onPin={onPin}
-                                isPinned={isPinnedArtifact?.(artifact)}
-                                onQuickSend={onQuickSend}
-                                cachedAt={artifact.sql && connectionId ? datasetCache.getCachedAt(artifact.sql, connectionId) : null}
-                            />
-                        ))}
+                        {msg.artifacts && msg.artifacts.map((artifact, idx) => {
+                            const isArtExpanded = Boolean(
+                                expandedArtifact && (
+                                    expandedArtifact === artifact ||
+                                    (artifact.key && expandedArtifact.key === artifact.key) ||
+                                    (artifact.downloadUrl && expandedArtifact.downloadUrl === artifact.downloadUrl) ||
+                                    (artifact.id && expandedArtifact.id === artifact.id) ||
+                                    (artifact.fileName && expandedArtifact.fileName === artifact.fileName)
+                                )
+                            );
+                            return (
+                                <ArtifactView
+                                    key={idx}
+                                    artifact={artifact}
+                                    connectionId={connectionId}
+                                    onExpand={onExpand}
+                                    onPin={onPin}
+                                    isPinned={isPinnedArtifact?.(artifact)}
+                                    onQuickSend={onQuickSend}
+                                    cachedAt={artifact.sql && connectionId ? datasetCache.getCachedAt(artifact.sql, connectionId) : null}
+                                    isExpanded={isArtExpanded}
+                                />
+                            );
+                        })}
 
                         {/* Credits used footer */}
                         {!msg.isStreaming && msg.creditsUsed != null && msg.creditsUsed > 0 && (
@@ -222,4 +288,4 @@ export function ChatMessage({
             </div>
         </div>
     );
-}
+});
