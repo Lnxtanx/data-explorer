@@ -1,0 +1,140 @@
+{
+  "total": {
+    "raw": 3214806,
+    "gzip": 950743
+  },
+  "chunks": {
+    "AIChatLibrary.js": {
+      "raw": 6257,
+      "gzip": 2194
+    },
+    "AIChatMain.js": {
+      "raw": 217406,
+      "gzip": 60870
+    },
+    "AIChatProjects.js": {
+      "raw": 7110,
+      "gzip": 2393
+    },
+    "AIChatSidebar.js": {
+      "raw": 18981,
+      "gzip": 5286
+    },
+    "arrow-right.js": {
+      "raw": 333,
+      "gzip": 266
+    },
+    "ArtifactHistory.js": {
+      "raw": 6795,
+      "gzip": 2411
+    },
+    "ArtifactView.js": {
+      "raw": 86261,
+      "gzip": 22320
+    },
+    "badge.js": {
+      "raw": 2573,
+      "gzip": 1126
+    },
+    "ConnectorDialog.js": {
+      "raw": 76113,
+      "gzip": 16674
+    },
+    "DashboardSidebar.js": {
+      "raw": 11886,
+      "gzip": 4126
+    },
+    "DashboardView.js": {
+      "raw": 14907,
+      "gzip": 5355
+    },
+    "ellipsis.js": {
+      "raw": 390,
+      "gzip": 266
+    },
+    "folder-kanban.js": {
+      "raw": 517,
+      "gzip": 347
+    },
+    "html2canvas.esm.js": {
+      "raw": 202379,
+      "gzip": 48044
+    },
+    "index.js": {
+      "raw": 375115,
+      "gzip": 104967
+    },
+    "index.es.js": {
+      "raw": 159647,
+      "gzip": 53539
+    },
+    "InvitationReviewModal.js": {
+      "raw": 4700,
+      "gzip": 1478
+    },
+    "message-square.js": {
+      "raw": 347,
+      "gzip": 270
+    },
+    "ProjectDetailView.js": {
+      "raw": 6795,
+      "gzip": 2206
+    },
+    "purify.es.js": {
+      "raw": 29049,
+      "gzip": 11178
+    },
+    "rows-2.js": {
+      "raw": 352,
+      "gzip": 280
+    },
+    "SettingsModal.js": {
+      "raw": 119566,
+      "gzip": 29189
+    },
+    "textarea.js": {
+      "raw": 522,
+      "gzip": 342
+    },
+    "useAIUsage.js": {
+      "raw": 2144,
+      "gzip": 958
+    },
+    "useCharts.js": {
+      "raw": 1179,
+      "gzip": 689
+    },
+    "user.js": {
+      "raw": 1290,
+      "gzip": 505
+    },
+    "vendor-charts.js": {
+      "raw": 444371,
+      "gzip": 117649
+    },
+    "vendor-katex.js": {
+      "raw": 261074,
+      "gzip": 77498
+    },
+    "vendor-query.js": {
+      "raw": 69286,
+      "gzip": 20392
+    },
+    "vendor-radix.js": {
+      "raw": 149182,
+      "gzip": 45171
+    },
+    "vendor-react.js": {
+      "raw": 182535,
+      "gzip": 60044
+    },
+    "vendor-reports.js": {
+      "raw": 422772,
+      "gzip": 138847
+    },
+    "vendor-xlsx.js": {
+      "raw": 332972,
+      "gzip": 113863
+    }
+  }
+}

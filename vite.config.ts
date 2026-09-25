@@ -75,12 +75,16 @@ export default defineConfig(({ mode }) => {
       },
     },
     build: {
+      chunkSizeWarningLimit: 650,
       rollupOptions: {
         output: {
           manualChunks(id) {
             if (id.includes('/recharts/') || id.includes('/d3-') || id.includes('/victory-')) return 'vendor-charts';
             if (id.includes('/mermaid/')) return 'vendor-mermaid';
             if (id.includes('/jspdf')) return 'vendor-reports';
+            if (id.includes('node_modules/katex/')) return 'vendor-katex';
+            if (id.includes('node_modules/xlsx/')) return 'vendor-xlsx';
+            if (id.includes('node_modules/framer-motion/')) return 'vendor-motion';
             if (id.includes('node_modules/react-dom/') || id.includes('node_modules/react/') || id.includes('node_modules/react-router-dom/')) return 'vendor-react';
             if (id.includes('node_modules/@radix-ui/')) return 'vendor-radix';
             if (id.includes('node_modules/@tanstack/')) return 'vendor-query';
