@@ -52,7 +52,7 @@ export function transcriptToMessages(runState: DashboardRunState, _isResuming: b
         const files = Array.isArray((m as any).files)
           ? (m as any).files
           : (typeof (m as any).files === 'string' ? [(m as any).files] : undefined);
-        msgs.push({ id: `u-${msgs.length}-${Date.now()}`, role: 'user', content, timestamp, files });
+        msgs.push({ id: (m as any).id || `u-${msgs.length}-${(m as any).timestamp || (m as any).created_at || msgs.length}`, role: 'user', content, timestamp, files });
       }
     } else if (m.role === 'assistant') {
       const content = (m.content || '').trim();
@@ -104,9 +104,27 @@ export function transcriptToMessages(runState: DashboardRunState, _isResuming: b
         });
       }
 
+      const rawSteps = (m as any).toolSteps || (m as any).execution_trace?.toolSteps;
+      if (newToolSteps.length === 0 && Array.isArray(rawSteps) && rawSteps.length > 0) {
+        rawSteps.forEach((s: any, idx: number) => {
+          const toolName = s.name || s.tool || 'tool';
+          const stepId = s.id || `ts-${msgs.length}-${idx}`;
+          newToolSteps.push({
+            id: stepId,
+            name: toolName,
+            input: sanitizeToolInput(toolName, s.input ?? {}),
+            status: s.status === 'error' ? 'error' : 'done',
+            result: s.result ? { success: s.result.success ?? true, summary: sanitizeToolSummary(s.result.summary || '') } : undefined,
+            latencyMs: s.latency_ms ?? s.latencyMs,
+          });
+        });
+      }
+
+      const msgId = (m as any).id || `a-${msgs.length}-${(m as any).timestamp || (m as any).created_at || msgs.length}`;
+
       if (!currentAssistantMsg) {
         currentAssistantMsg = {
-          id: `a-${msgs.length}-${Date.now()}`,
+          id: msgId,
           role: 'assistant',
           content: content,
           toolSteps: newToolSteps.length > 0 ? newToolSteps : undefined,
@@ -259,6 +277,11 @@ export function transcriptToMessages(runState: DashboardRunState, _isResuming: b
         } else if (runState.status === 'failed') {
           msg.content = `⚠️ ${runState.error || runState.completion_message || 'Dashboard generation failed.'}`;
         }
+      } else {
+        msg.content = 'Action completed.';
+      }
+      if (!msg.content.trim()) {
+        msg.content = 'Action completed.';
       }
       // Never let synthesized text leak SQL / internal ids.
       msg.content = sanitizeToolSummary(msg.content);

@@ -144,7 +144,8 @@ export function useSidePanelSessions({
       const targetSession = sessions.find((s) => s.run_id === runId || s.session_id === runId);
       if (selectedRunId === runId || (targetSession && currentSessionId === targetSession.session_id)) {
         setSelectedRunId(null);
-        setCurrentSessionId(null);
+        const newSessionId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `sess-${Date.now()}`;
+        setCurrentSessionId(newSessionId);
         setLocalMessages([]);
       }
     } catch (err: any) {
