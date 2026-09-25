@@ -30,20 +30,22 @@ export class VoiceAudioPlayer {
         // require native 44.1kHz or 48kHz. Supplying OUTPUT_SAMPLE_RATE to createBuffer
         // allows the browser's audio engine to cleanly resample to hardware output.
         this.ctx = new AudioCtx();
+
+        // 1. Direct speaker path: source -> gainNode -> destination
+        this.gainNode = this.ctx.createGain();
+        this.gainNode.gain.value = 1.0;
+        this.gainNode.connect(this.ctx.destination);
+
+        // 2. Parallel visualizer tap: gainNode -> analyser
         this.analyser = this.ctx.createAnalyser();
         this.analyser.fftSize = 256;
         this.analyser.smoothingTimeConstant = 0.4;
-
-        this.gainNode = this.ctx.createGain();
-        this.gainNode.gain.value = 1.0;
-
-        this.analyser.connect(this.gainNode);
-        this.gainNode.connect(this.ctx.destination);
+        this.gainNode.connect(this.analyser);
     }
 
     /** Resume a suspended AudioContext (must be called from a user gesture). */
     public async resume(): Promise<void> {
-        if (this.ctx.state === 'suspended') {
+        if (this.ctx.state !== 'running') {
             await this.ctx.resume();
         }
     }
@@ -64,8 +66,8 @@ export class VoiceAudioPlayer {
     /** Enqueue one Base64-encoded 24kHz PCM chunk for gapless playback. */
     public enqueueChunk(base64Pcm24k: string): void {
         if (!base64Pcm24k) return;
-        if (this.ctx.state === 'suspended') {
-            void this.ctx.resume();
+        if (this.ctx.state !== 'running') {
+            this.ctx.resume().catch((err) => console.warn('[VoicePlayer] auto-resume:', err));
         }
 
         const bytes = decodeBase64(base64Pcm24k);
@@ -82,11 +84,17 @@ export class VoiceAudioPlayer {
 
         const source = this.ctx.createBufferSource();
         source.buffer = audioBuffer;
-        source.connect(this.analyser);
+        // Connect directly to gainNode which routes to destination & analyser
+        source.connect(this.gainNode);
 
-        // Jitter buffer: never start earlier than the previous chunk's end,
-        // never sooner than now + lead-in (re-sync after an underrun).
-        const startAt = Math.max(this.nextPlayTime, this.ctx.currentTime + JITTER_LEAD_SECONDS);
+        // Jitter buffer with drift protection: never start earlier than the previous
+        // chunk's end, and never allow scheduling to drift more than 500ms into future.
+        const now = this.ctx.currentTime;
+        const minStart = now + JITTER_LEAD_SECONDS;
+        let startAt = this.nextPlayTime;
+        if (startAt < minStart || startAt > now + 0.5) {
+            startAt = minStart;
+        }
         source.start(startAt);
         this.nextPlayTime = startAt + audioBuffer.duration;
 
@@ -124,10 +132,16 @@ export class VoiceAudioPlayer {
 }
 
 function decodeBase64(base64: string): Uint8Array {
-    const binary = atob(base64);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) {
-        bytes[i] = binary.charCodeAt(i);
+    try {
+        const clean = base64.replace(/-/g, '+').replace(/_/g, '/').replace(/\s/g, '');
+        const binary = atob(clean);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+            bytes[i] = binary.charCodeAt(i);
+        }
+        return bytes;
+    } catch (err) {
+        console.error('[VoiceAudioPlayer] decodeBase64 error:', err);
+        return new Uint8Array(0);
     }
-    return bytes;
 }

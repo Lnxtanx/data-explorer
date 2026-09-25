@@ -292,18 +292,18 @@ export function useVoiceSession(connectionId: string, sessionId: string): UseVoi
         setIsConnecting(true);
 
         try {
-            // 1. Playback Engine
-            const player = new VoiceAudioPlayer();
-            await player.resume();
-            playerRef.current = player;
-
-            // 2. Microphone Capture
+            // 1. Microphone Capture (requests user media and sets hardware endpoints first)
             const recorder = new VoiceAudioRecorder();
             recorder.setMuted(isMutedRef.current);
             await recorder.start((chunk) => {
                 socketClientRef.current?.sendAudioChunk(chunk);
             });
             recorderRef.current = recorder;
+
+            // 2. Playback Engine (created after hardware routing is established)
+            const player = new VoiceAudioPlayer();
+            await player.resume();
+            playerRef.current = player;
 
             // 3. WebSocket Connection
             const client = new VoiceSocketClient();
