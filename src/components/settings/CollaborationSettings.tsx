@@ -7,13 +7,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { cn } from '@/lib/utils';
-import { SectionLabel, ConfirmAction } from '../collab/primitives';
-import { MembersPanel } from '../collab/MembersPanel';
-import { AgentSharesPanel } from '../collab/AgentSharesPanel';
-import { ProjectsPanel } from '../collab/ProjectsPanel';
-import { ConnectionsPanel } from '../collab/ConnectionsPanel';
-import { useTeamData } from '../collab/useTeamData';
-import { EMAIL_REGEX, queryKeys } from '../collab/types';
+import { SectionLabel, ConfirmAction } from '../collaboration/primitives';
+import { MembersPanel } from '../collaboration/MembersPanel';
+import { AgentSharesPanel } from '../collaboration/AgentSharesPanel';
+import { ProjectsPanel } from '../collaboration/ProjectsPanel';
+import { ConnectionsPanel } from '../collaboration/ConnectionsPanel';
+import { useTeamData } from '../collaboration/useTeamData';
+import { EMAIL_REGEX, queryKeys } from '../collaboration/types';
 
 export function CollaborationSettings() {
     const { user, signInWithGoogle, signInWithGithub } = useAuth();
@@ -31,7 +31,7 @@ export function CollaborationSettings() {
         seatsData, seatsFull,
         leaveTeamMutation,
         allAgentEntries, agentSharesLoading, shareAgentMutation, unshareAgentMutation,
-        allProjects, projectsLoading, visibleProjects, handleToggleProjectTeam,
+        allProjects, projectsLoading, handleToggleProjectTeam,
         sharedConnections, connections,
         isRefreshingDbs, handleRefreshSharedDbs,
         isRefreshing, handleRefreshAll,
@@ -41,7 +41,6 @@ export function CollaborationSettings() {
     } = data;
 
     const isOwner = selectedTeam?.is_owner ?? currentRole === 'owner';
-    const canChangeRoles = currentRole === 'owner';
     const emailValid = EMAIL_REGEX.test(email.trim());
 
     /* ─── Signed-out state ─────────────────────────────────────────────────── */
@@ -254,7 +253,7 @@ export function CollaborationSettings() {
                                 removeMemberMutation={removeMemberMutation}
                                 changeRoleMutation={changeRoleMutation}
                                 revokeInviteMutation={revokeInviteMutation}
-                                selectedTeam={selectedTeam}
+                                selectedTeam={selectedTeam ?? null}
                                 renameValue={renameValue}
                                 setRenameValue={setRenameValue}
                                 renameTeamMutation={renameTeamMutation}

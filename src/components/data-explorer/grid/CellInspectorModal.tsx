@@ -1,4 +1,3 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -21,6 +20,7 @@ import {
 } from 'lucide-react';
 import { cn, formatShortType } from '@/lib/utils';
 import { toast } from 'sonner';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 export interface CellInspectorData {
   value: any;

@@ -2,9 +2,8 @@
 // GridFilterChips - Inline active filter chips display with remove/clear actions
 // =============================================================================
 
-import React from 'react';
 import { X } from 'lucide-react';
-import type { FilterCondition } from '@/lib/api/data/explorer/types';
+import type { FilterCondition } from '../api/types';
 
 interface GridFilterChipsProps {
   filters: FilterCondition[];

@@ -6,9 +6,9 @@
 import React, { memo, useState, useCallback } from 'react';
 import { Check, Copy, ChevronRight, Maximize2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { ColumnInfo } from '@/lib/api/data/explorer/types';
+import type { ColumnInfo } from '../api/types';
 
-export function formatCellValue(value: any): string {
+function formatCellValue(value: any): string {
   if (value === null) return 'NULL';
   if (value === undefined) return '';
   if (typeof value === 'boolean') return value ? 'true' : 'false';
@@ -52,8 +52,6 @@ export const GridRow = memo(function GridRow({
   onCellMouseLeave,
   onCopyCell,
 }: GridRowProps) {
-  if (!row) return null;
-
   // Localized copied cell state - prevents parent TableGrid from re-rendering
   const [localCopiedCell, setLocalCopiedCell] = useState<string | null>(null);
 
@@ -64,6 +62,10 @@ export const GridRow = memo(function GridRow({
       setLocalCopiedCell((prev) => (prev === cellKey ? null : prev));
     }, 1500);
   }, [onCopyCell]);
+
+  // NOTE: the `!row` early return must stay below the hooks above, otherwise the
+  // hook count changes between renders when a virtualized row mounts/unmounts.
+  if (!row) return null;
 
   return (
     <tr

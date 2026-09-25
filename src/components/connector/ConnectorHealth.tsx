@@ -1,14 +1,14 @@
 import { useState, useMemo } from 'react';
 import { Activity, Loader2, RefreshCw, CheckCircle2, XCircle, Clock, Server, Zap, ShieldCheck } from 'lucide-react';
-import { PostgresIcon } from '@/components/data-explorer/shared/DatabaseEngineIcon';
-import { useConnectors, useHealthEvents } from '@/lib/api/connector';
+import { PostgresIcon } from './DatabaseEngineIcon';
+import { useConnectors, useHealthEvents } from './api/index';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
-import type { HealthEvent } from '@/lib/api/connector/types';
+import type { HealthEvent } from './api/types';
 
 export function ConnectorHealth() {
     const { data: connectors = [], isLoading: connectorsLoading } = useConnectors();

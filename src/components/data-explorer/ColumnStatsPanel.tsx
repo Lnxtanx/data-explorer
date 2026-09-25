@@ -7,10 +7,11 @@ import { X, Type, BarChart3, Hash, Percent, Copy, Filter, Check, Sigma, External
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
-import { useColumnStats } from '@/lib/api/data/explorer';
-import { getExplorerErrorMessage, getExplorerErrorHint } from '@/lib/api/data/explorer/errors';
-import { detectSemanticType } from '@/lib/data-profiling';
-import type { ColumnStats, TopValue, ColumnInfo } from '@/lib/api/data/explorer/types';
+import { formatCompactNumber } from '@/shared/lib/format';
+import { useColumnStats } from './api/index';
+import { getExplorerErrorMessage, getExplorerErrorHint } from './api/errors';
+import { detectSemanticType } from './api/data-profiling';
+import type { TopValue, ColumnInfo } from './api/types';
 
 interface ColumnStatsPanelProps {
   connectionId: string;
@@ -47,7 +48,7 @@ export function ColumnStatsPanel({
     const lines = [
       `Column: ${columnStats.name} (${columnStats.type}${columnStats.nullable ? ', nullable' : ''})`,
       `Null: ${columnStats.nullPercent ?? '?'}% (${columnStats.nullCount ?? '?'})`,
-      `Distinct: ${formatNumber(columnStats.distinctCount ?? 0)}`,
+      `Distinct: ${formatCompactNumber(columnStats.distinctCount ?? 0)}`,
       `Min: ${formatValue(columnStats.minValue)}`,
       `Max: ${formatValue(columnStats.maxValue)}`,
       `Avg: ${columnStats.avgValue ?? '—'}`,
@@ -163,7 +164,7 @@ export function ColumnStatsPanel({
                 <StatCard
                   icon={<Hash className="w-3.5 h-3.5" />}
                   label="Distinct"
-                  value={columnStats.distinctCount != null ? formatNumber(columnStats.distinctCount) : '—'}
+                  value={columnStats.distinctCount != null ? formatCompactNumber(columnStats.distinctCount) : '—'}
                 />
                 {columnStats.minValue !== null && columnStats.minValue !== undefined && (
                   <StatCard label="Min" value={formatValue(columnStats.minValue)} approx={columnStats.approx} />
@@ -172,10 +173,10 @@ export function ColumnStatsPanel({
                   <StatCard label="Max" value={formatValue(columnStats.maxValue)} approx={columnStats.approx} />
                 )}
                 {columnStats.avgValue !== null && columnStats.avgValue !== undefined && (
-                  <StatCard icon={<Sigma className="w-3.5 h-3.5" />} label="Avg" value={formatNumber(columnStats.avgValue)} />
+                  <StatCard icon={<Sigma className="w-3.5 h-3.5" />} label="Avg" value={formatCompactNumber(columnStats.avgValue)} />
                 )}
                 {columnStats.stdDevValue !== null && columnStats.stdDevValue !== undefined && (
-                  <StatCard label="Std dev" value={formatNumber(columnStats.stdDevValue)} />
+                  <StatCard label="Std dev" value={formatCompactNumber(columnStats.stdDevValue)} />
                 )}
               </div>
 
@@ -377,8 +378,4 @@ function StatCard({ icon, label, value, color, approx, compact, className }: {
   );
 }
 
-function formatNumber(num: number): string {
-  if (num >= 1_000_000) return `${(num / 1_000_000).toFixed(1)}M`;
-  if (num >= 1_000) return `${(num / 1_000).toFixed(1)}K`;
-  return String(num);
-}
+

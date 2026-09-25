@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import {
-    Wifi, WifiOff, ChevronDown, ChevronRight,
+    ChevronDown, ChevronRight,
     Trash2, ShieldOff, RefreshCw, Radio, Loader2
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -10,10 +10,10 @@ import {
     useConnectorDatabases,
     useRevokeConnector,
     useRemoveConnector,
-} from '@/lib/api/connector';
-import type { DatabaseConnector } from '@/lib/api/connector';
-import { useConnections } from '@/lib/api/data/connection';
-import { DatabaseEngineIcon, PostgresIcon } from '@/components/data-explorer/shared/DatabaseEngineIcon';
+} from './api/index';
+import type { DatabaseConnector } from './api/index';
+import { useConnections } from './api/useConnections';
+import { DatabaseEngineIcon, PostgresIcon } from './DatabaseEngineIcon';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
@@ -349,3 +349,4 @@ function DetailItem({ label, value, mono }: { label: string; value: string; mono
         </div>
     );
 }
+

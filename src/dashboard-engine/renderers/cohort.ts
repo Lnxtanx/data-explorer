@@ -1,6 +1,5 @@
 // cohort retention grid renderer (chart_type: cohort)
 import { escHtml, fmtNumber, isNumericVal } from '../format';
-import { getThemeColor } from '../theme';
 import type { PanelData, PanelRuntimeConfig } from '../contract';
 
 export interface CohortCell {
@@ -33,7 +32,7 @@ export function pivotCohortMatrix(data: PanelData | null, config: PanelRuntimeCo
   }
   let valueI = colI(config.value_col, -1);
   if (valueI < 0 || valueI === cohortI || valueI === ageI) {
-    valueI = cols.findIndex((c, i) => i !== cohortI && i !== ageI && data.rows.some((r) => isNumericVal(r[i])));
+    valueI = cols.findIndex((_c, i) => i !== cohortI && i !== ageI && data.rows.some((r) => isNumericVal(r[i])));
     if (valueI < 0) valueI = cols.length - 1;
   }
   const cohortOrder: string[] = [];
@@ -56,7 +55,7 @@ export function pivotCohortMatrix(data: PanelData | null, config: PanelRuntimeCo
   if (numericAges) ageOrder.sort((x, y) => (Number(x) - Number(y)) * sortDir);
 
   const cells: CohortCell[][] = cohortOrder.map((c, ci) =>
-    ageOrder.map((a, ai) => {
+    ageOrder.map((a, _ai) => {
       const count = longMap.get(keyOf(c, a)) || 0;
       let baseline = 0;
       for (let j = 0; j < ageOrder.length; j++) {
@@ -93,7 +92,7 @@ export function renderCohort(container: HTMLElement, data: PanelData | null, con
       '<div class="sw-error-message">Cohort requires rows with a cohort and an age bucket.</div></div>';
     return;
   }
-  const cellsCss = getThemeColor ? 'color:var(--sw-txt, #20242c);' : '';
+  const cellsCss = 'color:var(--sw-txt, #20242c);';
   container.innerHTML =
     '<div class="sw-cohort-wrap">' +
     '<table class="sw-cohort-table" style="' + cellsCss + '">' +
@@ -116,3 +115,5 @@ export function renderCohort(container: HTMLElement, data: PanelData | null, con
     ).join('') +
     '</tbody></table></div>';
 }
+
+

@@ -12,29 +12,29 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { TableSidebar } from './TableSidebar';
 import { TableGrid } from './TableGrid';
-import { ExportButton } from './ExportButton';
+import { ExportButton } from '../export/ExportButton';
 import { EmptyState } from './EmptyState';
 import { SchemaSelector } from './sidebar/SchemaSelector';
-import { useTableList, useSchemas, usePrefetchTableRows } from '@/lib/api/data/explorer';
-import type { TableInfo, ExportGridContext } from '@/lib/api/data/explorer';
+import { useTableList, useSchemas, usePrefetchTableRows } from './api/index';
+import type { TableInfo, ExportGridContext } from './api/index';
 import { SidebarFooter } from '@/components/layout/SidebarFooter';
-import { saveLastViewedTable, loadLastViewedTable, getExplorerPageSize } from '@/lib/explorer-preferences';
+import { saveLastViewedTable, loadLastViewedTable, getExplorerPageSize } from './storage/explorer-preferences';
 import type { ViewMode } from '@/lib/view-mode';
 
 // AI components are only rendered when the user activates AI mode.
 // Lazy-loading keeps recharts, mermaid, and jspdf out of the
 // initial bundle — they are fetched on demand when AI mode first becomes active.
-const AIChatSidebar = lazy(() => import('./ai/AIChatSidebar').then(m => ({ default: m.AIChatSidebar })));
-const AIChatMain = lazy(() => import('./ai/AIChatMain').then(m => ({ default: m.AIChatMain })));
-const AIChatLibrary = lazy(() => import('./ai/AIChatLibrary').then(m => ({ default: m.AIChatLibrary })));
-const AIChatProjects = lazy(() => import('./ai/AIChatProjects').then(m => ({ default: m.AIChatProjects })));
-const ProjectDetailView = lazy(() => import('./ai/ProjectDetailView').then(m => ({ default: m.ProjectDetailView })));
-const ArtifactHistory = lazy(() => import('./ai/ArtifactHistory').then(m => ({ default: m.ArtifactHistory })));
+const AIChatSidebar = lazy(() => import('@/components/ai/AIChatSidebar').then(m => ({ default: m.AIChatSidebar })));
+const AIChatMain = lazy(() => import('@/components/ai/AIChatMain').then(m => ({ default: m.AIChatMain })));
+const AIChatLibrary = lazy(() => import('@/components/ai/AIChatLibrary').then(m => ({ default: m.AIChatLibrary })));
+const AIChatProjects = lazy(() => import('@/components/ai/AIChatProjects').then(m => ({ default: m.AIChatProjects })));
+const ProjectDetailView = lazy(() => import('@/components/ai/ProjectDetailView').then(m => ({ default: m.ProjectDetailView })));
+const ArtifactHistory = lazy(() => import('@/components/ai/ArtifactHistory').then(m => ({ default: m.ArtifactHistory })));
 
-const DashboardView = lazy(() => import('@/components/dashboard/de-DashboardView').then(m => ({ default: m.DashboardView })));
-const DashboardSidebar = lazy(() => import('@/components/dashboard/de-DashboardSidebar').then(m => ({ default: m.DashboardSidebar })));
-import { ResonaAISidePanel } from './ai/side-panel';
-import { useConnections } from '@/lib/api/data/connection';
+const DashboardView = lazy(() => import('@/components/dashboard/DashboardView').then(m => ({ default: m.DashboardView })));
+const DashboardSidebar = lazy(() => import('@/components/dashboard/DashboardSidebar').then(m => ({ default: m.DashboardSidebar })));
+import { ResonaAISidePanel } from '@/components/dashboard/side-panel';
+import { useConnections } from '@/components/connector/api/useConnections';
 
 import {
   useDashboard,
@@ -42,9 +42,11 @@ import {
   useGenerateDashboard,
   useRefreshDashboard,
   useRefreshPanel,
-} from '@/hooks/de-useDashboard';
-import type { InsightEvidence } from '@/lib/api/dashboard';
+} from '../dashboard/hooks/useDashboard';
+import type { InsightEvidence } from '../dashboard/api/dashboard';
 import { toast } from 'sonner';
+import { projectQueryKeys } from '../ai/hooks/useProjects';
+import { aiQueryKeys } from '../ai/hooks/useAIChats';
 
 function formatInsightWhyPrompt(
   panelTitle: string,
@@ -132,7 +134,6 @@ const AI_PROJECT_STORAGE_KEY = 'sw-data-explorer:active-project-id';
 
 export function DataExplorerLayout({
   connectionId,
-  onConnectionChange,
   headerContent,
   onOpenSettings,
   onOpenPlans,
@@ -651,8 +652,8 @@ export function DataExplorerLayout({
                   projectId={activeProjectId}
                   onChatCreated={(id) => {
                     setActiveChatId(id);
-                    queryClient.invalidateQueries({ queryKey: ['ai', 'chats'] });
-                    queryClient.invalidateQueries({ queryKey: ['ai', 'projects'] });
+                    queryClient.invalidateQueries({ queryKey: aiQueryKeys.chatsRoot });
+                    queryClient.invalidateQueries({ queryKey: projectQueryKeys.all });
                   }}
                   onProjectClick={(projectId) => {
                     setActiveProjectId(projectId);
@@ -728,3 +729,5 @@ export function DataExplorerLayout({
     </div>
   );
 }
+
+

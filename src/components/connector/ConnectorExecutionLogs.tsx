@@ -1,14 +1,14 @@
 import { useState, useMemo } from 'react';
 import { Search, CheckCircle2, XCircle, FileText, Loader2, Copy, Check, Clock, Rows, RefreshCw, Terminal } from 'lucide-react';
-import { PostgresIcon } from '@/components/data-explorer/shared/DatabaseEngineIcon';
+import { PostgresIcon } from './DatabaseEngineIcon';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
-import { useExecutionLogs } from '@/lib/api/connector';
-import type { ExecutionEvent } from '@/lib/api/connector/types';
+import { useExecutionLogs } from './api/index';
+import type { ExecutionEvent } from './api/types';
 
 interface ConnectorExecutionLogsProps {
     connectionId?: string | null;

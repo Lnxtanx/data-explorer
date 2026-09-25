@@ -6,9 +6,9 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { useVerifyConnector, useConnectors } from '@/lib/api/connector';
-import type { ConnectorVerifyResult } from '@/lib/api/connector';
-import { DatabaseEngineIcon, PostgresIcon } from '@/components/data-explorer/shared/DatabaseEngineIcon';
+import { useVerifyConnector, useConnectors } from './api/index';
+import type { ConnectorVerifyResult } from './api/index';
+import { DatabaseEngineIcon, PostgresIcon } from './DatabaseEngineIcon';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 

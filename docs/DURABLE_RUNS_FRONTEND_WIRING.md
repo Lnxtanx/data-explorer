@@ -9,7 +9,7 @@
 
 ## 1. What the frontend does now
 
-`sw-data-explorer/src/hooks/useAgentStream.ts` implements the durable flow:
+`sw-data-explorer/src/components/ai/hooks/useAgentStream.ts` implements the durable flow:
 
 1. **Create** — `POST /api/ai/runs` with the same body the hook always sent
    (Node proxy creates the chat row + title; Python writes the messages).

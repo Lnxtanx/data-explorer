@@ -4,8 +4,7 @@
  * Comprehensive help and resources for Data Explorer.
  */
 
-import { ExternalLink, Database, Globe, Sparkles, FileBarChart } from 'lucide-react';
-import { Separator } from '@/components/ui/separator';
+import { ExternalLink, Globe, FileBarChart } from 'lucide-react';
 
 const RESOURCES = [
     {
@@ -126,3 +125,4 @@ export function DocumentationSettings() {
         </div>
     );
 }
+

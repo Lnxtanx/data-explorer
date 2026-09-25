@@ -1,0 +1,85 @@
+// =============================================================================
+// VoiceOrbStage — Floating Midway Audio-Reactive Voice Orb (ChatGPT / Claude Style)
+//
+// Positioned in the lower-middle viewport above the voice action bar.
+// Displays the fluid 3D WebGL IridescentFlow orb (or PulseOrb fallback)
+// reactive to user speech mic energy and Gemini Live 24kHz audio output.
+// =============================================================================
+
+import React, { useState } from 'react';
+import { cn } from '@/lib/utils';
+import { IridescentFlow, PulseOrb } from '../orbs';
+import type { OrbState } from '../orbs/orb-state';
+import { useWebGLSupport } from '../orbs/use-webgl-support';
+
+interface VoiceOrbStageProps {
+    orbState: OrbState;
+    audioLevelRef: React.MutableRefObject<number>;
+    isCompact?: boolean;
+    className?: string;
+}
+
+export const VoiceOrbStage: React.FC<VoiceOrbStageProps> = ({
+    orbState,
+    audioLevelRef,
+    isCompact = false,
+    className,
+}) => {
+    const webglSupported = useWebGLSupport();
+    const [useShaderOrb, setUseShaderOrb] = useState<boolean>(true);
+
+    const isWebGL = webglSupported && useShaderOrb;
+
+    // Orb dimension based on whether "+ Type" input is expanded
+    const orbSize = isCompact ? 96 : 160;
+
+    return (
+        <div
+            className={cn(
+                'relative flex flex-col items-center justify-center transition-all duration-300 pointer-events-none select-none my-3',
+                className
+            )}
+        >
+            {/* Ambient Background Glow matching the active state */}
+            <div
+                className={cn(
+                    'absolute rounded-full blur-3xl pointer-events-none transition-all duration-700 -z-10',
+                    isCompact ? 'w-32 h-32' : 'w-56 h-56',
+                    orbState === 'speaking'
+                        ? 'bg-sky-500/20 dark:bg-sky-400/25'
+                        : orbState === 'listening'
+                        ? 'bg-emerald-500/20 dark:bg-emerald-400/20'
+                        : orbState === 'thinking'
+                        ? 'bg-amber-500/20 dark:bg-amber-400/25'
+                        : 'bg-primary/15 dark:bg-primary/20'
+                )}
+            />
+
+            {/* Centered Audio-Reactive Orb Container */}
+            <div
+                className={cn(
+                    'relative rounded-full flex items-center justify-center cursor-pointer pointer-events-auto transition-transform duration-300 hover:scale-105 active:scale-95',
+                    isCompact ? 'w-24 h-24' : 'w-40 h-40'
+                )}
+                title="Click to toggle Orb renderer style"
+                onClick={() => setUseShaderOrb((prev) => !prev)}
+            >
+                {isWebGL ? (
+                    <IridescentFlow
+                        state={orbState}
+                        levelRef={audioLevelRef}
+                        size={orbSize}
+                        className="w-full h-full drop-shadow-2xl"
+                    />
+                ) : (
+                    <PulseOrb
+                        state={orbState}
+                        levelRef={audioLevelRef}
+                        size={orbSize}
+                        className="w-full h-full drop-shadow-2xl"
+                    />
+                )}
+            </div>
+        </div>
+    );
+};

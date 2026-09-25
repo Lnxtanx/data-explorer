@@ -7,8 +7,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import {
-    Download, Share2, Check, AlertCircle, Loader2
-} from 'lucide-react';
+    Download, Share2, Check, AlertCircle, } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 // ── Authentic HTML5 Shield Icon ───────────────────────────────────────────────
@@ -52,6 +51,20 @@ export default function PublicReportViewer() {
             try {
                 setLoading(true);
                 setError(null);
+                // DELIBERATE raw fetch — do not route through lib/api/client.
+                //
+                // This is the unauthenticated /share/r/:shareId route. The
+                // shared client unconditionally sends `credentials: 'include'`
+                // and fires the global `auth:unauthorized` event on 401, both
+                // of which are wrong for a public share link: it would attach
+                // the viewer's session cookie to an unauthenticated endpoint
+                // and could sign them out for opening a link.
+                //
+                // The endpoint also lives on the AI backend's `/ai-api` base
+                // path (proxied separately in vite.config.ts), which the client
+                // has no concept of. Phase 3 audited all 12 hand-rolled fetch
+                // sites and converted 10; this one and the two third-party
+                // calls are the intentional remainder.
                 const res = await fetch(`/ai-api/ai/exports/shared/${shareId}`);
                 if (!res.ok) {
                     if (res.status === 404) {

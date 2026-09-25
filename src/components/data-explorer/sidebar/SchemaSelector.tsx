@@ -10,7 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import type { SchemaInfo } from '@/lib/api/data/explorer';
+import type { SchemaInfo } from '../api/index';
 
 interface SchemaSelectorProps {
   schemas: SchemaInfo[];

@@ -1,10 +1,10 @@
 import { useMemo } from 'react';
-import { Wifi, WifiOff, Plus, ArrowRight, Activity, Clock, Zap, ShieldCheck, Terminal, Server, CheckCircle2, XCircle } from 'lucide-react';
+import { Plus, ArrowRight, Clock, Zap, ShieldCheck, Terminal, Server, CheckCircle2, XCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { useConnectors, useExecutionLogs, useHealthEvents } from '@/lib/api/connector';
-import { DatabaseEngineIcon, PostgresIcon } from '@/components/data-explorer/shared/DatabaseEngineIcon';
+import { Card, CardContent, CardHeader, } from '@/components/ui/card';
+import { useConnectors, useExecutionLogs, useHealthEvents } from './api/index';
+import { DatabaseEngineIcon, PostgresIcon } from './DatabaseEngineIcon';
 import { cn } from '@/lib/utils';
 
 interface ConnectorOverviewProps {
@@ -346,3 +346,4 @@ export function ConnectorOverview({ onNavigate }: ConnectorOverviewProps) {
         </div>
     );
 }
+

@@ -7,8 +7,8 @@ import {
     TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useAuth } from "@/components/auth/AuthProvider";
-import { useUserProfile } from "@/hooks/useUserProfile";
-import { PremiumAvatar } from "@/components/ui/PremiumAvatar";
+import { useUserProfile } from "../auth/hooks/useUserProfile";
+import { PremiumAvatar } from "../billing/components/PremiumAvatar";
 import { VIEW_MODE_LABEL, type ViewMode } from "@/lib/view-mode";
 
 

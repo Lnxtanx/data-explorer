@@ -241,6 +241,6 @@ Prioritized work items. Each is scoped to a repo and references the verified ser
 - Server routes: `backend/routes/payment/payments.js` , `backend/routes/service/cron.routes.js`
 - Marketing pricing: `schema-weaver/src/routes/pricing.tsx`
 - SQL Editor billing: `frontend/src/components/settings/PlansSettings.tsx`, `frontend/src/lib/api/payments.ts`
-- Data Explorer billing: `sw-data-explorer/src/components/settings/PlansSettings.tsx`, `sw-data-explorer/src/lib/api/payments.ts`
+- Data Explorer billing: `sw-data-explorer/src/components/billing/components/PlansSettings.tsx`, `sw-data-explorer/src/components/billing/api/payments.ts`
 - Deep-link gap: `frontend/src/pages/Index.tsx:251` , `frontend/src/App.tsx`
 - Broken settings link: `frontend/src/components/ai-panel/AIPanelShell.tsx:578,598`

@@ -16,19 +16,18 @@ import {
   isViewMode,
   type ViewMode,
 } from '@/lib/view-mode';
-import { TableInfo } from '@/lib/api/data/explorer/types';
-import { useConnections } from '@/lib/api/data/connection';
+import { TableInfo } from '@/components/data-explorer/api/types';
+import { useConnections } from '@/components/connector/api/useConnections';
 import { toast } from 'sonner';
 import { 
   acceptTeamInvitation, 
   getInvitationInfo, 
   declineTeamInvitation, 
   InvitationInfo 
-} from '@/lib/api/projects/collaboration';
-import { NotificationBanner } from '@/components/ui/NotificationBanner';
+} from '@/components/collaboration/api/collaboration';
+import { NotificationBanner } from '@/components/notifications/NotificationBanner';
 import { logger } from '@/lib/logger';
-import { storePendingInvite, getPendingInvite, clearPendingInvite } from '@/lib/inviteToken';
-import { cn } from '@/lib/utils';
+import { storePendingInvite, getPendingInvite, clearPendingInvite } from '@/components/auth/inviteToken';
 
 // Lazy-load heavy modals with background preloading so they open instantaneously without UI freeze
 const preloadSettingsModal = () => import('@/components/settings/SettingsModal');
@@ -36,7 +35,7 @@ const preloadConnectorDialog = () => import('@/components/connector/ConnectorDia
 
 const SettingsModal = lazy(() => preloadSettingsModal().then(m => ({ default: m.SettingsModal })));
 const ConnectorDialog = lazy(() => preloadConnectorDialog().then(m => ({ default: m.ConnectorDialog })));
-const InvitationReviewModal = lazy(() => import('@/components/auth/InvitationReviewModal').then(m => ({ default: m.InvitationReviewModal })));
+const InvitationReviewModal = lazy(() => import('@/components/collaboration/InvitationReviewModal').then(m => ({ default: m.InvitationReviewModal })));
 
 function ModalLoadingFallback() {
   return (

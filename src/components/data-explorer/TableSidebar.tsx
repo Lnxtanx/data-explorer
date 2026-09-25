@@ -3,17 +3,18 @@
 // =============================================================================
 
 import { memo, useState } from 'react';
-import { Table2, AlertTriangle, Search, X, Key, Link2, RefreshCw } from 'lucide-react';
+import { Table2, AlertTriangle, Search, X, RefreshCw } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import type { TableInfo } from '@/lib/api/data/explorer';
+import { formatCompactNumber } from '@/shared/lib/format';
+import type { TableInfo } from './api/index';
 import {
   getExplorerErrorMessage,
   getExplorerErrorHint,
-} from '@/lib/api/data/explorer/errors';
+} from './api/errors';
 
 interface TableSidebarProps {
   tables: TableInfo[];
@@ -153,7 +154,7 @@ export const TableSidebar = memo(function TableSidebar({
                   onClick={() => onTableSelect(table)}
                   onMouseEnter={() => onPrefetchTable?.(table)}
                   onFocus={() => onPrefetchTable?.(table)}
-                  title={`${table.name} · ${table.sizeFormatted || 'unknown size'} · ~${formatNumber(table.estimatedRows)} rows${table.hasPrimaryKey ? '' : ' · No PK'}`}
+                  title={`${table.name} · ${table.sizeFormatted || 'unknown size'} · ~${formatCompactNumber(table.estimatedRows)} rows${table.hasPrimaryKey ? '' : ' · No PK'}`}
                   className={cn(
                     'w-full text-left px-3 py-1.5 flex items-center gap-2 text-[13px] transition-colors',
                     'hover:bg-accent/50 group overflow-hidden',
@@ -188,7 +189,7 @@ export const TableSidebar = memo(function TableSidebar({
                         'text-[11px] tabular-nums',
                         isSelected ? 'text-primary/70' : 'text-muted-foreground/50'
                       )}>
-                        {formatNumber(table.estimatedRows)}
+                        {formatCompactNumber(table.estimatedRows)}
                       </span>
                     )}
                   </div>
@@ -202,8 +203,5 @@ export const TableSidebar = memo(function TableSidebar({
   );
 });
 
-function formatNumber(num: number): string {
-  if (num >= 1_000_000) return `${(num / 1_000_000).toFixed(1)}M`;
-  if (num >= 1_000) return `${(num / 1_000).toFixed(1)}K`;
-  return String(num);
-}
+
+

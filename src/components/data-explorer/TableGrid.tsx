@@ -15,20 +15,21 @@ import {
   Copy 
 } from 'lucide-react';
 import { cn, measureTextWidth, formatShortType } from '@/lib/utils';
-import { loadColumnWidths, saveColumnWidths, loadHiddenColumns, saveHiddenColumns } from '@/lib/grid-storage';
+import { formatCount } from '@/shared/lib/format';
+import { loadColumnWidths, saveColumnWidths, loadHiddenColumns, saveHiddenColumns } from './storage/grid-storage';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { EXPLORER_PAGE_SIZES, getExplorerPageSize, setExplorerPageSize } from '@/lib/explorer-preferences';
-import { useTableRows, useColumnHeaderProfiles } from '@/lib/api/data/explorer';
+import { EXPLORER_PAGE_SIZES, getExplorerPageSize, setExplorerPageSize } from './storage/explorer-preferences';
+import { useTableRows, useColumnHeaderProfiles } from './api/index';
 import {
   getExplorerErrorMessage,
   getExplorerErrorHint,
   getExplorerErrorTitle,
-} from '@/lib/api/data/explorer/errors';
+} from './api/errors';
 import { useQueryClient } from '@tanstack/react-query';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { dataExplorerKeys } from '@/lib/api/data/explorer/hooks';
+import { dataExplorerKeys } from './api/hooks';
 import { toast } from 'sonner';
 import { ColumnStatsPanel } from './ColumnStatsPanel';
 import { ColumnHeader } from './grid/ColumnHeader';
@@ -38,8 +39,8 @@ import { GridColumnsPopover } from './grid/GridColumnsPopover';
 import { GridFilterChips } from './grid/GridFilterChips';
 import { CellHoverPreview, type CellHoverData } from './grid/CellHoverPreview';
 import { CellInspectorModal, type CellInspectorData } from './grid/CellInspectorModal';
-import { matchesFilter } from '@/lib/api/data/explorer/filter-matcher';
-import type { TableInfo, ColumnInfo, FilterCondition, ColumnStats, ExportGridContext } from '@/lib/api/data/explorer/types';
+import { matchesFilter } from './api/filter-matcher';
+import type { TableInfo, ColumnInfo, FilterCondition, ColumnStats, ExportGridContext } from './api/types';
 import { logger } from '@/lib/logger';
 
 // Row height: compact single-line (33px)
@@ -875,9 +876,4 @@ export function TableGrid({
   );
 }
 
-function formatCount(num: number | null | undefined): string {
-  if (num === null || num === undefined || num < 0) return '0';
-  if (num >= 1_000_000) return `${(num / 1_000_000).toFixed(1)}M`;
-  if (num >= 1_000) return `${(num / 1_000).toFixed(1)}K`;
-  return num.toLocaleString();
-}
+

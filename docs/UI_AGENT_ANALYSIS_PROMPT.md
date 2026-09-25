@@ -135,7 +135,7 @@ as facts and design against them.
    `"export succeeded: 57 rows"`. **No downloadUrl, no filename.**
 3. The frontend auto-download + link extraction only looks at
    `evt.summary` for `DOWNLOAD_URL:`:
-   `sw-data-explorer/src/hooks/useAIAgent.ts`. Since the summary never contains
+   `sw-data-explorer/src/components/ai/hooks/useAIAgent.ts`. Since the summary never contains
    `DOWNLOAD_URL:`, the regex **never matches** → no auto-download, and
    `ToolCallCard`/`LiveToolSteps` (which render `step.result.summary` when
    expanded) show only "export succeeded" — no link, no filename, nothing
@@ -167,7 +167,7 @@ as facts and design against them.
 ### Other pinned facts
 - The 3-event artifact pattern (`artifact_start` → `artifact` →
   `artifact_rows`) is pure state and already covers parallel tool batches:
-  `sw-data-explorer/src/hooks/useAgentArtifacts.ts`.
+  `sw-data-explorer/src/components/ai/hooks/useAgentArtifacts.ts`.
 - `ChatMessage` renders user attachments from `msg.artifacts` (type
   `'attachment'`) with a per-file download link
   (`ChatMessage.tsx`) — a usable reference for the export card styling.

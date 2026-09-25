@@ -25,7 +25,7 @@ export function computeFunnel(data: PanelData | null, config: PanelRuntimeConfig
   const stageI = colI(config.stage_col, 0);
   let valueI = colI(config.value_col, -1);
   if (valueI < 0 || valueI === stageI) {
-    valueI = cols.findIndex((c, i) => i !== stageI && data.rows.some((r) => isNumericVal(r[i])));
+    valueI = cols.findIndex((_c, i) => i !== stageI && data.rows.some((r) => isNumericVal(r[i])));
     if (valueI < 0) valueI = cols.length - 1;
   }
 
@@ -86,3 +86,4 @@ export function renderFunnel(container: HTMLElement, data: PanelData | null, con
     .join('');
   container.innerHTML = '<div class="sw-funnel-wrap"><ol class="sw-funnel-list">' + rows + '</ol></div>';
 }
+

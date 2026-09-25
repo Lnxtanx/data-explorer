@@ -3,16 +3,16 @@
 // Isolated state prevents typing re-renders across the main TableGrid.
 // =============================================================================
 
-import React, { useState, useRef } from 'react';
 import { Filter, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import type { ColumnInfo, FilterCondition } from '@/lib/api/data/explorer/types';
+import type { ColumnInfo, FilterCondition } from '../api/types';
+import { useRef, useState } from 'react';
 
-export function getColumnType(col: ColumnInfo): string {
+function getColumnType(col: ColumnInfo): string {
   const t = col.type.toLowerCase();
   if (t.includes('varchar') || t.includes('text') || t.includes('char')) return 'text';
   if (t.includes('int') || t.includes('numeric') || t.includes('decimal') || t.includes('float') || t.includes('double') || t.includes('serial')) return 'number';

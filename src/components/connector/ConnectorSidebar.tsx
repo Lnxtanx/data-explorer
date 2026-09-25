@@ -1,5 +1,5 @@
 import { Settings, Activity, Plus, BarChart3, Heart, Server } from 'lucide-react';
-import { PostgresIcon } from '@/components/data-explorer/shared/DatabaseEngineIcon';
+import { PostgresIcon } from './DatabaseEngineIcon';
 import { cn } from '@/lib/utils';
 
 interface ConnectorSidebarProps {

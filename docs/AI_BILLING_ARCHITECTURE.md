@@ -270,11 +270,11 @@ The system is a **defense-in-depth stack**:
 
 ### 8.6 Frontend plumbing
 
-- `sw-data-explorer/src/lib/api/auth` — `AIQuotaStatus` (+`allowed_modes`), `AIModelInfo`, `getAIUsage`/`getAIModels`.
-- `sw-data-explorer/src/hooks/useAIUsage.ts` — polls `/api/ai/usage` every 60 s.
-- `sw-data-explorer/src/components/settings/UsageSettings.tsx` — Daily / Weekly / Monthly bars + Modes card (new).
-- `sw-data-explorer/src/components/data-explorer/ai/chat/ChatInput.tsx` + `AIChatMain.tsx` — quota-exhaustion & warning banners; send blocked on quota error.
-- `sw-data-explorer/src/hooks/useAIAgent.ts` — SSE reducer for `quota_update` / `quota_exceeded` (no `quota_warning` handler).
+- `sw-data-explorer/src/components/auth/api` — `AIQuotaStatus` (+`allowed_modes`), `AIModelInfo`, `getAIUsage`/`getAIModels`.
+- `sw-data-explorer/src/components/ai/hooks/useAIUsage.ts` — polls `/api/ai/usage` every 60 s.
+- `sw-data-explorer/src/components/billing/components/UsageSettings.tsx` — Daily / Weekly / Monthly bars + Modes card (new).
+- `sw-data-explorer/src/components/ai/chat/ChatInput.tsx` + `AIChatMain.tsx` — quota-exhaustion & warning banners; send blocked on quota error.
+- `sw-data-explorer/src/components/ai/hooks/useAIAgent.ts` — SSE reducer for `quota_update` / `quota_exceeded` (no `quota_warning` handler).
 
 ---
 
@@ -378,8 +378,8 @@ The industry pattern = **"money" limits are monthly (or balance), "machine" limi
 | Request rate limiting | `backend/middleware/rateLimit.js` |
 | Plan activation / payment RPCs | `backend/services/billing/*`, `backend/routes/payment/payments.js` |
 | Plans service (SW source) | `backend/services/plans/planService.js` |
-| Frontend quota hooks | `sw-data-explorer/src/hooks/useAIUsage.ts`, `useAIAgent.ts` |
-| Settings → Usage UI | `sw-data-explorer/src/components/settings/UsageSettings.tsx` |
+| Frontend quota hooks | `sw-data-explorer/src/components/ai/hooks/useAIUsage.ts`, `useAIAgent.ts` |
+| Settings → Usage UI | `sw-data-explorer/src/components/billing/components/UsageSettings.tsx` |
 | Modes display metadata | `sw-data-explorer/src/lib/modes.ts` |
 | Old (partially stale) architecture doc | `docs/BILLING_ARCHITECTURE.md` |
 

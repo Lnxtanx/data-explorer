@@ -359,7 +359,7 @@ Severity scale: CRITICAL / HIGH / MEDIUM / LOW. "Confirmed" = demonstrated from 
 ### HIGH
 
 **H1 — Dead/broken API: `GET /api/payments/usage/:userId` (confirmed)**
-- Client implementations: `sw-data-explorer/src/lib/api/payments.ts:90-92`, `src/hooks/usePayments.ts:26-34`; identical in `frontend/src/lib/api/payments.ts:116-118`. No such backend route exists (full inventory above). Currently unused by rendered components, so it's dormant breakage — the moment someone wires `useUsage` into UI, they ship a permanent 404.
+- Client implementations: `sw-data-explorer/src/components/billing/api/payments.ts:90-92`, `src/hooks/usePayments.ts:26-34`; identical in `frontend/src/lib/api/payments.ts:116-118`. No such backend route exists (full inventory above). Currently unused by rendered components, so it's dormant breakage — the moment someone wires `useUsage` into UI, they ship a permanent 404.
 - Fix: delete the client functions or implement the endpoint backed by `ai_meta.get_quota_status` (which already returns richer data than the invented `UsageResponse` shape).
 
 **H2 — No cancellation capability despite renewal UX (confirmed)**
@@ -461,7 +461,7 @@ Highest-value tests to write first (exact scenarios):
 5. **Expiry sweep (after C1 fix):** expired active subscription → flipped to free, quota reset, entitlement cache invalidated.
 6. **Authorization/IDOR:** history/status/verify with foreign ids; admin-only refund as regular user.
 7. **DB constraints:** duplicate `razorpay_order_id` insert rejected (requires new unique index); refund-sum exceeding payment rejected (post-C5 schema).
-8. **Contract test:** generated OpenAPI/zod schemas shared with `sw-data-explorer/src/lib/api/payments.ts` to prevent drift like H1.
+8. **Contract test:** generated OpenAPI/zod schemas shared with `sw-data-explorer/src/components/billing/api/payments.ts` to prevent drift like H1.
 
 ---
 
@@ -640,7 +640,7 @@ Rules encoded in these services:
 7. `payments.js:425-428`: return `400` on invalid webhook signature; keep 200 for *valid but unhandled* events only; log signature failures with `secureLog`-style structure.
 8. `payments.js:487-528`: extract `refund.amount` from payload; revoke only when cumulative refunds ≥ payment amount; dedupe via `refund_id` existence check (proper table in P1).
 9. `entitlements.service.js:59-61`: `const inGrace = (data.status==='canceled' || data.status==='active') ? periodEnd > Date.now() : true;` (free plan exempted via `plan_id==='free'` or infinity timestamp).
-10. `sw-data-explorer/src/lib/api/payments.ts`: drop `user_id`/`plan_id` from `VerifyPaymentParams`; delete `getUsage`/`UsageResponse` or implement endpoint.
+10. `sw-data-explorer/src/components/billing/api/payments.ts`: drop `user_id`/`plan_id` from `VerifyPaymentParams`; delete `getUsage`/`UsageResponse` or implement endpoint.
 
 ## D. Architecture Diagram (actual → target annotations)
 

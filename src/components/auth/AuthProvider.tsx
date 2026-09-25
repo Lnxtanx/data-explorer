@@ -1,6 +1,6 @@
 
-import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
-import { User } from '@supabase/supabase-js';
+import { useEffect, useState, useCallback, useRef } from 'react';
+import type { User } from '@supabase/supabase-js';
 
 import { useGoogleLogin } from '@react-oauth/google';
 import { toast } from 'sonner';
@@ -10,41 +10,26 @@ import {
     logout as apiLogout,
     refreshSession as apiRefreshSession,
     validateSession,
-    getCurrentUser,
-} from '@/lib/api';
+    } from '@/components/auth/api';
 import {
     setSessionCookie,
     getSessionCookie,
-    deleteSessionCookie,
-    sessionNeedsRefresh,
+      sessionNeedsRefresh,
     refreshSessionCookie,
-} from '@/lib/cookies';
-import { broadcastSync, subscribeToSync } from '@/lib/storage/core';
+} from './cookies';
+import { broadcastSync, subscribeToSync } from './crossTab';
 import { queryClient } from '@/lib/queryClient';
 import { purgeExplorerCacheDb } from '@/lib/persist';
-import { clearAllClientData } from '@/lib/clearAllClientData';
+import { clearAllClientData } from './clearAllClientData';
 import { logger } from '@/lib/logger';
-import { trackEvent, startActivityTracking, stopActivityTracking } from '@/lib/activity';
+import { trackEvent, startActivityTracking, stopActivityTracking } from './activity';
+import { AuthContext } from './context';
 
-interface AuthContextType {
-    user: User | null;
-    loading: boolean;
-    isLoggingIn: boolean;
-    signInWithGoogle: () => void;
-    signInWithGithub: () => void;
-    signOut: () => Promise<void>;
-    refreshSession: () => void;
-}
-
-const AuthContext = createContext<AuthContextType>({
-    user: null,
-    loading: true,
-    isLoggingIn: false,
-    signInWithGoogle: () => { },
-    signInWithGithub: () => { },
-    signOut: async () => { },
-    refreshSession: () => { },
-});
+// The context and `useAuth` are defined in @/lib/auth/context so that lib/ and
+// hooks/ can read auth state without importing a component module. Re-exported
+// here so all 13 component-layer call sites keep their existing import path.
+export { useAuth } from './context';
+export type { AuthContextType } from './context';
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
     const [user, setUser] = useState<User | null>(null);
@@ -455,4 +440,4 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     );
 }
 
-export const useAuth = () => useContext(AuthContext);
+

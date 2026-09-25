@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { PostgresIcon } from '@/components/data-explorer/shared/DatabaseEngineIcon';
+import { PostgresIcon } from './DatabaseEngineIcon';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
 import { Button } from '@/components/ui/button';

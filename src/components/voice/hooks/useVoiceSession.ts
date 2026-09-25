@@ -1,0 +1,446 @@
+// =============================================================================
+// src/components/voice/hooks/useVoiceSession.ts — Native Gemini Live Voice Session Hook
+// =============================================================================
+
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { VoiceAudioPlayer } from '../audio/voice-audio-player';
+import { VoiceAudioRecorder } from '../audio/voice-audio-recorder';
+import { VoiceSocketClient } from '../voice-socket-client';
+import { useVoiceAudioLevel } from './useVoiceAudioLevel';
+import type {
+    GeminiEvent,
+      ToolCallInfo,
+    UseVoiceSessionReturn,
+    VoiceMessage,
+} from '../types';
+import type { OrbState } from '../orbs/orb-state';
+
+const MAX_RECONNECT_ATTEMPTS = 2;
+const RECONNECT_BASE_DELAY_MS = 500;
+const VOICE_SESSION_LIMIT_MS = 60 * 60 * 1000 + 5000;
+const FATAL_ERROR_CODES = new Set([
+    'session_duration_exceeded',
+    // P7 quota refusals — reconnecting would just re-refuse; surface the message.
+    'quota_exhausted',
+    'quota_unavailable',
+    'model_not_allowed',
+    'concurrent_limit',
+]);
+
+function newId(): string {
+    return typeof crypto !== 'undefined' && 'randomUUID' in crypto
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+export function useVoiceSession(connectionId: string, sessionId: string): UseVoiceSessionReturn {
+    const [isConnecting, setIsConnecting] = useState(false);
+    const [isConnected, setIsConnected] = useState(false);
+    const [isTalking, setIsTalking] = useState(false);
+    const [isThinking, setIsThinking] = useState(false);
+    const [isMuted, setIsMuted] = useState(false);
+    const [toolCallInfo, setToolCallInfo] = useState<ToolCallInfo | null>(null);
+    const [messages, setMessages] = useState<VoiceMessage[]>([]);
+    const [error, setError] = useState<string | null>(null);
+
+    // Audio & Socket Controllers
+    const socketClientRef = useRef<VoiceSocketClient | null>(null);
+    const playerRef = useRef<VoiceAudioPlayer | null>(null);
+    const recorderRef = useRef<VoiceAudioRecorder | null>(null);
+
+    // Turn & Message Accumulators
+    const pendingUserRef = useRef<VoiceMessage | null>(null);
+    const pendingAssistantRef = useRef<VoiceMessage | null>(null);
+
+    // Resilience State
+    const errorRef = useRef<string | null>(null);
+    const isMutedRef = useRef(false);
+    const userEndedRef = useRef(false);
+    const reconnectAttemptsRef = useRef(0);
+    const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const sessionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const startSessionRef = useRef<(() => Promise<void>) | null>(null);
+
+    // Audio level meter
+    const audioLevelRef = useVoiceAudioLevel(recorderRef, isConnected);
+
+    const showError = useCallback((msg: string | null) => {
+        errorRef.current = msg;
+        setError(msg);
+    }, []);
+
+    const clearSessionTimer = useCallback(() => {
+        if (sessionTimerRef.current) {
+            clearTimeout(sessionTimerRef.current);
+            sessionTimerRef.current = null;
+        }
+    }, []);
+
+    const finalizeMessages = useCallback(() => {
+        const toCommit: VoiceMessage[] = [];
+        if (pendingUserRef.current) {
+            toCommit.push({ ...pendingUserRef.current, isInterim: false });
+            pendingUserRef.current = null;
+        }
+        if (pendingAssistantRef.current) {
+            toCommit.push({ ...pendingAssistantRef.current, isInterim: false });
+            pendingAssistantRef.current = null;
+        }
+        if (toCommit.length > 0) {
+            setMessages((prev) => {
+                const map = new Map(prev.map((m) => [m.id, m]));
+                for (const m of toCommit) map.set(m.id, m);
+                return Array.from(map.values());
+            });
+        }
+    }, []);
+
+    const toggleMute = useCallback(() => {
+        setIsMuted((prev) => {
+            const next = !prev;
+            isMutedRef.current = next;
+            recorderRef.current?.setMuted(next);
+            return next;
+        });
+    }, []);
+
+    // Cleanup resources
+    const teardownMedia = useCallback(() => {
+        recorderRef.current?.dispose();
+        recorderRef.current = null;
+        playerRef.current?.dispose();
+        playerRef.current = null;
+    }, []);
+
+    const endSession = useCallback(() => {
+        userEndedRef.current = true;
+        if (reconnectTimerRef.current) {
+            clearTimeout(reconnectTimerRef.current);
+            reconnectTimerRef.current = null;
+        }
+        clearSessionTimer();
+        reconnectAttemptsRef.current = 0;
+
+        socketClientRef.current?.close(1000, 'user ended session');
+        socketClientRef.current = null;
+
+        teardownMedia();
+        finalizeMessages();
+
+        setIsConnecting(false);
+        setIsConnected(false);
+        setIsTalking(false);
+        setIsThinking(false);
+        setToolCallInfo(null);
+    }, [clearSessionTimer, finalizeMessages, teardownMedia]);
+
+    // Reconnection Backoff
+    const scheduleReconnect = useCallback(
+        (closeCode?: number, closeReason?: string) => {
+            const attempt = reconnectAttemptsRef.current;
+            if (attempt >= MAX_RECONNECT_ATTEMPTS) {
+                reconnectAttemptsRef.current = 0;
+                showError(
+                    errorRef.current ??
+                        `Voice connection lost${closeCode ? ` (code ${closeCode})` : ''}${
+                            closeReason ? `: ${closeReason}` : ''
+                        }`,
+                );
+                setIsConnecting(false);
+                return;
+            }
+            reconnectAttemptsRef.current = attempt + 1;
+            const delay = RECONNECT_BASE_DELAY_MS * (attempt + 1);
+            setIsConnecting(true);
+            reconnectTimerRef.current = setTimeout(() => {
+                reconnectTimerRef.current = null;
+                if (userEndedRef.current) return;
+                void startSessionRef.current?.();
+            }, delay);
+        },
+        [showError],
+    );
+
+    // Event Handler for Gemini Live Events
+    const handleGeminiEvent = useCallback(
+        (event: GeminiEvent) => {
+            const content = event.server_content;
+
+            // 1. Spoken Audio Playback
+            if (content?.model_turn?.parts) {
+                for (const part of content.model_turn.parts) {
+                    if (part.inline_data?.data) {
+                        playerRef.current?.enqueueChunk(part.inline_data.data);
+                        setIsTalking(true);
+                    }
+                }
+            }
+
+            // 2. User Input Transcription (Interim or Final)
+            if (content?.input_transcription?.text) {
+                const txt = content.input_transcription.text;
+                const isFinished = Boolean(content.input_transcription.finished);
+
+                if (!pendingUserRef.current) {
+                    pendingUserRef.current = {
+                        id: newId(),
+                        role: 'user',
+                        text: txt,
+                        isInterim: !isFinished,
+                    };
+                } else {
+                    pendingUserRef.current = {
+                        ...pendingUserRef.current,
+                        text: pendingUserRef.current.text + txt,
+                        isInterim: !isFinished,
+                    };
+                }
+
+                const currentPending = pendingUserRef.current;
+                setMessages((prev) => {
+                    const idx = prev.findIndex((m) => m.id === currentPending.id);
+                    if (idx !== -1) {
+                        const copy = [...prev];
+                        copy[idx] = currentPending;
+                        return copy;
+                    }
+                    return [...prev, currentPending];
+                });
+            }
+
+            // 3. Model Output Transcription
+            if (content?.output_transcription?.text) {
+                const token = content.output_transcription.text;
+                setIsThinking(false);
+
+                // Commit user turn now that model began responding
+                if (pendingUserRef.current) {
+                    const finalUser = { ...pendingUserRef.current, isInterim: false };
+                    pendingUserRef.current = null;
+                    setMessages((prev) => prev.map((m) => (m.id === finalUser.id ? finalUser : m)));
+                }
+
+                if (!pendingAssistantRef.current) {
+                    pendingAssistantRef.current = {
+                        id: newId(),
+                        role: 'assistant',
+                        text: token,
+                        isInterim: false,
+                    };
+                } else {
+                    pendingAssistantRef.current = {
+                        ...pendingAssistantRef.current,
+                        text: pendingAssistantRef.current.text + token,
+                    };
+                }
+
+                const currentAssistant = pendingAssistantRef.current;
+                setMessages((prev) => {
+                    const idx = prev.findIndex((m) => m.id === currentAssistant.id);
+                    if (idx !== -1) {
+                        const copy = [...prev];
+                        copy[idx] = currentAssistant;
+                        return copy;
+                    }
+                    return [...prev, currentAssistant];
+                });
+            }
+
+            // 4. Barge-In / Interruption
+            if (content?.interrupted) {
+                playerRef.current?.stopAndClear();
+                setIsTalking(false);
+                setIsThinking(false);
+                if (pendingAssistantRef.current) {
+                    const finalInterrupted = { ...pendingAssistantRef.current, wasInterrupted: true };
+                    pendingAssistantRef.current = null;
+                    setMessages((prev) =>
+                        prev.map((m) => (m.id === finalInterrupted.id ? finalInterrupted : m)),
+                    );
+                }
+            }
+
+            // 5. Turn Complete
+            if (content?.turn_complete) {
+                setIsTalking(false);
+                setIsThinking(false);
+                setToolCallInfo(null);
+                if (pendingAssistantRef.current) {
+                    const finalTurn = { ...pendingAssistantRef.current };
+                    pendingAssistantRef.current = null;
+                    setMessages((prev) =>
+                        prev.map((m) => (m.id === finalTurn.id ? finalTurn : m)),
+                    );
+                }
+            }
+
+            // 6. Tool Calling
+            if (event.tool_call?.function_calls && event.tool_call.function_calls.length > 0) {
+                const firstCall = event.tool_call.function_calls[0];
+                setToolCallInfo({ name: firstCall.name, args: firstCall.args });
+                setIsThinking(true);
+            }
+        },
+        [],
+    );
+
+    const startSession = useCallback(async () => {
+        if (socketClientRef.current?.isConnected || socketClientRef.current?.isConnecting) return;
+
+        userEndedRef.current = false;
+        showError(null);
+        setIsConnecting(true);
+
+        try {
+            // 1. Playback Engine
+            const player = new VoiceAudioPlayer();
+            await player.resume();
+            playerRef.current = player;
+
+            // 2. Microphone Capture
+            const recorder = new VoiceAudioRecorder();
+            recorder.setMuted(isMutedRef.current);
+            await recorder.start((chunk) => {
+                socketClientRef.current?.sendAudioChunk(chunk);
+            });
+            recorderRef.current = recorder;
+
+            // 3. WebSocket Connection
+            const client = new VoiceSocketClient();
+            socketClientRef.current = client;
+
+            client.connect(connectionId, sessionId, {
+                onSessionReady: () => {
+                    reconnectAttemptsRef.current = 0;
+                    clearSessionTimer();
+                    sessionTimerRef.current = setTimeout(() => {
+                        showError('Voice session reached the 60-minute limit');
+                        endSession();
+                    }, VOICE_SESSION_LIMIT_MS);
+                    setIsConnecting(false);
+                    setIsConnected(true);
+                    showError(null);
+                },
+                onGeminiEvent: (event) => {
+                    handleGeminiEvent(event);
+                },
+                onToolResult: () => {
+                    setIsThinking(true);
+                },
+                onTurnFormatted: (frame) => {
+                    setIsThinking(false);
+                    if (frame.content) {
+                        setMessages((prev) => {
+                            const lastIdx = prev.map((m) => m.role).lastIndexOf('assistant');
+                            if (lastIdx !== -1) {
+                                return prev.map((m, idx) =>
+                                    idx === lastIdx
+                                        ? {
+                                              ...m,
+                                              text: frame.content!,
+                                              isInterim: false,
+                                              artifacts: frame.artifacts ?? m.artifacts,
+                                              creditsUsed: frame.credits_charged ?? m.creditsUsed,
+                                              wasInterrupted: frame.was_interrupted ?? m.wasInterrupted,
+                                          }
+                                        : m,
+                                );
+                            }
+                            return [
+                                ...prev,
+                                {
+                                    id: newId(),
+                                    role: 'assistant',
+                                    text: frame.content!,
+                                    isInterim: false,
+                                    artifacts: frame.artifacts,
+                                    creditsUsed: frame.credits_charged,
+                                    wasInterrupted: frame.was_interrupted,
+                                },
+                            ];
+                        });
+                    }
+                },
+                onSessionEnded: () => {
+                    endSession();
+                },
+                onError: (msg, code) => {
+                    setIsConnecting(false);
+                    showError(msg);
+                    if (code && FATAL_ERROR_CODES.has(code)) {
+                        userEndedRef.current = true;
+                    }
+                },
+                onClose: (code, reason) => {
+                    teardownMedia();
+                    finalizeMessages();
+                    setIsConnecting(false);
+                    setIsConnected(false);
+                    setIsTalking(false);
+                    setIsThinking(false);
+
+                    if (userEndedRef.current || code === 1000 || code === 1001) return;
+                    scheduleReconnect(code, reason);
+                },
+            });
+        } catch (err) {
+            teardownMedia();
+            setIsConnecting(false);
+            const message = err instanceof Error ? err.message : 'Could not start voice session';
+            if (reconnectAttemptsRef.current > 0) {
+                scheduleReconnect(undefined, message);
+            } else {
+                showError(message);
+            }
+        }
+    }, [clearSessionTimer, connectionId, endSession, finalizeMessages, handleGeminiEvent, scheduleReconnect, sessionId, showError, teardownMedia]);
+
+    // Keep the reconnect timer calling the latest startSession
+    useEffect(() => {
+        startSessionRef.current = startSession;
+    }, [startSession]);
+
+    // Cleanup on unmount
+    useEffect(() => {
+        return () => {
+            userEndedRef.current = true;
+            if (reconnectTimerRef.current) {
+                clearTimeout(reconnectTimerRef.current);
+                reconnectTimerRef.current = null;
+            }
+            clearSessionTimer();
+            socketClientRef.current?.close();
+            socketClientRef.current = null;
+            teardownMedia();
+        };
+    }, [clearSessionTimer, teardownMedia]);
+
+    // Reactive Orb State
+    const orbState: OrbState = useMemo(() => {
+        if (error) return 'error';
+        if (isConnecting) return 'connecting';
+        if (isThinking) return 'thinking';
+        if (isTalking) return 'speaking';
+        if (isMuted) return 'disabled';
+        if (isConnected) return 'listening';
+        return 'idle';
+    }, [error, isConnecting, isThinking, isTalking, isMuted, isConnected]);
+
+    return {
+        isConnecting,
+        isConnected,
+        isTalking,
+        isThinking,
+        toolCallInfo,
+        isMuted,
+        toggleMute,
+        orbState,
+        audioLevelRef,
+        messages,
+        error,
+        startSession,
+        endSession,
+    };
+}
+
+

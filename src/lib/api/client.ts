@@ -56,19 +56,32 @@ export async function initCsrfToken(): Promise<void> {
 }
 
 // =============================================================================
-// Request Helper with Credentials
+// Shared request preamble
+//
+// Phase 3: 17 call sites used to hand-roll their own `fetch`, each re-deriving
+// base URL, `credentials: 'include'`, the CSRF header, the 401 `auth:unauthorized`
+// event and ApiError construction. They drifted: some omitted credentials
+// entirely, some threw a bare `Error` and so lost `code`/`hint`/the rate-limit
+// predicate, and one hit a second, undocumented base path.
+//
+// Everything that needs a non-JSON body (blobs, HTML, SSE) now goes through
+// apiRequestRaw/apiRequestText/apiRequestBlob below, which share this preamble
+// with apiRequest. Response parsing is the only thing that differs.
 // =============================================================================
 
-export async function apiRequest<T>(
-    endpoint: string,
-    options: RequestInit = {}
-): Promise<T> {
-    const url = `${API_BASE_URL}${endpoint}`;
-    const csrfToken = getCsrfToken();
+/** Endpoints whose 401 must not trigger the global sign-out event. */
+const AUTH_ENDPOINTS = [
+    '/api/auth/session',
+    '/api/auth/google',
+    '/api/auth/github',
+    '/api/auth/logout',
+];
 
+function buildRequestConfig(options: RequestInit = {}): RequestInit {
+    const csrfToken = getCsrfToken();
     const isFormData = options.body instanceof FormData;
-    
-    const config: RequestInit = {
+
+    return {
         ...options,
         credentials: 'include', // Include cookies for session
         headers: {
@@ -77,32 +90,119 @@ export async function apiRequest<T>(
             ...options.headers,
         },
     };
+}
 
-    const response = await fetch(url, config);
+/**
+ * Announce a 401 so AuthProvider can sign the user out.
+ * No-op for the auth endpoints themselves, which legitimately 401.
+ */
+function announceUnauthorized(url: string, status: number): void {
+    if (status !== 401) return;
+    if (AUTH_ENDPOINTS.some((ep) => url.includes(ep))) return;
+    window.dispatchEvent(new Event('auth:unauthorized'));
+}
+
+/**
+ * Perform a request and return the raw Response with NO status handling.
+ *
+ * The lowest-level primitive: it applies only the shared preamble (base URL,
+ * credentials, CSRF, JSON content type) and leaves `response.ok` /
+ * `response.status` entirely to the caller.
+ *
+ * Use this when the caller needs to map failures onto its own protocol — the
+ * AI durable-run endpoints, for example, translate a 429 into a
+ * `quota_exceeded` SSE frame rather than throwing. Use `apiRequestRaw` when you
+ * just want standard ApiError behaviour on a non-JSON body.
+ */
+export async function apiRequestFetch(
+    endpoint: string,
+    options: RequestInit = {}
+): Promise<Response> {
+    return fetch(`${API_BASE_URL}${endpoint}`, buildRequestConfig(options));
+}
+
+/**
+ * Perform a request and return the raw Response for the caller to consume.
+ *
+ * Use this for streaming (SSE), blobs and text — anything `apiRequest` would
+ * flatten to `{}`. Error handling still matches `apiRequest`: a non-OK response
+ * throws `ApiError` carrying the parsed body when the body is JSON, and the 401
+ * event still fires.
+ */
+export async function apiRequestRaw(
+    endpoint: string,
+    options: RequestInit = {}
+): Promise<Response> {
+    const url = `${API_BASE_URL}${endpoint}`;
+    const response = await fetch(url, buildRequestConfig(options));
+
+    if (!response.ok) {
+        announceUnauthorized(url, response.status);
+
+        const contentType = response.headers.get('content-type');
+        if (contentType?.includes('application/json')) {
+            let data: unknown;
+            try {
+                data = await response.json();
+            } catch {
+                data = undefined;
+            }
+            const message =
+                (data as { message?: string; error?: string } | undefined)?.message ??
+                (data as { error?: string } | undefined)?.error ??
+                'Request failed';
+            throw new ApiError(response.status, message, data);
+        }
+        throw new ApiError(response.status, await response.text().catch(() => ''));
+    }
+
+    return response;
+}
+
+/** As `apiRequestRaw`, but resolves the body as text (e.g. invoice HTML). */
+export async function apiRequestText(
+    endpoint: string,
+    options: RequestInit = {}
+): Promise<string> {
+    return (await apiRequestRaw(endpoint, options)).text();
+}
+
+/** As `apiRequestRaw`, but resolves the body as a Blob (e.g. CSV/XLSX export). */
+export async function apiRequestBlob(
+    endpoint: string,
+    options: RequestInit = {}
+): Promise<Blob> {
+    return (await apiRequestRaw(endpoint, options)).blob();
+}
+
+// =============================================================================
+// Request Helper with Credentials
+// =============================================================================
+
+export async function apiRequest<T>(
+    endpoint: string,
+    options: RequestInit = {}
+): Promise<T> {
+    const url = `${API_BASE_URL}${endpoint}`;
+
+    const response = await fetch(url, buildRequestConfig(options));
 
     // Handle non-JSON responses
     const contentType = response.headers.get('content-type');
     if (!contentType?.includes('application/json')) {
         if (!response.ok) {
+            announceUnauthorized(url, response.status);
             throw new ApiError(response.status, await response.text());
         }
+        // Documented limitation: a successful non-JSON response yields an empty
+        // object. Callers that need the body must use apiRequestRaw/Text/Blob.
         return {} as T;
     }
 
     const data = await response.json();
 
     if (!response.ok) {
-        if (response.status === 401) {
-            // Exclude status check / login endpoints from firing global unauthorized event
-            const isAuthEndpoint = url.includes('/api/auth/session') ||
-                url.includes('/api/auth/google') ||
-                url.includes('/api/auth/github') ||
-                url.includes('/api/auth/logout');
-
-            if (!isAuthEndpoint) {
-                window.dispatchEvent(new Event('auth:unauthorized'));
-            }
-        }
+        announceUnauthorized(url, response.status);
         throw new ApiError(response.status, data.message || data.error || 'Request failed', data);
     }
 
@@ -174,9 +274,3 @@ export function del<T>(endpoint: string): Promise<T> {
     return apiRequest<T>(endpoint, { method: 'DELETE' });
 }
 
-export function put<T>(endpoint: string, body?: unknown): Promise<T> {
-    return apiRequest<T>(endpoint, {
-        method: 'PUT',
-        body: body instanceof FormData ? body : (body ? JSON.stringify(body) : undefined),
-    });
-}

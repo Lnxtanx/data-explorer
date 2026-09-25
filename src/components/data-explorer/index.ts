@@ -7,7 +7,7 @@ export { TableSidebar } from './TableSidebar';
 export { TableGrid } from './TableGrid';
 export { EmptyState } from './EmptyState';
 export { ColumnStatsPanel } from './ColumnStatsPanel';
-export { ExportButton } from './ExportButton';
+export { ExportButton } from '../export/ExportButton';
 export { ConnectionSelector } from './ConnectionSelector';
 
 // Sub-components

@@ -1,7 +1,14 @@
 // =============================================================================
-// Slim API Barrel — Data Explorer only
-// Only exports what the Data Explorer feature needs.
-// Does NOT include: file-management, schema, payments, migrations.
+// Shared HTTP surface - transport only.
+//
+// Phase 4: this barrel used to re-export the auth, ai and projects API modules
+// as well. Those three all moved into their own component folders
+// (components/auth/api, components/ai, components/collaboration), and lib/ is
+// now shared-infrastructure only, so a lib/ barrel must not reach back up into
+// components/.
+//
+// Nothing imported this barrel - consumers reached for the specific module they
+// needed - so the domain re-exports are simply gone rather than repointed.
 // =============================================================================
 
 export {
@@ -14,8 +21,5 @@ export {
     del,
 } from './client';
 
-export * from './auth';
-export * from './ai';
-export * from './projects';
 export * from './feedback';
 

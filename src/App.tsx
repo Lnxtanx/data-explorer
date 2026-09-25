@@ -62,7 +62,7 @@ export default function App() {
           <DarkClassSync />
           <TooltipProvider delayDuration={150} skipDelayDuration={100}>
             <AuthProvider>
-              <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+              <BrowserRouter>
                 <Routes>
                   <Route path="/share/r/:shareId" element={<PublicReportViewer />} />
                   <Route path="/" element={<DataExplorerPage />} />

@@ -2,7 +2,7 @@
 // Connection Selector - Clean Discovered Database Switcher for Data Explorer
 // =============================================================================
 
-import { ChevronDown, Database, Check, Plus, LayoutDashboard, RefreshCw } from 'lucide-react';
+import { ChevronDown, Check, Plus, LayoutDashboard, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import {
@@ -12,9 +12,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { useConnections } from '@/lib/api/data/connection';
-import { useAuth } from '@/components/auth/AuthProvider';
-import { DatabaseEngineIcon, PostgresIcon } from './shared/DatabaseEngineIcon';
+import { useConnections } from '../connector/api/useConnections';
+import { DatabaseEngineIcon, PostgresIcon } from '../connector/DatabaseEngineIcon';
 
 interface ConnectionSelectorProps {
   selectedConnectionId: string | null;
@@ -29,7 +28,6 @@ export function ConnectionSelector({
   onOpenConnectWizard,
   onOpenOverview,
 }: ConnectionSelectorProps) {
-  const { user } = useAuth();
   const { data: connections, isLoading, isFetching, refetch } = useConnections();
 
   const selectedConnection = connections?.find(c => c.id === selectedConnectionId);
@@ -191,5 +189,6 @@ export function ConnectionSelector({
     </div>
   );
 }
+
 
 

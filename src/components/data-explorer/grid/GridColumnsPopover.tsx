@@ -3,13 +3,13 @@
 // Isolated search state prevents keystroke re-renders across the main TableGrid.
 // =============================================================================
 
-import React, { useState } from 'react';
 import { Eye, EyeOff, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import type { ColumnInfo } from '@/lib/api/data/explorer/types';
+import type { ColumnInfo } from '../api/types';
+import { useState } from 'react';
 
 interface GridColumnsPopoverProps {
   columns: ColumnInfo[];

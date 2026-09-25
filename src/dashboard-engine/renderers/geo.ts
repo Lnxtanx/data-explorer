@@ -292,7 +292,7 @@ export function renderGeo(container: HTMLElement, data: PanelData | null, config
       'resize',
       () => {
         if (raf) cancelAnimationFrame(raf);
-        raf = window.requestAnimationFrame ? requestAnimationFrame(() => { raf = 0; draw(); }) : 0;
+        raf = window.requestAnimationFrame(() => { raf = 0; draw(); });
       },
       { passive: true }
     );

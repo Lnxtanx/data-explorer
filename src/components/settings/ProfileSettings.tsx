@@ -4,13 +4,11 @@
  * User profile section showing account information.
  */
 
-import { Mail, Calendar, Shield, LogOut, Github, CheckCircle2, Sparkles } from 'lucide-react';
+import { Mail, Calendar, Shield, LogOut, Github, CheckCircle2, } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { PremiumAvatar } from '@/components/ui/PremiumAvatar';
+import { PremiumAvatar } from '../billing/components/PremiumAvatar';
 import { Badge } from '@/components/ui/badge';
-import { cn } from '@/lib/utils';
-import { useUserProfile } from '@/hooks/useUserProfile';
+import { useUserProfile } from '../auth/hooks/useUserProfile';
 import type { User } from '@supabase/supabase-js';
 import { useAuth } from '@/components/auth/AuthProvider';
 
@@ -102,7 +100,7 @@ export function ProfileSettings({ user, signOut, signInWithGoogle, signInWithGit
 
   const rawDisplayName = profile?.full_name || user?.user_metadata?.full_name || 'User';
   const displayName = rawDisplayName
-    .replace(/[^\w\s\-\.\u00C0-\u017F]/gu, '')
+    .replace(/[^\w\s\-.À-ſ]/gu, '')
     .trim() || 'User';
 
   const displayEmail = profile?.email || user?.email || 'No email';
@@ -261,4 +259,5 @@ export function ProfileSettings({ user, signOut, signInWithGoogle, signInWithGit
     </div>
   );
 }
+
 

@@ -3,13 +3,13 @@
 // =============================================================================
 
 import { useState, useMemo } from 'react';
-import { Search, RefreshCw, ArrowRight, Server, CheckCircle2, XCircle } from 'lucide-react';
+import { Search, RefreshCw, ArrowRight, } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { useConnections } from '@/lib/api/data/connection';
-import { DatabaseEngineIcon, PostgresIcon } from '@/components/data-explorer/shared/DatabaseEngineIcon';
+import { Card, CardContent, CardHeader, } from '@/components/ui/card';
+import { useConnections } from './api/useConnections';
+import { DatabaseEngineIcon, PostgresIcon } from './DatabaseEngineIcon';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 

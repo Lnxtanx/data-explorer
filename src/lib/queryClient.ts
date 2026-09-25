@@ -26,22 +26,24 @@ export const queryClient = new QueryClient({
 // Query Keys Factory
 // Prevents typos and enables type-safe invalidation
 // =============================================================================
+//
+// Phase 1: removed `user.session`, the whole `files` factory, and the
+// `connections` factory — all had zero consumers.
+//
+// The `connections` removal matters most: it was a SECOND, disagreeing
+// definition of the same namespace. The live one is `connectionKeys` in
+// lib/api/data/connection, which scopes the list key by user
+// (['connections','list', userId]). The dead one here produced
+// ['connections','list'] with no user segment, so the two could not be
+// reconciled by prefix matching and would silently disagree on identity.
+//
+// Phase 3 folds the remaining factories into one shared/query/queryKeys root.
+// =============================================================================
 
 export const queryKeys = {
   user: {
     all:      ['user'] as const,
     profile:  ['user', 'profile'] as const,
-    session:  ['user', 'session'] as const,
-  },
-  files: {
-    all:      ['files'] as const,
-    list:     (userId: string) => ['files', 'list', userId] as const,
-    detail:   (id: string) => ['files', 'detail', id] as const,
-  },
-  connections: {
-    all:      ['connections'] as const,
-    list:     ['connections', 'list'] as const,
-    detail:   (id: string) => ['connections', id] as const,
   },
   payments: {
     all:          ['payments'] as const,
@@ -51,4 +53,29 @@ export const queryKeys = {
     history:      (userId: string) => ['payments', 'history', userId] as const,
     invoices:     ['payments', 'invoices'] as const,
   },
+  /**
+   * The legacy duplicate subscription fetch.
+   *
+   * Phase 3: `useUserProfile` queries `/api/payments/subscription` under the bare
+   * key ['subscription'] while `usePayments` queries the SAME endpoint under
+   * ['payments','subscription'] — so the subscription is fetched and cached
+   * twice, under two keys, with no invalidation path keeping them in sync.
+   * usePayments and PlansSettings both invalidated this literal while the query
+   * lived in a third file.
+   *
+   * The two are reconciled in Phase 4, when useUserProfile stops fetching the
+   * subscription and consumes usePayments.useSubscription instead. Until then
+   * this key must stay exactly ['subscription'] so the existing invalidations
+   * keep matching, which is why it lives here rather than being renamed.
+   */
+  legacySubscription: ['subscription'] as const,
+  /**
+   * AI credit quota poll, owned by useAIUsage.
+   *
+   * Phase 3: previously the bare literal ['ai-usage'] in three files — the
+   * query in useAIUsage, and invalidations in usePayments (billing) and
+   * PlansSettings. Billing invalidating a key owned by the AI module is a real
+   * cross-domain coupling; the key now has one owner and is imported.
+   */
+  aiUsage: ['ai-usage'] as const,
 } as const;

@@ -1,8 +1,8 @@
 import { ShieldOff, Trash2, Wifi, WifiOff, RefreshCw, Info, Users } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { useConnectors, useRevokeConnector, useRemoveConnector } from '@/lib/api/connector';
-import { DatabaseEngineIcon, PostgresIcon } from '@/components/data-explorer/shared/DatabaseEngineIcon';
+import { useConnectors, useRevokeConnector, useRemoveConnector } from './api/index';
+import { DatabaseEngineIcon, PostgresIcon } from './DatabaseEngineIcon';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 

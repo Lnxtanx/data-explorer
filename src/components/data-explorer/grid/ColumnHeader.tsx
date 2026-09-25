@@ -1,6 +1,6 @@
 import { ArrowUp, ArrowDown, ArrowUpDown, Key, Link2 } from 'lucide-react';
 import { cn, formatShortType } from '@/lib/utils';
-import type { ColumnInfo, ColumnStats } from '@/lib/api/data/explorer';
+import type { ColumnInfo, ColumnStats } from '../api/index';
 
 interface ColumnHeaderProps {
   column: ColumnInfo;
