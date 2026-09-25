@@ -20,16 +20,25 @@ export class VoiceAudioPlayer {
     private nextPlayTime = 0;
     private sources = new Set<AudioBufferSourceNode>();
     private analyser: AnalyserNode;
+    private gainNode: GainNode;
 
     constructor() {
         const AudioCtx =
             window.AudioContext ||
             (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-        this.ctx = new AudioCtx({ sampleRate: OUTPUT_SAMPLE_RATE });
+        // Do not force 24000Hz on the root AudioContext — Windows WASAPI/hardware DACs
+        // require native 44.1kHz or 48kHz. Supplying OUTPUT_SAMPLE_RATE to createBuffer
+        // allows the browser's audio engine to cleanly resample to hardware output.
+        this.ctx = new AudioCtx();
         this.analyser = this.ctx.createAnalyser();
         this.analyser.fftSize = 256;
         this.analyser.smoothingTimeConstant = 0.4;
-        this.analyser.connect(this.ctx.destination);
+
+        this.gainNode = this.ctx.createGain();
+        this.gainNode.gain.value = 1.0;
+
+        this.analyser.connect(this.gainNode);
+        this.gainNode.connect(this.ctx.destination);
     }
 
     /** Resume a suspended AudioContext (must be called from a user gesture). */
@@ -54,13 +63,18 @@ export class VoiceAudioPlayer {
 
     /** Enqueue one Base64-encoded 24kHz PCM chunk for gapless playback. */
     public enqueueChunk(base64Pcm24k: string): void {
+        if (!base64Pcm24k) return;
+        if (this.ctx.state === 'suspended') {
+            void this.ctx.resume();
+        }
+
         const bytes = decodeBase64(base64Pcm24k);
         if (bytes.byteLength < 2) return;
         const sampleCount = Math.floor(bytes.byteLength / 2);
-        const int16 = new Int16Array(bytes.buffer, bytes.byteOffset, sampleCount);
+        const dataView = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
         const floats = new Float32Array(sampleCount);
         for (let i = 0; i < sampleCount; i++) {
-            floats[i] = int16[i] / 32768;
+            floats[i] = dataView.getInt16(i * 2, true) / 32768;
         }
 
         const audioBuffer = this.ctx.createBuffer(1, sampleCount, OUTPUT_SAMPLE_RATE);
