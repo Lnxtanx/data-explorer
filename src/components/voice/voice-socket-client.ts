@@ -36,6 +36,7 @@ export class VoiceSocketClient {
         connectionId: string,
         sessionId: string,
         events: VoiceSocketEvents,
+        userName?: string,
     ): void {
         this.close();
         this.events = events;
@@ -46,6 +47,7 @@ export class VoiceSocketClient {
         const query = new URLSearchParams();
         if (connectionId) query.set('connection_id', connectionId);
         if (sessionId) query.set('session_id', sessionId);
+        if (userName) query.set('user_name', userName);
         const wsUrl = `${wsProto}//${wsHost}/api/voice/session?${query.toString()}`;
 
         const socket = new WebSocket(wsUrl);

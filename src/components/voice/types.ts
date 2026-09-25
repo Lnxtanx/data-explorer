@@ -10,6 +10,7 @@ export interface VoiceMessage {
     role: 'user' | 'assistant';
     text: string;
     isInterim?: boolean;
+    turnIndex?: number;
     artifacts?: any[];
     creditsUsed?: number;
     wasInterrupted?: boolean;

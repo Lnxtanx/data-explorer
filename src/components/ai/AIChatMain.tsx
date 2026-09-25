@@ -454,7 +454,7 @@ export function AIChatMain({
         messages: voiceMessages,
         startSession: startVoiceSession,
         endSession: endVoiceSession,
-    } = useVoiceSession(connectionId || '', voiceSessionId);
+    } = useVoiceSession(connectionId || '', voiceSessionId, greeting.firstName);
 
     const isVoiceActive = isVoiceConnected || isVoiceConnecting;
 

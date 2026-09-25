@@ -13,43 +13,46 @@ export function useVoiceChatSync(
     useEffect(() => {
         if (!voiceMessages || voiceMessages.length === 0) return;
 
-        for (const vm of voiceMessages) {
-            if (!vm.isInterim && vm.text.trim()) {
-                setLocalMessages((prev) => {
-                    const existingIdx = prev.findIndex((m) => m.id === vm.id);
+        setLocalMessages((prev) => {
+            let next = [...prev];
+            let modified = false;
+
+            for (const vm of voiceMessages) {
+                if (!vm.isInterim && vm.text.trim()) {
+                    const existingIdx = next.findIndex((m) => m.id === vm.id);
                     if (existingIdx !== -1) {
-                        const existing = prev[existingIdx];
+                        const existing = next[existingIdx];
                         if (
                             existing.content !== vm.text ||
                             existing.creditsUsed !== vm.creditsUsed ||
-                            (vm.artifacts && !existing.artifacts)
+                            (vm.artifacts && !existing.artifacts) ||
+                            (vm.wasInterrupted && !existing.wasInterrupted)
                         ) {
-                            return prev.map((m, idx) =>
-                                idx === existingIdx
-                                    ? {
-                                          ...m,
-                                          content: vm.text,
-                                          artifacts: vm.artifacts ?? m.artifacts,
-                                          creditsUsed: vm.creditsUsed ?? m.creditsUsed,
-                                      }
-                                    : m,
-                            );
+                            next[existingIdx] = {
+                                ...existing,
+                                content: vm.text,
+                                artifacts: vm.artifacts ?? existing.artifacts,
+                                creditsUsed: vm.creditsUsed ?? existing.creditsUsed,
+                                wasInterrupted: vm.wasInterrupted ?? existing.wasInterrupted,
+                            };
+                            modified = true;
                         }
-                        return prev;
-                    }
-                    return [
-                        ...prev,
-                        {
+                    } else {
+                        next.push({
                             id: vm.id,
                             role: vm.role,
                             content: vm.text,
                             isAgent: vm.role === 'assistant' ? agentMode : undefined,
                             artifacts: vm.artifacts,
                             creditsUsed: vm.creditsUsed,
-                        },
-                    ];
-                });
+                            wasInterrupted: vm.wasInterrupted,
+                        });
+                        modified = true;
+                    }
+                }
             }
-        }
+
+            return modified ? next : prev;
+        });
     }, [voiceMessages, agentMode, setLocalMessages]);
 }

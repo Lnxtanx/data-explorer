@@ -33,7 +33,11 @@ function newId(): string {
         : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
-export function useVoiceSession(connectionId: string, sessionId: string): UseVoiceSessionReturn {
+export function useVoiceSession(
+    connectionId: string,
+    sessionId: string,
+    userName?: string,
+): UseVoiceSessionReturn {
     const [isConnecting, setIsConnecting] = useState(false);
     const [isConnected, setIsConnected] = useState(false);
     const [isTalking, setIsTalking] = useState(false);
@@ -48,9 +52,10 @@ export function useVoiceSession(connectionId: string, sessionId: string): UseVoi
     const playerRef = useRef<VoiceAudioPlayer | null>(null);
     const recorderRef = useRef<VoiceAudioRecorder | null>(null);
 
-    // Turn & Message Accumulators
+    // Turn & Message Accumulators (Strictly isolated per turn)
     const pendingUserRef = useRef<VoiceMessage | null>(null);
     const pendingAssistantRef = useRef<VoiceMessage | null>(null);
+    const turnCounterRef = useRef<number>(1);
 
     // Resilience State
     const errorRef = useRef<string | null>(null);
@@ -168,6 +173,13 @@ export function useVoiceSession(connectionId: string, sessionId: string): UseVoi
 
             // 1. Spoken Audio Playback
             if (content?.model_turn?.parts) {
+                // If user was speaking, finalize user turn as model is now responding
+                if (pendingUserRef.current) {
+                    const finalUser = { ...pendingUserRef.current, isInterim: false };
+                    pendingUserRef.current = null;
+                    setMessages((prev) => prev.map((m) => (m.id === finalUser.id ? finalUser : m)));
+                }
+
                 for (const part of content.model_turn.parts) {
                     if (part.inline_data?.data) {
                         playerRef.current?.enqueueChunk(part.inline_data.data);
@@ -181,12 +193,23 @@ export function useVoiceSession(connectionId: string, sessionId: string): UseVoi
                 const txt = content.input_transcription.text;
                 const isFinished = Boolean(content.input_transcription.finished);
 
+                // CRITICAL: Finalize any previous assistant turn so each turn has its own distinct bubble
+                if (pendingAssistantRef.current) {
+                    const finalAssistant = { ...pendingAssistantRef.current, isInterim: false };
+                    pendingAssistantRef.current = null;
+                    turnCounterRef.current += 1;
+                    setMessages((prev) =>
+                        prev.map((m) => (m.id === finalAssistant.id ? finalAssistant : m)),
+                    );
+                }
+
                 if (!pendingUserRef.current) {
                     pendingUserRef.current = {
                         id: newId(),
                         role: 'user',
                         text: txt,
                         isInterim: !isFinished,
+                        turnIndex: turnCounterRef.current,
                     };
                 } else {
                     pendingUserRef.current = {
@@ -226,6 +249,7 @@ export function useVoiceSession(connectionId: string, sessionId: string): UseVoi
                         role: 'assistant',
                         text: token,
                         isInterim: false,
+                        turnIndex: turnCounterRef.current,
                     };
                 } else {
                     pendingAssistantRef.current = {
@@ -247,13 +271,15 @@ export function useVoiceSession(connectionId: string, sessionId: string): UseVoi
             }
 
             // 4. Barge-In / Interruption
-            if (content?.interrupted) {
+            const isInterrupted = Boolean(content?.interrupted || (content as any)?.wasInterrupted);
+            if (isInterrupted) {
                 playerRef.current?.stopAndClear();
                 setIsTalking(false);
                 setIsThinking(false);
                 if (pendingAssistantRef.current) {
-                    const finalInterrupted = { ...pendingAssistantRef.current, wasInterrupted: true };
+                    const finalInterrupted = { ...pendingAssistantRef.current, wasInterrupted: true, isInterim: false };
                     pendingAssistantRef.current = null;
+                    turnCounterRef.current += 1;
                     setMessages((prev) =>
                         prev.map((m) => (m.id === finalInterrupted.id ? finalInterrupted : m)),
                     );
@@ -261,13 +287,15 @@ export function useVoiceSession(connectionId: string, sessionId: string): UseVoi
             }
 
             // 5. Turn Complete
-            if (content?.turn_complete) {
+            const isTurnComplete = Boolean(content?.turn_complete || (content as any)?.turnComplete);
+            if (isTurnComplete) {
                 setIsTalking(false);
                 setIsThinking(false);
                 setToolCallInfo(null);
                 if (pendingAssistantRef.current) {
-                    const finalTurn = { ...pendingAssistantRef.current };
+                    const finalTurn = { ...pendingAssistantRef.current, isInterim: false };
                     pendingAssistantRef.current = null;
+                    turnCounterRef.current += 1;
                     setMessages((prev) =>
                         prev.map((m) => (m.id === finalTurn.id ? finalTurn : m)),
                     );
@@ -309,58 +337,79 @@ export function useVoiceSession(connectionId: string, sessionId: string): UseVoi
             const client = new VoiceSocketClient();
             socketClientRef.current = client;
 
-            client.connect(connectionId, sessionId, {
-                onSessionReady: () => {
-                    reconnectAttemptsRef.current = 0;
-                    clearSessionTimer();
-                    sessionTimerRef.current = setTimeout(() => {
-                        showError('Voice session reached the 60-minute limit');
-                        endSession();
-                    }, VOICE_SESSION_LIMIT_MS);
-                    setIsConnecting(false);
-                    setIsConnected(true);
-                    showError(null);
-                },
-                onGeminiEvent: (event) => {
-                    handleGeminiEvent(event);
-                },
-                onToolResult: () => {
-                    setIsThinking(true);
-                },
-                onTurnFormatted: (frame) => {
-                    setIsThinking(false);
-                    if (frame.content) {
-                        setMessages((prev) => {
-                            const lastIdx = prev.map((m) => m.role).lastIndexOf('assistant');
-                            if (lastIdx !== -1) {
-                                return prev.map((m, idx) =>
-                                    idx === lastIdx
-                                        ? {
-                                              ...m,
-                                              text: frame.content!,
-                                              isInterim: false,
-                                              artifacts: frame.artifacts ?? m.artifacts,
-                                              creditsUsed: frame.credits_charged ?? m.creditsUsed,
-                                              wasInterrupted: frame.was_interrupted ?? m.wasInterrupted,
-                                          }
-                                        : m,
-                                );
-                            }
-                            return [
-                                ...prev,
-                                {
-                                    id: newId(),
-                                    role: 'assistant',
-                                    text: frame.content!,
-                                    isInterim: false,
-                                    artifacts: frame.artifacts,
-                                    creditsUsed: frame.credits_charged,
-                                    wasInterrupted: frame.was_interrupted,
-                                },
-                            ];
-                        });
-                    }
-                },
+            client.connect(
+                connectionId,
+                sessionId,
+                {
+                    onSessionReady: () => {
+                        reconnectAttemptsRef.current = 0;
+                        clearSessionTimer();
+                        sessionTimerRef.current = setTimeout(() => {
+                            showError('Voice session reached the 60-minute limit');
+                            endSession();
+                        }, VOICE_SESSION_LIMIT_MS);
+                        setIsConnecting(false);
+                        setIsConnected(true);
+                        showError(null);
+                    },
+                    onGeminiEvent: (event) => {
+                        handleGeminiEvent(event);
+                    },
+                    onToolResult: () => {
+                        setIsThinking(true);
+                    },
+                    onTurnFormatted: (frame) => {
+                        setIsThinking(false);
+                        if (
+                            pendingAssistantRef.current &&
+                            (frame.turn_index == null || pendingAssistantRef.current.turnIndex === frame.turn_index)
+                        ) {
+                            pendingAssistantRef.current = null;
+                            turnCounterRef.current = Math.max(turnCounterRef.current, (frame.turn_index || 0) + 1);
+                        }
+                        if (frame.content) {
+                            setMessages((prev) => {
+                                let targetIdx = -1;
+                                if (frame.turn_index != null) {
+                                    targetIdx = prev.findIndex(
+                                        (m) => m.role === 'assistant' && m.turnIndex === frame.turn_index,
+                                    );
+                                }
+                                if (targetIdx === -1) {
+                                    targetIdx = prev.map((m) => m.role).lastIndexOf('assistant');
+                                }
+
+                                if (targetIdx !== -1) {
+                                    return prev.map((m, idx) =>
+                                        idx === targetIdx
+                                            ? {
+                                                  ...m,
+                                                  text: frame.content!,
+                                                  isInterim: false,
+                                                  turnIndex: frame.turn_index ?? m.turnIndex,
+                                                  artifacts: frame.artifacts ?? m.artifacts,
+                                                  creditsUsed: frame.credits_charged ?? m.creditsUsed,
+                                                  wasInterrupted: frame.was_interrupted ?? m.wasInterrupted,
+                                              }
+                                            : m,
+                                    );
+                                }
+                                return [
+                                    ...prev,
+                                    {
+                                        id: newId(),
+                                        role: 'assistant',
+                                        text: frame.content!,
+                                        isInterim: false,
+                                        turnIndex: frame.turn_index,
+                                        artifacts: frame.artifacts,
+                                        creditsUsed: frame.credits_charged,
+                                        wasInterrupted: frame.was_interrupted,
+                                    },
+                                ];
+                            });
+                        }
+                    },
                 onSessionEnded: () => {
                     endSession();
                 },
@@ -382,7 +431,7 @@ export function useVoiceSession(connectionId: string, sessionId: string): UseVoi
                     if (userEndedRef.current || code === 1000 || code === 1001) return;
                     scheduleReconnect(code, reason);
                 },
-            });
+            }, userName);
         } catch (err) {
             teardownMedia();
             setIsConnecting(false);
@@ -393,7 +442,7 @@ export function useVoiceSession(connectionId: string, sessionId: string): UseVoi
                 showError(message);
             }
         }
-    }, [clearSessionTimer, connectionId, endSession, finalizeMessages, handleGeminiEvent, scheduleReconnect, sessionId, showError, teardownMedia]);
+    }, [clearSessionTimer, connectionId, endSession, finalizeMessages, handleGeminiEvent, scheduleReconnect, sessionId, showError, teardownMedia, userName]);
 
     // Keep the reconnect timer calling the latest startSession
     useEffect(() => {
