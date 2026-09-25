@@ -130,7 +130,7 @@ export function ConnectorExecutionLogs({ connectionId = null }: ConnectorExecuti
                     size="sm"
                     onClick={() => refetch()}
                     disabled={isFetching}
-                    className="h-8 gap-1.5 text-xs rounded-lg shadow-xs shrink-0"
+                    className="h-8 gap-1.5 text-xs rounded-lg shadow-sm shrink-0"
                 >
                     <RefreshCw className={cn("w-3.5 h-3.5", isFetching && "animate-spin text-primary")} />
                     <span>Refresh</span>
@@ -152,7 +152,7 @@ export function ConnectorExecutionLogs({ connectionId = null }: ConnectorExecuti
                             className={cn(
                                 "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs transition-colors font-medium whitespace-nowrap shrink-0",
                                 selectedType === tab.id
-                                    ? "bg-background text-foreground shadow-xs font-semibold"
+                                    ? "bg-background text-foreground shadow-sm font-semibold"
                                     : "text-muted-foreground hover:bg-muted/40 hover:text-foreground"
                             )}
                         >
@@ -303,7 +303,7 @@ export function ConnectorExecutionLogs({ connectionId = null }: ConnectorExecuti
 
             {/* Inspector Modal (Opens on Click) */}
             {inspectedLog && (
-                <div className="p-3.5 rounded-xl border bg-background space-y-2.5 shadow-xs shrink-0">
+                <div className="p-3.5 rounded-xl border bg-background space-y-2.5 shadow-sm shrink-0">
                     <div className="flex items-center justify-between border-b pb-1.5">
                         <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
                             <FileText className="w-3.5 h-3.5 text-primary" />

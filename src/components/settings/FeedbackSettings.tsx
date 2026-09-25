@@ -108,7 +108,7 @@ export function FeedbackSettings() {
                 <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-4">
                     <CheckCircle2 className="w-6 h-6 text-primary" />
                 </div>
-                <h3 className="text-lg font-semibold">Thank you for your feedback</h3>
+                <h3 className="text-lg font-semibold tracking-tight text-foreground">Thank you for your feedback</h3>
                 <p className="text-sm text-muted-foreground mt-2 mb-6">
                     We've received your report and will review it shortly.
                 </p>
@@ -122,7 +122,7 @@ export function FeedbackSettings() {
     return (
         <div className="p-8 max-w-2xl mx-auto space-y-8">
             <div className="space-y-1">
-                <h3 className="text-xl font-semibold">Feedback & Support</h3>
+                <h3 className="text-lg font-semibold tracking-tight text-foreground">Feedback & Support</h3>
                 <p className="text-sm text-muted-foreground">
                     Report an issue, request support, or suggest a feature to help us improve Data Explorer.
                 </p>
@@ -179,7 +179,7 @@ export function FeedbackSettings() {
                                 className="w-20 h-20 rounded-lg border border-dashed border-border/60 hover:border-primary/50 hover:bg-muted/30 transition-all flex flex-col items-center justify-center gap-1 text-muted-foreground"
                             >
                                 <Upload className="w-4 h-4" />
-                                <span className="text-[10px] font-medium uppercase tracking-tighter">Add Photo</span>
+                                <span className="text-2xs font-medium uppercase tracking-tighter">Add Photo</span>
                             </button>
                         )}
                     </div>
@@ -191,7 +191,7 @@ export function FeedbackSettings() {
                         className="hidden"
                         multiple
                     />
-                    <div className="flex items-center gap-2 text-[10px] text-muted-foreground mt-1">
+                    <div className="flex items-center gap-2 text-2xs text-muted-foreground mt-1">
                         <AlertCircle className="w-3 h-3" />
                         <span>Maximum 3 screenshots allowed.</span>
                     </div>

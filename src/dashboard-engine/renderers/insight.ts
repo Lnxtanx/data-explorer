@@ -83,6 +83,7 @@ export function renderInsight(container: HTMLElement, data: PanelData | null, co
 
   const headlineAttr = isHeadline ? ' data-headline="true"' : '';
 
+  const panelKey = config.panel_key || container.dataset.panelKey || '';
   const whyLabel = 'Why?';
   container.innerHTML =
     '<div class="sw-insight-card"' + headlineAttr + '>' +
@@ -99,13 +100,28 @@ export function renderInsight(container: HTMLElement, data: PanelData | null, co
     '<span class="sw-insight-tag sw-insight-tag--' + classification + '">' + escHtml(classification) + '</span>' +
     '<span class="sw-insight-confidence">' + escHtml(confidence) + ' confidence</span>' +
     '</div>' +
-    '<button class="sw-why-btn" onclick="parent.postMessage({ type: \'INSIGHT_WHY_REQUEST\', panelKey: ' + JSON.stringify(container.dataset.panelKey || config.panel_key || '') + ' }, \'*\')" title="Ask the AI why this changed">' + whyLabel + '</button>' +
+    '<button class="sw-why-btn" data-panel-key="' + escHtml(panelKey) + '" onclick="window.swRuntime && window.swRuntime.whyPanel ? window.swRuntime.whyPanel(this.dataset.panelKey) : parent.postMessage({ type: \'INSIGHT_WHY_REQUEST\', panelKey: this.dataset.panelKey }, \'*\')" title="Ask the AI why this changed">' + whyLabel + '</button>' +
     '</div>' +
     '</div>';
 
-  if (config.panel_key) {
-    setInsightEvidence(config.panel_key, {
+  const whyBtn = container.querySelector<HTMLButtonElement>('.sw-why-btn');
+  if (whyBtn) {
+    whyBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (typeof window !== 'undefined' && (window as any).swRuntime?.whyPanel) {
+        (window as any).swRuntime.whyPanel(panelKey);
+      } else if (typeof parent !== 'undefined') {
+        parent.postMessage({ type: 'INSIGHT_WHY_REQUEST', panelKey }, '*');
+      }
+    });
+  }
+
+  const targetKey = config.panel_key || panelKey;
+  if (targetKey) {
+    setInsightEvidence(targetKey, {
+      title: config.title ? String(config.title) : undefined,
       classification,
+      confidence,
       current_value: currentValue,
       previous_value: previousValue,
       delta_pct: deltaPct,

@@ -35,7 +35,7 @@ export function ConnectionSelector({
   const selectedConnection = connections?.find(c => c.id === selectedConnectionId);
 
   return (
-    <div className="inline-flex items-center h-8 rounded-lg border border-border bg-card shadow-xs">
+    <div className="inline-flex items-center h-8 rounded-lg border border-border bg-card shadow-sm">
       {/* Left Icon Button: Direct 1-Click to Connector Manager */}
       <button
         type="button"

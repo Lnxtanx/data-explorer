@@ -68,13 +68,13 @@ export function ResonaAIInput({
   const effectivePlaceholder =
     placeholder ||
     (databaseName
-      ? `Ask Resona AI about ${databaseName}...`
-      : 'Ask Resona AI...');
+      ? `Ask Resona Dashboard AI about ${databaseName}...`
+      : 'Ask Resona Dashboard AI about metrics or charts...');
 
   return (
     <div className="p-3 bg-transparent shrink-0 relative select-none">
       {/* Clean Input Box Card */}
-      <div className="relative rounded-xl border border-border/80 bg-card p-2.5 shadow-2xs focus-within:border-primary/50 focus-within:ring-1 focus-within:ring-primary/20 transition-all select-text">
+      <div className="relative rounded-xl border border-border/80 bg-card p-2.5 shadow-sm focus-within:border-primary/50 focus-within:ring-1 focus-within:ring-primary/20 transition-all select-text">
         <textarea
           ref={textareaRef}
           value={value}
@@ -83,7 +83,7 @@ export function ResonaAIInput({
           placeholder={effectivePlaceholder}
           disabled={disabled && !isStreaming}
           rows={1}
-          className="w-full resize-none bg-transparent px-1.5 py-1 text-xs sm:text-sm text-foreground placeholder:text-muted-foreground/70 outline-none max-h-32 leading-relaxed overflow-y-auto"
+          className="w-full resize-none bg-transparent px-1.5 py-1 text-[14px] sm:text-[14.5px] leading-[22px] font-sans antialiased text-foreground placeholder:text-muted-foreground/70 outline-none max-h-32 overflow-y-auto"
         />
 
         {/* Footer controls: Real ModeSelector on left, Send/Stop button on right */}

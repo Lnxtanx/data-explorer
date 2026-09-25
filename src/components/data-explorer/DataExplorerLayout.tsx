@@ -22,7 +22,7 @@ import { saveLastViewedTable, loadLastViewedTable, getExplorerPageSize } from '@
 import type { ViewMode } from '@/lib/view-mode';
 
 // AI components are only rendered when the user activates AI mode.
-// Lazy-loading keeps recharts, mermaid, pptxgenjs, and jspdf out of the
+// Lazy-loading keeps recharts, mermaid, and jspdf out of the
 // initial bundle — they are fetched on demand when AI mode first becomes active.
 const AIChatSidebar = lazy(() => import('./ai/AIChatSidebar').then(m => ({ default: m.AIChatSidebar })));
 const AIChatMain = lazy(() => import('./ai/AIChatMain').then(m => ({ default: m.AIChatMain })));
@@ -44,6 +44,65 @@ import {
   useRefreshPanel,
 } from '@/hooks/de-useDashboard';
 import type { InsightEvidence } from '@/lib/api/dashboard';
+import { toast } from 'sonner';
+
+function formatInsightWhyPrompt(
+  panelTitle: string,
+  evidence?: InsightEvidence,
+  panelSql?: string
+): string {
+  const parts: string[] = [];
+  const title = panelTitle || 'Insight Metric';
+  parts.push(`Investigate why this metric changed on the dashboard:\n`);
+  parts.push(`• **Metric**: ${title}`);
+
+  if (evidence) {
+    if (evidence.current_value !== null && evidence.current_value !== undefined) {
+      let changeStr = `${evidence.current_value}`;
+      if (evidence.previous_value !== null && evidence.previous_value !== undefined) {
+        changeStr += ` (vs ${evidence.previous_value} previously`;
+        if (evidence.delta_pct !== null && evidence.delta_pct !== undefined) {
+          const sign = evidence.delta_pct > 0 ? '+' : '';
+          changeStr += `, ${sign}${evidence.delta_pct.toFixed(1)}%`;
+        }
+        changeStr += `)`;
+      } else if (evidence.delta_pct !== null && evidence.delta_pct !== undefined) {
+        const sign = evidence.delta_pct > 0 ? '+' : '';
+        changeStr += ` (${sign}${evidence.delta_pct.toFixed(1)}%)`;
+      }
+      parts.push(`• **Value & Delta**: ${changeStr}`);
+    }
+
+    if (evidence.comparison_period) {
+      parts.push(`• **Comparison Period**: ${evidence.comparison_period}`);
+    }
+
+    if (evidence.classification || evidence.confidence) {
+      const cls = evidence.classification ? evidence.classification.toUpperCase() : '';
+      const conf = evidence.confidence ? `${evidence.confidence} confidence` : '';
+      const tag = [cls, conf].filter(Boolean).join(' - ');
+      if (tag) parts.push(`• **Classification**: ${tag}`);
+    }
+
+    if (evidence.interpretation) {
+      parts.push(`• **Observation**: ${evidence.interpretation}`);
+    }
+
+    if (evidence.recommendation) {
+      parts.push(`• **Suggested Action**: ${evidence.recommendation}`);
+    }
+  }
+
+  if (panelSql) {
+    parts.push(`\n**Metric SQL Definition**:\n\`\`\`sql\n${panelSql.trim()}\n\`\`\``);
+  }
+
+  parts.push(
+    `\nPlease inspect the underlying database tables and queries to diagnose the root cause of this change, identify which learner cohorts or behaviors contributed to it, and recommend next steps.`
+  );
+
+  return parts.join('\n');
+}
 
 function AISuspenseFallback({ className }: { className?: string }) {
   return <div className={cn('flex-1 animate-pulse bg-muted/30', className)} />;
@@ -148,17 +207,39 @@ export function DataExplorerLayout({
     latestRunId,
   } = useGenerateDashboard(connectionId);
 
+  // Keep DashboardView mounted in the DOM once visited so the iframe, Chart.js instances,
+  // and scroll state are preserved across tab switches without expensive rebuilds.
+  const hasMountedDashboardRef = useRef(false);
+  if (mode === 'dashboard') {
+    hasMountedDashboardRef.current = true;
+  }
+
+  const [pendingInquiry, setPendingInquiry] = useState<{ id: string; message: string } | null>(null);
+
   const handleGenerateDashboard = useCallback(async (opts?: any) => {
     onOpenAiPanel?.();
     return rawStartGeneration(opts);
   }, [onOpenAiPanel, rawStartGeneration]);
 
-  // A "Why?" click on an insight panel — surfaced for Phase 3, when it will be
-  // wired into the Resona investigation loop. For now open the AI side panel
-  // so the user lands in the conversation surface.
-  const handleInsightWhy = useCallback((_panelKey: string, _evidence?: InsightEvidence) => {
+  const handleInsightWhy = useCallback((panelKey: string, evidence?: InsightEvidence, title?: string) => {
+    if (isDashboardGenerating) {
+      toast.info('Dashboard AI is currently analyzing. Please wait for it to complete.');
+      return;
+    }
+
+    const panel = dashboardData?.dashboard?.panels?.find(
+      (p: any) => (p.panel_key || p.key) === panelKey
+    );
+    const resolvedTitle = title || panel?.title || evidence?.title || evidence?.interpretation || panelKey;
+    const prompt = formatInsightWhyPrompt(resolvedTitle, evidence, panel?.sql);
+
+    setPendingInquiry({
+      id: `${panelKey}-${Date.now()}`,
+      message: prompt,
+    });
+
     onOpenAiPanel?.();
-  }, [onOpenAiPanel]);
+  }, [isDashboardGenerating, dashboardData?.dashboard?.panels, onOpenAiPanel]);
   const refreshDashboardMutation = useRefreshDashboard(
     connectionId,
     (data) => {
@@ -428,7 +509,7 @@ export function DataExplorerLayout({
         </div>
 
         {/* Table List / AI Sidebar */}
-        <div className="flex-1 overflow-hidden flex flex-col">
+        <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
           {!sidebarCollapsed && (
             mode === 'ai' ? (
               <Suspense fallback={<AISuspenseFallback className="flex-1" />}>
@@ -509,14 +590,16 @@ export function DataExplorerLayout({
       {/* Main Workspace (Middle Content) */}
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {(() => {
-          const exportButtonElement = (
-            <ExportButton
-              connectionId={connectionId}
-              tableName={selectedTable?.name ?? ''}
-              schemaName={schemaName}
-              gridContext={gridExportContext}
-            />
-          );
+          // Export is a grid-only control — skip it entirely on dashboard view.
+          const exportButtonElement =
+            mode === 'dashboard' ? null : (
+              <ExportButton
+                connectionId={connectionId}
+                tableName={selectedTable?.name ?? ''}
+                schemaName={schemaName}
+                gridContext={gridExportContext}
+              />
+            );
 
           if (typeof headerContent === 'function') {
             return headerContent({ exportButton: exportButtonElement });
@@ -525,7 +608,7 @@ export function DataExplorerLayout({
           return (
             <>
               {headerContent}
-              {exportPortalTarget && createPortal(exportButtonElement, exportPortalTarget)}
+              {exportButtonElement && exportPortalTarget && createPortal(exportButtonElement, exportPortalTarget)}
             </>
           );
         })()}
@@ -579,29 +662,12 @@ export function DataExplorerLayout({
                   aiContextSchema={aiContextSchema}
                   onTableClick={handleTableMentionClick}
                   onOpenPlans={onOpenPlans ?? onOpenSettings}
+                  onNewChat={handleNewChat}
                 />
               )}
             </Suspense>
-          ) : mode === 'dashboard' ? (
-            <Suspense fallback={<AISuspenseFallback />}>
-              <DashboardView
-                connectionId={connectionId}
-                dashboard={dashboardData?.dashboard}
-                html={dashboardData?.html}
-                isLoading={isDashboardLoading}
-                isGenerating={isDashboardGenerating}
-                generationProgress={dashboardGenerationProgress}
-                onGenerate={handleGenerateDashboard}
-                onCancelGenerate={handleCancelDashboardGeneration}
-                onRefreshPanel={handleRefreshPanel}
-                onSectionVisible={(secId) => setActiveSectionId(secId)}
-                iframeRef={dashboardIframeRef}
-                onOpenConnectWizard={onOpenConnectWizard}
-                onInsightWhy={handleInsightWhy}
-              />
-            </Suspense>
           ) : selectedTable && connectionId ? (
-            <>
+            <div className={cn("flex-1 flex flex-col min-w-0 overflow-hidden", mode === 'dashboard' && "hidden")}>
               <TableGrid
                 connectionId={connectionId}
                 tableName={selectedTable.name}
@@ -610,12 +676,37 @@ export function DataExplorerLayout({
                 onViewReferencedTable={handleTableMentionClick}
                 onGridContextChange={setGridExportContext}
               />
-            </>
+            </div>
           ) : (
-            <EmptyState
-              hasConnection={!!connectionId}
-              onOpenConnectWizard={onOpenConnectWizard}
-            />
+            <div className={cn("flex-1 flex flex-col min-w-0 overflow-hidden", mode === 'dashboard' && "hidden")}>
+              <EmptyState
+                hasConnection={!!connectionId}
+                onOpenConnectWizard={onOpenConnectWizard}
+              />
+            </div>
+          )}
+
+          {/* Dashboard Mode (Kept mounted once visited to avoid iframe destroy & re-bootstrap) */}
+          {(mode === 'dashboard' || hasMountedDashboardRef.current) && (
+            <div className={cn("flex-1 flex flex-col min-w-0 overflow-hidden", mode !== 'dashboard' && "hidden")}>
+              <Suspense fallback={<AISuspenseFallback />}>
+                <DashboardView
+                  connectionId={connectionId}
+                  dashboard={dashboardData?.dashboard}
+                  html={dashboardData?.html}
+                  isLoading={isDashboardLoading}
+                  isGenerating={isDashboardGenerating}
+                  generationProgress={dashboardGenerationProgress}
+                  onGenerate={handleGenerateDashboard}
+                  onCancelGenerate={handleCancelDashboardGeneration}
+                  onRefreshPanel={handleRefreshPanel}
+                  onSectionVisible={(secId) => setActiveSectionId(secId)}
+                  iframeRef={dashboardIframeRef}
+                  onOpenConnectWizard={onOpenConnectWizard}
+                  onInsightWhy={handleInsightWhy}
+                />
+              </Suspense>
+            </div>
           )}
         </div>
       </main>
@@ -630,6 +721,8 @@ export function DataExplorerLayout({
           isDashboardGenerating={isDashboardGenerating}
           dashboardGenerationProgress={dashboardGenerationProgress}
           activeRunId={latestRunId}
+          pendingInquiry={pendingInquiry}
+          onClearPendingInquiry={() => setPendingInquiry(null)}
         />
       )}
     </div>

@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { GenerationProgress } from '@/hooks/de-useDashboard';
 import { LiveToolSteps } from '@/components/data-explorer/ai/tools/LiveToolSteps';
+import { sanitizeToolSummary } from '@/components/data-explorer/ai/tools/toolSanitize';
 
 interface GenerateProgressProps {
   progress: GenerationProgress | null;
@@ -26,6 +27,13 @@ const PHASES = [
 export function GenerateProgress({ progress, onCancel }: GenerateProgressProps) {
   const percent = progress?.percent || 15;
   const currentPhase = progress?.phase || 'introspect';
+  const [dismissedWarnings, setDismissedWarnings] = React.useState<Set<string>>(new Set());
+  const visibleWarnings = (progress?.warnings || [])
+    .map((w) => sanitizeToolSummary(w))
+    .filter((w) => w && !dismissedWarnings.has(w));
+  const progressMessage = progress?.message
+    ? sanitizeToolSummary(progress.message)
+    : 'Analyzing tables, relations, and drafting business metrics...';
 
   const currentIdx = PHASES.findIndex((p) => p.id === currentPhase);
 
@@ -42,7 +50,7 @@ export function GenerateProgress({ progress, onCancel }: GenerateProgressProps) 
         Generating Analytics Dashboard
       </h3>
       <p className="text-xs text-muted-foreground text-center mb-6 max-w-xs">
-        {progress?.message || 'Analyzing tables, relations, and drafting business metrics...'}
+        {progressMessage}
       </p>
 
       {/* Progress Bar */}
@@ -58,12 +66,27 @@ export function GenerateProgress({ progress, onCancel }: GenerateProgressProps) 
         <LiveToolSteps steps={progress?.toolSteps || []} isLive />
       </div>
 
-      {progress?.warnings && progress.warnings.length > 0 && (
-        <div className="w-full mb-4 space-y-1">
-          {progress.warnings.map((w, i) => (
-            <p key={i} className="text-[11px] text-amber-600 dark:text-amber-500 text-left leading-snug">
-              {w}
-            </p>
+      {visibleWarnings.length > 0 && (
+        <div className="w-full mb-4 space-y-1.5">
+          {visibleWarnings.map((w, i) => (
+            <div
+              key={i}
+              className="flex items-start justify-between gap-1.5 text-[11px] text-amber-600 dark:text-amber-500 bg-amber-500/10 border border-amber-500/20 rounded-lg px-2.5 py-1.5 leading-snug animate-in fade-in duration-150"
+            >
+              <div className="flex items-start gap-1.5 flex-1 min-w-0">
+                <span className="shrink-0 select-none">⚠️</span>
+                <span className="flex-1 select-text">{w}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDismissedWarnings((prev) => new Set([...prev, w]))}
+                className="shrink-0 p-0.5 rounded text-amber-600/60 dark:text-amber-500/60 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-amber-500/20 transition-colors ml-1"
+                title="Dismiss warning"
+                aria-label="Dismiss warning"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </div>
           ))}
         </div>
       )}

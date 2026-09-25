@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { ChevronDown, ChevronRight, Download, Loader2, X, Copy, Check } from 'lucide-react';
+import { ChevronDown, ChevronRight, Download, Loader2, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ToolIcon, toolLabel, getToolKeyParam } from './ToolIcon';
+import { sanitizeToolInput, sanitizeToolSummary, humanizeParamKey } from './toolSanitize';
 import type { AgentToolStep } from '@/hooks/useAIAgent';
 
 interface ToolCallCardProps {
@@ -17,7 +18,6 @@ function formatDuration(ms: number): string {
 
 export function ToolCallCard({ step, isLive = false, defaultExpanded = false }: ToolCallCardProps) {
     const [expanded, setExpanded] = useState(defaultExpanded);
-    const [copiedSql, setCopiedSql] = useState(false);
     const isPending = step.status === 'calling' && isLive;
     const isInterrupted = step.status === 'calling' && !isLive;
     const isDone = step.status === 'done';
@@ -32,29 +32,24 @@ export function ToolCallCard({ step, isLive = false, defaultExpanded = false }: 
         return () => clearInterval(t);
     }, [isPending]);
 
-    const inputEntries = step.input
-        ? Object.entries(step.input).filter(([k]) => k !== 'connection_id' && k !== 'connectionId')
-        : [];
+    // Strip internal metadata (ids, sql, config, html_template…) before display.
+    // Thinking steps keep their full text (no SQL redaction).
+    const safeInput = sanitizeToolInput(step.name, step.input);
+    const inputEntries = Object.entries(safeInput);
     const hasMeaningfulInput = step.type !== 'thinking' && inputEntries.length > 0;
-    const canExpand = Boolean(step.result?.summary || hasMeaningfulInput || step.downloadUrl);
+    const safeSummary = step.result
+        ? isThinking
+            ? step.result.summary
+            : sanitizeToolSummary(step.result.summary)
+        : '';
+    const canExpand = Boolean(safeSummary || hasMeaningfulInput || step.downloadUrl);
 
     const liveElapsed = isPending
         ? Math.max(0, (now - (step.startedAt ?? now))) / 1000
         : null;
     const rawLatency = step.latencyMs ?? (step.result as any)?.latencyMs ?? (step.result as any)?.latency_ms;
     const duration = !isPending && rawLatency != null ? formatDuration(rawLatency) : null;
-    const keyParam = getToolKeyParam(step.name, step.input as Record<string, unknown>);
-
-    const sqlQuery = typeof step.input?.sql === 'string' ? step.input.sql : null;
-    const otherInputs = inputEntries.filter(([k]) => k !== 'sql');
-
-    const handleCopySql = async (e: React.MouseEvent) => {
-        e.stopPropagation();
-        if (!sqlQuery) return;
-        await navigator.clipboard.writeText(sqlQuery);
-        setCopiedSql(true);
-        setTimeout(() => setCopiedSql(false), 2000);
-    };
+    const keyParam = getToolKeyParam(step.name, safeInput);
 
     return (
         <div className="text-xs transition-colors">
@@ -124,63 +119,34 @@ export function ToolCallCard({ step, isLive = false, defaultExpanded = false }: 
                 )}
             </button>
 
-            {/* Expanded input + output */}
+            {/* Expanded parameters + output (never SQL / internal ids) */}
             {expanded && (
                 <div className="px-3 pb-3 pt-2 bg-muted/20 dark:bg-muted/10 border-t border-border/20 space-y-2.5">
-                    {/* SQL query block if present */}
-                    {sqlQuery && (
-                        <div className="space-y-1">
-                            <div className="flex items-center justify-between text-[10px] uppercase tracking-wider text-muted-foreground/60 font-semibold">
-                                <span>SQL Query</span>
-                                <button
-                                    type="button"
-                                    onClick={handleCopySql}
-                                    className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground cursor-pointer px-1.5 py-0.5 rounded hover:bg-muted"
-                                >
-                                    {copiedSql ? (
-                                        <>
-                                            <Check className="w-3 h-3 text-emerald-500" />
-                                            <span className="text-emerald-500">Copied</span>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Copy className="w-3 h-3" />
-                                            <span>Copy</span>
-                                        </>
-                                    )}
-                                </button>
-                            </div>
-                            <pre className="bg-background/80 border border-border/30 p-2.5 rounded-lg font-mono text-[11px] leading-relaxed text-foreground/90 whitespace-pre-wrap overflow-x-auto">
-                                {sqlQuery}
-                            </pre>
-                        </div>
-                    )}
-
-                    {/* Other inputs */}
-                    {otherInputs.length > 0 && (
+                    {inputEntries.length > 0 && (
                         <div className="space-y-1">
                             <div className="text-[10px] uppercase tracking-wider text-muted-foreground/60 font-semibold">
                                 Parameters
                             </div>
                             <div className="bg-background/80 border border-border/30 rounded-lg p-2 font-mono text-[11px] space-y-0.5">
-                                {otherInputs.map(([k, v]) => (
+                                {inputEntries.map(([k, v]) => (
                                     <div key={k} className="flex items-start gap-2">
-                                        <span className="text-muted-foreground/70 shrink-0">{k}:</span>
-                                        <span className="text-foreground/90 break-all">{typeof v === 'object' ? JSON.stringify(v) : String(v)}</span>
+                                        <span className="text-muted-foreground/70 shrink-0">{humanizeParamKey(k)}:</span>
+                                        <span className="text-foreground/90 break-all">
+                                            {typeof v === 'object' && v !== null ? JSON.stringify(v) : String(v)}
+                                        </span>
                                     </div>
                                 ))}
                             </div>
                         </div>
                     )}
 
-                    {/* Output summary */}
-                    {step.result?.summary && (
+                    {safeSummary && (
                         <div className="space-y-1">
                             <div className="text-[10px] uppercase tracking-wider text-muted-foreground/60 font-semibold">
                                 Result
                             </div>
-                            <p className="text-foreground/80 text-[11.5px] leading-relaxed whitespace-pre-wrap">
-                                {step.result.summary}
+                            <p className="text-foreground/80 text-[11.5px] leading-relaxed whitespace-pre-wrap select-text">
+                                {safeSummary}
                             </p>
                             {step.downloadUrl && (
                                 <a

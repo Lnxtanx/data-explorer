@@ -901,7 +901,7 @@ export function ExportButton({
                     placeholder="Filter tables..."
                     value={tableSearchTerm}
                     onChange={(e) => setTableSearchTerm(e.target.value)}
-                    className="pl-6 pr-6 h-6.5 text-[11px] bg-background border-border/80"
+                    className="pl-6 pr-6 h-6 text-[11px] bg-background border-border/80"
                   />
                   {tableSearchTerm && (
                     <button
@@ -1129,7 +1129,7 @@ export function ExportButton({
               <div className="flex items-center gap-2 pt-0.5">
                 <Button
                   size="sm"
-                  className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-medium flex-1 gap-1.5 shadow-xs"
+                  className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-medium flex-1 gap-1.5 shadow-sm"
                   onClick={() => window.open(lastExportedSheet.url, '_blank', 'noopener,noreferrer')}
                 >
                   <ExternalLink className="w-3.5 h-3.5" />
@@ -1235,7 +1235,7 @@ export function ExportButton({
               <Button
                 variant="destructive"
                 size="sm"
-                className="h-7 text-xs px-2.5 gap-1 font-medium shadow-xs shrink-0"
+                className="h-7 text-xs px-2.5 gap-1 font-medium shadow-sm shrink-0"
                 onClick={handleCancelExport}
               >
                 <XCircle className="w-3.5 h-3.5" />
@@ -1286,7 +1286,7 @@ function ScopeTab({
       className={cn(
         'flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-md text-[11px] font-medium transition-all select-none',
         active
-          ? 'bg-background shadow-xs text-foreground font-semibold border border-border/50'
+          ? 'bg-background shadow-sm text-foreground font-semibold border border-border/50'
           : 'text-muted-foreground hover:text-foreground hover:bg-muted/40',
         disabled && 'opacity-35 cursor-not-allowed hover:bg-transparent'
       )}

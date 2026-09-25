@@ -140,7 +140,7 @@ export function ConnectorWizard({ onClose }: ConnectorWizardProps) {
                                 href="https://github.com/Schema-Weaver/pg-connector"
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium text-muted-foreground hover:text-foreground bg-muted/60 hover:bg-muted border border-border/70 transition-all hover:border-border cursor-pointer shadow-2xs"
+                                className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium text-muted-foreground hover:text-foreground bg-muted/60 hover:bg-muted border border-border/70 transition-all hover:border-border cursor-pointer shadow-sm"
                                 title="Open pg-connector GitHub repository (Open Source)"
                             >
                                 <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
@@ -174,7 +174,7 @@ export function ConnectorWizard({ onClose }: ConnectorWizardProps) {
                         </div>
 
                         {/* Clean Theme-Aware Commands Block */}
-                        <div className="rounded-xl border border-border/70 bg-card shadow-xs overflow-hidden">
+                        <div className="rounded-xl border border-border/70 bg-card shadow-sm overflow-hidden">
                             {/* Commands Top Bar */}
                             <div className="flex items-center justify-between px-3.5 py-2.5 border-b border-border/60 bg-muted/30">
                                 <div className="flex items-center gap-2">
@@ -185,7 +185,7 @@ export function ConnectorWizard({ onClose }: ConnectorWizardProps) {
                                 </div>
                                 <button
                                     onClick={handleCopyAll}
-                                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium text-foreground bg-background hover:bg-muted border border-border/70 transition-colors shadow-2xs cursor-pointer"
+                                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium text-foreground bg-background hover:bg-muted border border-border/70 transition-colors shadow-sm cursor-pointer"
                                     title="Copy all 4 commands"
                                 >
                                     {copiedAll ? (
@@ -319,7 +319,7 @@ export function ConnectorWizard({ onClose }: ConnectorWizardProps) {
             {step === 'result' && result && (
                 <div className="space-y-4 flex-1 flex flex-col justify-between py-1">
                     <div className="space-y-3.5">
-                        <div className="border rounded-2xl bg-card p-4 space-y-3.5 shadow-xs">
+                        <div className="border rounded-2xl bg-card p-4 space-y-3.5 shadow-sm">
                             <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-3">
                                     <div className={cn(
@@ -394,7 +394,7 @@ export function ConnectorWizard({ onClose }: ConnectorWizardProps) {
                         </div>
 
                         {!result.is_online && (
-                            <div className="border rounded-xl border-amber-500/30 bg-amber-500/5 dark:bg-amber-500/10 p-3.5 space-y-3 shadow-xs">
+                            <div className="border rounded-xl border-amber-500/30 bg-amber-500/5 dark:bg-amber-500/10 p-3.5 space-y-3 shadow-sm">
                                 <div className="flex items-center justify-between gap-3">
                                     <div className="flex items-center gap-2.5 min-w-0">
                                         <div className="w-7 h-7 rounded-lg bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
@@ -412,7 +412,7 @@ export function ConnectorWizard({ onClose }: ConnectorWizardProps) {
                                     <Button
                                         variant="outline"
                                         size="sm"
-                                        className="h-8 px-3 text-xs rounded-lg font-medium border-border hover:bg-background text-foreground gap-1.5 shadow-2xs shrink-0 cursor-pointer"
+                                        className="h-8 px-3 text-xs rounded-lg font-medium border-border hover:bg-background text-foreground gap-1.5 shadow-sm shrink-0 cursor-pointer"
                                         onClick={handleRefreshStatus}
                                         disabled={isRefreshing}
                                     >
@@ -499,7 +499,7 @@ function SimpleCommandRow({ command }: { command: string }) {
     };
 
     return (
-        <div className="flex items-center justify-between gap-2.5 px-3 py-2 rounded-lg bg-background border border-border/70 text-foreground font-mono text-xs shadow-2xs">
+        <div className="flex items-center justify-between gap-2.5 px-3 py-2 rounded-lg bg-background border border-border/70 text-foreground font-mono text-xs shadow-sm">
             <div className="flex items-center gap-2 min-w-0">
                 <span className="text-muted-foreground/60 select-none">$</span>
                 <span className="font-medium text-foreground select-all truncate">{command}</span>

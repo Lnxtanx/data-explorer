@@ -4,9 +4,17 @@
 // and manages loading/generating/empty states.
 // =============================================================================
 
-import React, { useCallback, useEffect, useRef } from 'react';
-import { Database, Loader2, Plus, Users } from 'lucide-react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Database, Loader2, Plus, Users, Trash2, Eye, EyeOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { useTheme } from 'next-themes';
@@ -14,7 +22,7 @@ import { Dashboard, InsightEvidence, PanelData } from '@/lib/api/dashboard';
 import type { SwTheme } from '@/dashboard-engine/contract';
 import { GenerateProgress } from './de-GenerateProgress';
 import { DashboardEmptyState } from './de-DashboardEmptyState';
-import { GenerationProgress } from '@/hooks/de-useDashboard';
+import { GenerationProgress, useDeletePanel, useReorderPanels, useResizePanel, useSetPanelVisibility } from '@/hooks/de-useDashboard';
 import { useConnections } from '@/lib/api/data/connection';
 import { useGreeting } from '@/hooks/useGreeting';
 
@@ -31,7 +39,7 @@ interface DashboardViewProps {
   onSectionVisible?: (sectionId: string) => void;
   iframeRef?: React.RefObject<HTMLIFrameElement>;
   onOpenConnectWizard?: () => void;
-  onInsightWhy?: (panelKey: string, evidence?: InsightEvidence) => void;
+  onInsightWhy?: (panelKey: string, evidence?: InsightEvidence, title?: string) => void;
 }
 
 export function DashboardView({
@@ -66,30 +74,142 @@ export function DashboardView({
   const displayName = firstName || 'there';
   const isTeamMember = selectedConnection?.access_type === 'team';
 
-  // Keep the sandboxed engine's palette in sync when the app theme changes.
+  const deletePanelMutation = useDeletePanel(connectionId);
+  const reorderPanelsMutation = useReorderPanels(connectionId);
+  const resizePanelMutation = useResizePanel(connectionId);
+  const setVisibilityMutation = useSetPanelVisibility(connectionId);
+
+  const [pendingDelete, setPendingDelete] = useState<{ panelKey: string; title: string } | null>(null);
+  const [hiddenPanels, setHiddenPanels] = useState<Array<{ key: string; title: string }>>([]);
+  const [showHiddenModal, setShowHiddenModal] = useState(false);
+
+  useEffect(() => {
+    if (dashboard?.panels) {
+      const hidden = dashboard.panels
+        .filter((p) => p.config?.is_hidden === true)
+        .map((p) => ({ key: p.panel_key || (p as any).key || '', title: p.title || p.panel_key || '' }))
+        .filter((p) => Boolean(p.key));
+      setHiddenPanels(hidden);
+    }
+  }, [dashboard?.panels]);
+
+  useEffect(() => {
+    window.dispatchEvent(
+      new CustomEvent('sw:hidden-panels-changed', {
+        detail: { count: hiddenPanels.length, panels: hiddenPanels },
+      })
+    );
+  }, [hiddenPanels]);
+
+  useEffect(() => {
+    const handleOpenModal = () => setShowHiddenModal(true);
+    window.addEventListener('sw:open-hidden-panels-modal', handleOpenModal);
+    return () => window.removeEventListener('sw:open-hidden-panels-modal', handleOpenModal);
+  }, []);
+
+  // Keep the sandboxed engine's palette and permissions in sync
   const pushThemeSync = useCallback(() => {
     iframeRef.current?.contentWindow?.postMessage({ type: 'THEME_SYNC', theme: dashTheme }, '*');
-  }, [dashTheme, iframeRef]);
+    iframeRef.current?.contentWindow?.postMessage({ type: 'SET_PERMISSIONS', canEdit: !isTeamMember }, '*');
+  }, [dashTheme, isTeamMember, iframeRef]);
 
   useEffect(() => {
     pushThemeSync();
   }, [pushThemeSync]);
 
+  const handleConfirmDelete = async () => {
+    if (!pendingDelete || !dashboard?.id) return;
+    const { panelKey, title } = pendingDelete;
+    setPendingDelete(null);
+
+    // Optimistically animate out inside the iframe
+    iframeRef.current?.contentWindow?.postMessage({ type: 'PANEL_DELETED', panelKey }, '*');
+
+    try {
+      await deletePanelMutation.mutateAsync({
+        dashboardId: dashboard.id,
+        panelKey,
+      });
+      toast.success(`Removed "${title}" from dashboard`);
+    } catch (err: any) {
+      toast.error(`Failed to delete panel: ${err?.message || 'Deletion failed'}`);
+    }
+  };
+
+  const handleUnhidePanel = (panelKey: string) => {
+    iframeRef.current?.contentWindow?.postMessage({ type: 'UNHIDE_PANEL', panelKey }, '*');
+    setHiddenPanels((prev) => prev.filter((p) => p.key !== panelKey));
+    if (dashboard?.id) {
+      setVisibilityMutation.mutate({
+        dashboardId: dashboard.id,
+        panelKey,
+        isHidden: false,
+      });
+    }
+  };
+
   // postMessage bridge: listen for events coming from inside the sandboxed iframe
   useEffect(() => {
     const handleMessage = async (event: MessageEvent) => {
       // Source-identity check: only accept messages from OUR sandboxed iframe
-      // (the iframe has sandbox="allow-scripts" only, so it cannot spoof this).
       if (event.source !== iframeRef.current?.contentWindow) return;
 
-      // Ensure the message has our expected structure
       const msg = event.data;
       if (!msg || typeof msg !== 'object') return;
 
       if (msg.type === 'DASHBOARD_LOADED') {
-        // The runtime just finished rendering a (possibly fresh) html snapshot —
-        // reply with the current theme so __SW_THEME__ can never go stale.
         pushThemeSync();
+      } else if (msg.type === 'PANEL_DELETE_REQUEST') {
+        if (isTeamMember) {
+          toast.error('Only the dashboard owner can delete panels.');
+          return;
+        }
+        setPendingDelete({ panelKey: msg.panelKey, title: msg.title || msg.panelKey });
+      } else if (msg.type === 'PANEL_MOVE_REQUEST') {
+        if (isTeamMember) {
+          toast.error('Only the dashboard owner can reorder panels.');
+          return;
+        }
+        if (dashboard?.id && msg.panelKey && msg.direction) {
+          reorderPanelsMutation.mutate({
+            dashboardId: dashboard.id,
+            panelKey: msg.panelKey,
+            direction: msg.direction,
+          }, {
+            onError: (err: any) => {
+              toast.error(`Failed to move panel: ${err?.message || 'Unknown error'}`);
+            },
+          });
+        }
+      } else if (msg.type === 'PANEL_RESIZE_REQUEST') {
+        if (isTeamMember) return;
+        if (dashboard?.id && msg.panelKey && (msg.colSpan || msg.height !== undefined)) {
+          resizePanelMutation.mutate({
+            dashboardId: dashboard.id,
+            panelKey: msg.panelKey,
+            colSpan: msg.colSpan,
+            height: msg.height,
+          });
+        }
+      } else if (msg.type === 'PANEL_HIDE_REQUEST') {
+        if (isTeamMember) return;
+        if (dashboard?.id && msg.panelKey) {
+          const isHidden = Boolean(msg.isHidden);
+          if (isHidden) {
+            setHiddenPanels((prev) => {
+              if (prev.some((p) => p.key === msg.panelKey)) return prev;
+              return [...prev, { key: msg.panelKey, title: msg.title || msg.panelKey }];
+            });
+            toast.success(`Hidden "${msg.title || msg.panelKey}". You can restore it from Hidden Panels.`);
+          } else {
+            setHiddenPanels((prev) => prev.filter((p) => p.key !== msg.panelKey));
+          }
+          setVisibilityMutation.mutate({
+            dashboardId: dashboard.id,
+            panelKey: msg.panelKey,
+            isHidden,
+          });
+        }
       } else if (msg.type === 'PANEL_REFRESH_REQUEST') {
         const { panelKey } = msg;
         if (panelKey && onRefreshPanel) {
@@ -129,14 +249,14 @@ export function DashboardView({
         }
       } else if (msg.type === 'INSIGHT_WHY_REQUEST') {
         if (onInsightWhy && msg.panelKey) {
-          onInsightWhy(msg.panelKey, msg.evidence);
+          onInsightWhy(msg.panelKey, msg.evidence, msg.title);
         }
       }
     };
 
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, [onRefreshPanel, onSectionVisible, iframeRef, onInsightWhy, pushThemeSync]);
+  }, [onRefreshPanel, onSectionVisible, iframeRef, onInsightWhy, pushThemeSync, isTeamMember, dashboard?.id, reorderPanelsMutation]);
 
   // 1. Currently generating dashboard
   if (isGenerating) {
@@ -186,13 +306,90 @@ export function DashboardView({
           </span>
         </div>
       )}
+
       <iframe
         ref={iframeRef}
         srcDoc={html}
         title={dashboard.title || 'Analytics Dashboard'}
         sandbox="allow-scripts"
         className="w-full h-full border-none flex-1"
+        onLoad={pushThemeSync}
       />
+
+      {/* Delete Confirmation Modal */}
+      <Dialog open={!!pendingDelete} onOpenChange={(open) => !open && setPendingDelete(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete Panel</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to remove <strong className="text-foreground">{pendingDelete?.title}</strong> from this dashboard?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0 mt-4">
+            <Button
+              variant="outline"
+              onClick={() => setPendingDelete(null)}
+              disabled={deletePanelMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleConfirmDelete}
+              disabled={deletePanelMutation.isPending}
+            >
+              {deletePanelMutation.isPending ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                'Delete Panel'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Hidden Panels Management Modal */}
+      <Dialog open={showHiddenModal} onOpenChange={setShowHiddenModal}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <EyeOff className="w-4 h-4 text-amber-500" />
+              Manage Hidden Panels
+            </DialogTitle>
+            <DialogDescription>
+              These panels are currently hidden from your dashboard. Click "Restore" to unhide any card.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-2 max-h-64 overflow-y-auto py-2">
+            {hiddenPanels.length === 0 ? (
+              <p className="text-xs text-muted-foreground py-6 text-center">No panels are currently hidden.</p>
+            ) : (
+              hiddenPanels.map((p) => (
+                <div key={p.key} className="flex items-center justify-between p-2.5 rounded-lg bg-muted/40 border border-border">
+                  <span className="text-xs font-medium text-foreground truncate max-w-[260px]">{p.title}</span>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleUnhidePanel(p.key)}
+                    className="h-7 text-xs gap-1 text-primary hover:text-primary hover:bg-primary/10 border-primary/20"
+                  >
+                    <Eye className="w-3.5 h-3.5" />
+                    Restore
+                  </Button>
+                </div>
+              ))
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="secondary" size="sm" onClick={() => setShowHiddenModal(false)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

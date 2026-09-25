@@ -71,7 +71,7 @@ export function ConnectorList({ onSelectConnection }: ConnectorListProps) {
                     size="sm"
                     onClick={handleManualRefresh}
                     disabled={isFetching}
-                    className="h-8 gap-1.5 text-xs rounded-lg shadow-xs shrink-0"
+                    className="h-8 gap-1.5 text-xs rounded-lg shadow-sm shrink-0"
                 >
                     <RefreshCw className={cn("w-3.5 h-3.5", isFetching && "animate-spin text-primary")} />
                     <span>Refresh</span>

@@ -33,7 +33,7 @@ function Html5Icon({ className }: { className?: string }) {
 // ── Authentic Excel Icon ──────────────────────────────────────────────────────
 function ExcelIcon({ className }: { className?: string }) {
     return (
-        <div className={cn("w-5 h-5 rounded bg-[#107C41] flex items-center justify-center text-white font-bold text-xs shadow-xs", className)}>
+        <div className={cn("w-5 h-5 rounded bg-[#107C41] flex items-center justify-center text-white font-bold text-xs shadow-sm", className)}>
             X
         </div>
     );
@@ -42,7 +42,7 @@ function ExcelIcon({ className }: { className?: string }) {
 // ── Authentic PDF Icon ────────────────────────────────────────────────────────
 function PdfIcon({ className }: { className?: string }) {
     return (
-        <div className={cn("w-5 h-5 rounded bg-[#EA4335] flex items-center justify-center text-white font-bold text-[9px] tracking-tight shadow-xs", className)}>
+        <div className={cn("w-5 h-5 rounded bg-[#EA4335] flex items-center justify-center text-white font-bold text-[9px] tracking-tight shadow-sm", className)}>
             PDF
         </div>
     );
@@ -82,7 +82,7 @@ export function FileView({ artifact, onView, isOpen = false }: FileViewProps) {
     let typeLabel = 'Document';
 
     if (isHtml) {
-        customIcon = <Html5Icon className="w-5 h-5 drop-shadow-xs" />;
+        customIcon = <Html5Icon className="w-5 h-5 drop-shadow-sm" />;
         badgeBg = 'bg-orange-500/15 text-orange-500 border-orange-500/30';
         cardHover = 'hover:border-orange-500/40 hover:shadow-orange-500/5';
         typeLabel = 'HTML5 Report';
@@ -185,15 +185,15 @@ export function FileView({ artifact, onView, isOpen = false }: FileViewProps) {
             className={cn(
                 'group relative flex items-center gap-3 rounded-xl border px-3.5 py-2.5 transition-all w-full max-w-[420px] select-none',
                 isOpen
-                    ? 'border-primary/60 bg-primary/[0.04] shadow-xs'
-                    : 'border-border/60 bg-card/95 shadow-2xs hover:shadow-xs',
+                    ? 'border-primary/60 bg-primary/[0.04] shadow-sm'
+                    : 'border-border/60 bg-card/95 shadow-sm hover:shadow-sm',
                 cardHover,
                 onView && 'cursor-pointer hover:bg-muted/15'
             )}
             onClick={() => onView?.(active)}
         >
             {/* File Icon */}
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border border-border/40 bg-background shadow-2xs">
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border border-border/40 bg-background shadow-sm">
                 {customIcon}
             </div>
 
@@ -296,9 +296,9 @@ export function FileView({ artifact, onView, isOpen = false }: FileViewProps) {
                         type="button"
                         onClick={() => onView(active)}
                         className={cn(
-                            "p-2 rounded-lg transition-all cursor-pointer active:scale-95 shadow-2xs",
+                            "p-2 rounded-lg transition-all cursor-pointer active:scale-95 shadow-sm",
                             isOpen
-                                ? "bg-primary text-primary-foreground shadow-xs ring-2 ring-primary/30 border border-primary font-semibold"
+                                ? "bg-primary text-primary-foreground shadow-sm ring-2 ring-primary/30 border border-primary font-semibold"
                                 : "text-muted-foreground/70 hover:text-foreground hover:bg-muted border border-transparent hover:border-border/60"
                         )}
                         title={isOpen ? "Preview is active (click to close)" : "Preview report"}

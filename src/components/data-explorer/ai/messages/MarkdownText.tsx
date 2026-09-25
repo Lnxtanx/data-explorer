@@ -242,7 +242,7 @@ function MarkdownTable({
     };
 
     return (
-        <div className="my-3 w-full max-w-full overflow-x-auto rounded-xl border border-border/60 bg-card/60 shadow-2xs">
+        <div className="my-3 w-full max-w-full overflow-x-auto rounded-xl border border-border/60 bg-card/60 shadow-sm">
             <table className="w-full text-xs border-collapse">
                 <thead className="bg-muted/50 border-b border-border/40">
                     <tr>
@@ -409,7 +409,7 @@ function CalloutBlock({
         }[type];
 
         return (
-            <div className={cn('my-2.5 rounded-lg border p-3 leading-relaxed shadow-2xs', styles.border)}>
+            <div className={cn('my-2.5 rounded-lg border p-3 leading-relaxed shadow-sm', styles.border)}>
                 <div className="flex items-center gap-1.5 font-semibold text-[11px] uppercase tracking-wider mb-1">
                     <styles.Icon className={cn('w-3.5 h-3.5 shrink-0', styles.titleColor)} />
                     <span className={styles.titleColor}>{styles.title}</span>

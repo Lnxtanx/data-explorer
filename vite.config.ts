@@ -65,6 +65,7 @@ export default defineConfig(({ mode }) => {
         "/api": {
           target: env.VITE_PROXY_TARGET || "http://localhost:3000",
           changeOrigin: true,
+          ws: true, // voice session WS (/api/voice/session) + agent data channel
         },
         "/ai-api": {
           target: "http://localhost:8001",
@@ -79,7 +80,7 @@ export default defineConfig(({ mode }) => {
           manualChunks(id) {
             if (id.includes('/recharts/') || id.includes('/d3-') || id.includes('/victory-')) return 'vendor-charts';
             if (id.includes('/mermaid/')) return 'vendor-mermaid';
-            if (id.includes('/pptxgenjs/') || id.includes('/jspdf')) return 'vendor-reports';
+            if (id.includes('/jspdf')) return 'vendor-reports';
             if (id.includes('node_modules/react-dom/') || id.includes('node_modules/react/') || id.includes('node_modules/react-router-dom/')) return 'vendor-react';
             if (id.includes('node_modules/@radix-ui/')) return 'vendor-radix';
             if (id.includes('node_modules/@tanstack/')) return 'vendor-query';

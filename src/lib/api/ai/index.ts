@@ -55,6 +55,7 @@ export interface AIChat {
     modelUsed: string;
     agentMode?: 'flash' | 'deep';
     thinkingEnabled?: boolean;
+    useCase?: string;
 }
 
 export interface AIMessage {
@@ -135,6 +136,8 @@ export interface ChatMessagesResponse {
         created_at: string;
         agent_mode?: 'flash' | 'deep';
         thinking_enabled?: boolean;
+        use_case?: string;
+        useCase?: string;
     };
     messages: AIMessage[];
     hasMore?: boolean;
@@ -179,11 +182,13 @@ export async function listChats(params?: {
     connectionId?: string;
     limit?: number;
     offset?: number;
+    useCase?: string;
 }): Promise<ListChatsResponse> {
     const qs = new URLSearchParams();
     if (params?.connectionId) qs.set('connectionId', params.connectionId);
     if (params?.limit)        qs.set('limit', String(params.limit));
     if (params?.offset)       qs.set('offset', String(params.offset));
+    if (params?.useCase)      qs.set('useCase', params.useCase);
 
     const query = qs.toString() ? `?${qs.toString()}` : '';
     return apiRequest<ListChatsResponse>(`/api/ai/chats${query}`);
@@ -319,6 +324,10 @@ export interface UploadedFileItem {
     token_estimate: number;
     preview: string;
     metadata: Record<string, unknown>;
+    download_url?: string;
+    storage_path?: string;
+    extracted_components?: Record<string, unknown>;
+    text_content?: string;
 }
 
 export interface UploadFilesResponse {

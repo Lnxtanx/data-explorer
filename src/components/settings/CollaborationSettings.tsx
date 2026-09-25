@@ -103,14 +103,14 @@ export function CollaborationSettings() {
                         size="sm"
                         onClick={handleRefreshAll}
                         disabled={isRefreshing}
-                        className="h-8 rounded-lg text-xs gap-1.5 text-muted-foreground hover:text-foreground"
+                        className="rounded-lg text-muted-foreground hover:text-foreground"
                         title="Refresh all team data"
                         aria-label="Refresh all team data"
                     >
                         <RefreshCw className={cn("h-3.5 w-3.5", isRefreshing && "animate-spin")} />
                         <span>{isRefreshing ? 'Refreshing...' : 'Refresh'}</span>
                     </Button>
-                    <Button variant="outline" size="sm" onClick={() => setIsCreatingTeam(!isCreatingTeam)} className="h-8 rounded-lg border-dashed text-xs" aria-label="Create a new team">
+                    <Button variant="outline" size="sm" onClick={() => setIsCreatingTeam(!isCreatingTeam)} className="rounded-lg border-dashed" aria-label="Create a new team">
                         <Plus className="mr-1.5 h-3.5 w-3.5" /> New Team
                     </Button>
                 </div>
@@ -144,7 +144,7 @@ export function CollaborationSettings() {
                         <p className="text-xs text-muted-foreground max-w-[250px]">Create a team to start sharing your database projects with others.</p>
                     </div>
                     {!isCreatingTeam && (
-                        <Button onClick={() => setIsCreatingTeam(true)} size="sm" className="rounded-xl font-medium shadow-xs">
+                        <Button onClick={() => setIsCreatingTeam(true)} size="sm" className="rounded-xl font-medium shadow-sm">
                             Create First Team
                         </Button>
                     )}
@@ -170,7 +170,7 @@ export function CollaborationSettings() {
                                 <div className="flex items-center gap-2 min-w-0">
                                     <span className="font-semibold text-sm capitalize text-foreground truncate">{currentRole ? currentRole : '—'}</span>
                                     {isOwner && (
-                                        <Badge variant="outline" className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20 text-[10px] font-medium px-2 py-0.5">
+                                        <Badge variant="outline" className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20 text-2xs font-medium px-2 py-0.5">
                                             OWNER
                                         </Badge>
                                     )}
@@ -186,7 +186,7 @@ export function CollaborationSettings() {
                                             <Button
                                                 variant="ghost"
                                                 size="sm"
-                                                className="h-7 px-2 text-[11px] text-muted-foreground hover:text-destructive gap-1"
+                                                className="px-2 text-2xs text-muted-foreground hover:text-destructive gap-1"
                                                 aria-label="Leave this team"
                                             >
                                                 <LogOut className="h-3 w-3" /> Leave
@@ -203,7 +203,7 @@ export function CollaborationSettings() {
                             <Badge
                                 variant="outline"
                                 className={cn(
-                                    "text-[10px] font-medium px-2 py-0.5",
+                                    "text-2xs font-medium px-2 py-0.5",
                                     seatsFull
                                         ? "border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400"
                                         : "text-muted-foreground"
@@ -214,7 +214,7 @@ export function CollaborationSettings() {
                                 Seats {seatsData.occupied}/{seatsData.seats}
                             </Badge>
                             {seatsFull && (
-                                <span className="text-[11px] text-muted-foreground">
+                                <span className="text-2xs text-muted-foreground">
                                     Seat limit reached — the team owner must upgrade to invite more people.
                                 </span>
                             )}

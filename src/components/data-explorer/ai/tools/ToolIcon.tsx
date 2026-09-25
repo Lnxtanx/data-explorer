@@ -72,13 +72,14 @@ export function toolLabel(name: string): string {
     return name.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 }
 
+const UNSAFE_PREVIEW_KEYS = new Set([
+    'connection_id', 'connectionId', 'sql', 'query', 'user_id', 'session_id',
+    'run_id', 'dashboard_id', 'config', 'html_template', 'panels', 'sections',
+]);
+
 export function getToolKeyParam(name: string, input?: Record<string, unknown>): string | null {
     if (!input || Object.keys(input).length === 0) return null;
 
-    if (name === 'run_query' && input.sql) {
-        const clean = String(input.sql).replace(/\s+/g, ' ').trim();
-        return clean.length > 35 ? clean.slice(0, 35) + '…' : clean;
-    }
     if (name === 'save_dashboard' && input.title) {
         const title = String(input.title).trim();
         return title.length > 35 ? title.slice(0, 35) + '…' : title;
@@ -90,7 +91,12 @@ export function getToolKeyParam(name: string, input?: Record<string, unknown>): 
         return String(input.title || input.panel_key);
     }
     if (name === 'get_schema_context') {
+        if (input.tables) return String(input.tables);
         return input.table_names ? String(input.table_names) : null;
+    }
+    if (name === 'run_query') {
+        // SQL is never previewed in the UI.
+        return null;
     }
     if (name === 'export') {
         const fmt = input.format ? String(input.format).toUpperCase() : 'FILE';
@@ -123,9 +129,12 @@ export function getToolKeyParam(name: string, input?: Record<string, unknown>): 
     if (input.metric_column) return String(input.metric_column);
     if (input.column) return String(input.column);
 
-    // Fallback: first non-connectionId primitive entry
+    // Fallback: first safe primitive entry (never sql / connection / id keys).
     const entries = Object.entries(input).filter(
-        ([k, v]) => k !== 'connection_id' && k !== 'connectionId' && (typeof v === 'string' || typeof v === 'number')
+        ([k, v]) =>
+            !UNSAFE_PREVIEW_KEYS.has(k) &&
+            !/(^|_)(id|uuid|token|secret)$/i.test(k) &&
+            (typeof v === 'string' || typeof v === 'number')
     );
     if (entries.length > 0) {
         const str = String(entries[0][1]);

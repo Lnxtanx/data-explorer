@@ -16,6 +16,7 @@ export interface PanelData {
 }
 
 export interface InsightEvidence {
+  title?: string;
   classification?: string;
   current_value?: number | null;
   previous_value?: number | null;
@@ -57,6 +58,16 @@ export interface SwChartApi {
 export interface SwRuntimeApi {
   refreshPanel: (panelKey: string) => void;
   whyPanel: (panelKey: string) => void;
+  deletePanel: (panelKey: string) => void;
+  movePanel: (panelKey: string, direction: 'up' | 'down') => void;
+  expandPanel: (panelKey: string) => void;
+  resizePanel: (panelKey: string, options?: (1 | 2 | 3) | { colSpan?: 1 | 2 | 3; height?: number }) => void;
+  collapsePanel: (panelKey: string) => void;
+  hidePanel: (panelKey: string) => void;
+  unhidePanel: (panelKey: string) => void;
+  toggleSection: (sectionId: string) => void;
+  toggleCardMenu?: (btnOrKey: HTMLElement | string, panelKey?: string) => void;
+  closeAllCardMenus?: () => void;
   _updatePanel: (panelKey: string, data: PanelData) => void;
 }
 
@@ -74,7 +85,15 @@ export type BridgeMessage =
   | { type: 'GLOBAL_REFRESH_DONE'; dataMap: Record<string, PanelData> }
   | { type: 'GLOBAL_REFRESH_ERROR'; error?: string }
   | { type: 'SCROLL_TO_SECTION'; sectionId: string }
-  | { type: 'THEME_SYNC'; theme: SwTheme };
+  | { type: 'SECTION_VISIBLE'; sectionId: string }
+  | { type: 'THEME_SYNC'; theme: SwTheme }
+  | { type: 'PANEL_DELETE_REQUEST'; panelKey: string; title?: string }
+  | { type: 'PANEL_MOVE_REQUEST'; panelKey: string; direction: 'up' | 'down' }
+  | { type: 'PANEL_DELETED'; panelKey: string }
+  | { type: 'PANEL_RESIZE_REQUEST'; panelKey: string; colSpan?: 1 | 2 | 3; height?: number }
+  | { type: 'PANEL_HIDE_REQUEST'; panelKey: string; isHidden: boolean; title?: string }
+  | { type: 'UNHIDE_PANEL'; panelKey: string }
+  | { type: 'SET_PERMISSIONS'; canEdit: boolean };
 
 declare global {
   interface Window extends EngineGlobals {

@@ -92,25 +92,90 @@ export function FilePreviewView({ artifact, onClose }: FilePreviewViewProps) {
         if (artifact.key) {
             return `/ai-api/ai/exports/content?key=${encodeURIComponent(artifact.key)}`;
         }
-        let url = artifact.downloadUrl;
+        // If we have a file_id, prefer our same-origin content endpoint to avoid cross-origin S3 CORS issues
+        const fileId = artifact.fileId || (artifact as any).file_id || (artifact.type === 'attachment' && artifact.id ? artifact.id : null);
+        if (fileId && (!artifact.downloadUrl || !artifact.downloadUrl.startsWith('/'))) {
+            return `/api/ai/files/${fileId}/content`;
+        }
+        let url = artifact.downloadUrl || (artifact as any).url;
+        if (!url && fileId) {
+            return `/api/ai/files/${fileId}/content`;
+        }
         if (!url) {
             throw new Error('File download URL is not available.');
         }
         return url;
-    }, [artifact.downloadUrl, artifact.key]);
+    }, [artifact]);
 
     // ── Load & parse file ────────────────────────────────────────────────────────
     const loadFile = useCallback(async () => {
         setLoading(true);
         setError(null);
         try {
-            // Check if rows and columns were already provided directly on artifact
+            // 1. Check if rows and columns were already provided directly on artifact
             if (artifact.rows && artifact.rows.length > 0 && artifact.columns && artifact.columns.length > 0) {
                 const headers = artifact.columns.map(c => c.name);
                 const rows = artifact.rows.map(r => headers.map(h => (r[h] ?? null) as string | number | boolean | null));
                 setSheets([{ name: 'Data', headers, rows }]);
                 setLoading(false);
                 return;
+            }
+
+            // 2. Check if text/csv content is already available locally (e.g. from file upload)
+            const localContent = artifact.rawContent || (artifact as any).text_content || (artifact as any).textContent;
+            if (localContent && typeof localContent === 'string' && localContent.trim().length > 0) {
+                if (isCsv || isExcel) {
+                    try {
+                        const workbook = XLSX.read(localContent, { type: 'string' });
+                        const parsedSheets: ParsedSheet[] = workbook.SheetNames.map(name => {
+                            const sheet = workbook.Sheets[name];
+                            if (!sheet) return { name, headers: [], rows: [] };
+                            const rawData = XLSX.utils.sheet_to_json<(string | number | boolean | null)[]>(sheet, {
+                                header: 1,
+                                defval: '',
+                                blankrows: false,
+                            });
+                            if (rawData.length === 0) return { name, headers: [], rows: [] };
+                            const rawHeaders = (rawData[0] || []) as any[];
+                            const headers = rawHeaders.map((h, i) => String(h ?? '').trim() || `Column ${i + 1}`);
+                            const rows = rawData.slice(1);
+                            return { name, headers, rows };
+                        });
+                        setSheets(parsedSheets);
+                        setActiveSheetIdx(0);
+                        setLoading(false);
+                        return;
+                    } catch (csvErr) {
+                        console.warn('[FilePreviewView] Failed to parse localContent as spreadsheet:', csvErr);
+                    }
+                } else if (isText) {
+                    setTextRaw(localContent);
+                    setLoading(false);
+                    return;
+                } else if (isHtml) {
+                    setHtmlRaw(localContent);
+                    setLoading(false);
+                    return;
+                } else if (isJson) {
+                    setTextRaw(localContent);
+                    try {
+                        const parsed = JSON.parse(localContent);
+                        setJsonRaw(JSON.stringify(parsed, null, 2));
+                        if (Array.isArray(parsed) && parsed.length > 0 && typeof parsed[0] === 'object' && parsed[0] !== null) {
+                            const allKeys = Array.from(new Set(parsed.flatMap(obj => (typeof obj === 'object' && obj !== null ? Object.keys(obj) : []))));
+                            const rows = parsed.map(obj => allKeys.map(k => (obj && typeof obj === 'object' ? obj[k] : null)));
+                            setSheets([{ name: 'JSON Records', headers: allKeys, rows }]);
+                        } else if (typeof parsed === 'object' && parsed !== null) {
+                            const headers = ['Key', 'Value'];
+                            const rows = Object.entries(parsed).map(([k, v]) => [k, typeof v === 'object' ? JSON.stringify(v) : String(v)]);
+                            setSheets([{ name: 'Properties', headers, rows }]);
+                        }
+                    } catch {
+                        setSheets([]);
+                    }
+                    setLoading(false);
+                    return;
+                }
             }
 
             const url = await fetchValidUrl();
@@ -127,7 +192,9 @@ export function FilePreviewView({ artifact, onClose }: FilePreviewViewProps) {
                 return;
             }
 
-            const res = await fetch(url, { credentials: 'include' });
+            // Omit credentials on cross-origin requests (e.g. S3 presigned URLs) to prevent CORS credential errors
+            const isSameOrigin = url.startsWith('/') || (typeof window !== 'undefined' && url.startsWith(window.location.origin));
+            const res = await fetch(url, isSameOrigin ? { credentials: 'include' } : {});
             if (!res.ok) {
                 throw new Error(`Failed to fetch file (${res.status} ${res.statusText})`);
             }
@@ -213,7 +280,7 @@ export function FilePreviewView({ artifact, onClose }: FilePreviewViewProps) {
         } finally {
             setLoading(false);
         }
-    }, [artifact, fetchValidUrl, isHtml, isImage, isJson, isPdf, isText]);
+    }, [artifact, fetchValidUrl, isHtml, isImage, isJson, isPdf, isText, isCsv, isExcel]);
 
     useEffect(() => {
         loadFile();
@@ -518,7 +585,7 @@ export function FilePreviewView({ artifact, onClose }: FilePreviewViewProps) {
                             type="button"
                             onClick={handleDownload}
                             disabled={downloading}
-                            className="p-1.5 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-2xs disabled:opacity-60 cursor-pointer"
+                            className="p-1.5 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-sm disabled:opacity-60 cursor-pointer"
                             title="Download HTML file"
                         >
                             {downloading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
@@ -603,7 +670,7 @@ export function FilePreviewView({ artifact, onClose }: FilePreviewViewProps) {
                             type="button"
                             onClick={handleDownload}
                             disabled={downloading}
-                            className="p-1.5 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-2xs disabled:opacity-60 cursor-pointer"
+                            className="p-1.5 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-sm disabled:opacity-60 cursor-pointer"
                             title="Download PDF"
                         >
                             {downloading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
@@ -744,7 +811,7 @@ export function FilePreviewView({ artifact, onClose }: FilePreviewViewProps) {
     return (
         <div className="flex flex-col h-full bg-background">
             {/* Unified Single Header Toolbar */}
-            <div className="flex items-center justify-between px-3.5 py-2 border-b border-border/40 bg-card/60 backdrop-blur-xs shrink-0 gap-2">
+            <div className="flex items-center justify-between px-3.5 py-2 border-b border-border/40 bg-card/60 backdrop-blur-sm shrink-0 gap-2">
                 {/* File Meta */}
                 <div className="flex items-center gap-2 min-w-0 flex-1 overflow-hidden">
                     <div className="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-500 flex items-center justify-center shrink-0">
@@ -849,7 +916,7 @@ export function FilePreviewView({ artifact, onClose }: FilePreviewViewProps) {
                         type="button"
                         onClick={handleDownload}
                         disabled={downloading}
-                        className="h-7 flex items-center gap-1.5 text-[11px] font-medium px-2.5 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-2xs disabled:opacity-60 cursor-pointer"
+                        className="h-7 flex items-center gap-1.5 text-[11px] font-medium px-2.5 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-sm disabled:opacity-60 cursor-pointer"
                         title="Download file"
                     >
                         {downloading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />}
@@ -882,7 +949,7 @@ export function FilePreviewView({ artifact, onClose }: FilePreviewViewProps) {
                             className={cn(
                                 'text-[11px] px-2.5 py-0.5 rounded-md font-medium whitespace-nowrap transition-colors cursor-pointer',
                                 activeSheetIdx === idx
-                                    ? 'bg-primary/15 text-primary font-semibold shadow-2xs'
+                                    ? 'bg-primary/15 text-primary font-semibold shadow-sm'
                                     : 'text-muted-foreground/70 hover:text-foreground hover:bg-muted/40'
                             )}
                         >
@@ -913,7 +980,7 @@ export function FilePreviewView({ artifact, onClose }: FilePreviewViewProps) {
                     </div>
                 ) : (
                     <table className="w-full text-left border-collapse text-xs">
-                        <thead className="sticky top-0 z-10 bg-background/95 backdrop-blur-xs shadow-2xs">
+                        <thead className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm shadow-sm">
                             <tr className="border-b border-border/50 bg-muted/30">
                                 {/* Row Index # */}
                                 <th className="w-12 px-2.5 py-2 font-mono text-[10px] text-muted-foreground/50 text-right border-r border-border/20 select-none bg-muted/40">

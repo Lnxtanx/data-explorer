@@ -47,7 +47,7 @@ export function ConnectorOverview({ onNavigate }: ConnectorOverviewProps) {
                 <Button
                     size="sm"
                     onClick={() => onNavigate('connect')}
-                    className="h-8 gap-1.5 text-xs rounded-lg shadow-xs shrink-0"
+                    className="h-8 gap-1.5 text-xs rounded-lg shadow-sm shrink-0"
                 >
                     <Plus className="w-3.5 h-3.5" />
                     <span>Add Connector</span>
@@ -56,7 +56,7 @@ export function ConnectorOverview({ onNavigate }: ConnectorOverviewProps) {
 
             {/* Quick Metrics Grid */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 shrink-0">
-                <div className="p-3 rounded-xl border bg-background space-y-1 shadow-xs">
+                <div className="p-3 rounded-xl border bg-background space-y-1 shadow-sm">
                     <div className="flex items-center justify-between text-muted-foreground">
                         <span className="text-[10px] font-semibold uppercase tracking-wider">Connectors</span>
                         <PostgresIcon className="w-3.5 h-3.5" />
@@ -81,7 +81,7 @@ export function ConnectorOverview({ onNavigate }: ConnectorOverviewProps) {
                     </div>
                 </div>
 
-                <div className="p-3 rounded-xl border bg-background space-y-1 shadow-xs">
+                <div className="p-3 rounded-xl border bg-background space-y-1 shadow-sm">
                     <div className="flex items-center justify-between text-muted-foreground">
                         <span className="text-[10px] font-semibold uppercase tracking-wider">Relay Status</span>
                         <Server className="w-3.5 h-3.5 text-primary" />
@@ -104,7 +104,7 @@ export function ConnectorOverview({ onNavigate }: ConnectorOverviewProps) {
                     </p>
                 </div>
 
-                <div className="p-3 rounded-xl border bg-background space-y-1 shadow-xs">
+                <div className="p-3 rounded-xl border bg-background space-y-1 shadow-sm">
                     <div className="flex items-center justify-between text-muted-foreground">
                         <span className="text-[10px] font-semibold uppercase tracking-wider">Avg Latency</span>
                         <Zap className="w-3.5 h-3.5 text-emerald-500" />
@@ -121,7 +121,7 @@ export function ConnectorOverview({ onNavigate }: ConnectorOverviewProps) {
                     </p>
                 </div>
 
-                <div className="p-3 rounded-xl border bg-background space-y-1 shadow-xs">
+                <div className="p-3 rounded-xl border bg-background space-y-1 shadow-sm">
                     <div className="flex items-center justify-between text-muted-foreground">
                         <span className="text-[10px] font-semibold uppercase tracking-wider">Query Activity</span>
                         <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />

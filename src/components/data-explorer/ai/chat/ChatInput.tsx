@@ -1,9 +1,12 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { Plus, Send, Database, LayoutDashboard, FolderOpen, AtSign, X, FileText, Square, Loader2, AlertTriangle } from 'lucide-react';
+import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
+import { ActionTooltip } from '@/components/ui/tooltip';
 import { MentionPicker } from '../input/MentionPicker';
 import { MicButton } from '../MicButton';
+import VoicePanel from '../voice/VoicePanel';
 import { ModeSelector } from '../models/ModeSelector';
 import type { AgentMode } from '../models/ModeSelector';
 import type { AgentWarning, ContextMeta } from '@/hooks/agentTypes';
@@ -74,6 +77,62 @@ function MentionOverlay({
     );
 }
 
+// ─── Format detection for large pasted text ──────────────────────────────────
+
+function detectPastedFormat(text: string): { filename: string; mimeType: string } {
+    const trimmed = text.trim();
+    const timestamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 12);
+
+    // 1. JSON
+    if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+        try {
+            JSON.parse(trimmed);
+            return { filename: `pasted_data_${timestamp}.json`, mimeType: 'application/json' };
+        } catch (_) {}
+    }
+
+    // 2. SQL
+    if (/^\s*(SELECT|INSERT|UPDATE|DELETE|CREATE|ALTER|DROP|WITH|EXPLAIN)\b/i.test(trimmed)) {
+        return { filename: `pasted_query_${timestamp}.sql`, mimeType: 'application/sql' };
+    }
+
+    // 3. CSV / TSV
+    const firstLines = trimmed.split('\n').slice(0, 5).filter(l => l.trim().length > 0);
+    if (firstLines.length >= 2) {
+        const commaCount = (firstLines[0].match(/,/g) || []).length;
+        if (commaCount >= 2 && firstLines.every(l => (l.match(/,/g) || []).length === commaCount)) {
+            return { filename: `pasted_table_${timestamp}.csv`, mimeType: 'text/csv' };
+        }
+        const tabCount = (firstLines[0].match(/\t/g) || []).length;
+        if (tabCount >= 2 && firstLines.every(l => (l.match(/\t/g) || []).length === tabCount)) {
+            return { filename: `pasted_table_${timestamp}.tsv`, mimeType: 'text/tab-separated-values' };
+        }
+    }
+
+    // 4. HTML / XML
+    if (/^\s*<!DOCTYPE html|^\s*<html|^\s*<\?xml/i.test(trimmed)) {
+        return { filename: `pasted_document_${timestamp}.html`, mimeType: 'text/html' };
+    }
+
+    // 5. Python
+    if (/^\s*(def |class |import |from \w+ import |@\w+)/m.test(trimmed)) {
+        return { filename: `pasted_script_${timestamp}.py`, mimeType: 'text/x-python' };
+    }
+
+    // 6. TypeScript / JavaScript / React
+    if (/^\s*(interface |type |const |let |function |export |import |return <)/m.test(trimmed)) {
+        return { filename: `pasted_code_${timestamp}.ts`, mimeType: 'text/typescript' };
+    }
+
+    // 7. Markdown
+    if (/^#+\s|\*\*|```/m.test(trimmed)) {
+        return { filename: `pasted_doc_${timestamp}.md`, mimeType: 'text/markdown' };
+    }
+
+    // Default plain text
+    return { filename: `pasted_text_${timestamp}.txt`, mimeType: 'text/plain' };
+}
+
 // ─── ChatInput ────────────────────────────────────────────────────────────────
 
 export interface ChatInputProps {
@@ -97,6 +156,7 @@ export interface ChatInputProps {
     onKeyDown: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
     onSend: () => void;
     onAbort: () => void;
+    onFilesAdd?: (files: File[]) => void;
     onFileSelect: (e: React.ChangeEvent<HTMLInputElement>) => void;
     onRemoveFile: (index: number) => void;
     onMentionSelect: (table: string) => void;
@@ -125,7 +185,7 @@ export function ChatInput({
     input, scrollTop, attachedFiles, mentionQuery, availableTables, isStreaming,
     agentMode, connectionId, dbName, dashboardCount, showDashboard, mode, thinking,
     textareaRef, fileInputRef,
-    onInput, onScroll, onKeyDown, onSend, onAbort, onFileSelect, onRemoveFile,
+    onInput, onScroll, onKeyDown, onSend, onAbort, onFilesAdd, onFileSelect, onRemoveFile,
     onMentionSelect, onMentionClose, onMentionTrigger, onModeChange, onThinkingChange,
     onToggleDashboard, onToggleWorkspace, showWorkspace, onTranscript,
     quotaError, quotaWarning, onOpenPlans, uploadError, isUploading,
@@ -143,6 +203,32 @@ export function ChatInput({
     }
 
     const [interimSpeech, setInterimSpeech] = useState('');
+
+    const handlePaste = useCallback((e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+        // 1. If clipboard contains native files (e.g. copied images/screenshots, files from desktop)
+        const files = e.clipboardData?.files ? Array.from(e.clipboardData.files) : [];
+        if (files.length > 0 && onFilesAdd) {
+            e.preventDefault();
+            onFilesAdd(files);
+            toast.success(`Attached ${files.length} file${files.length > 1 ? 's' : ''} from clipboard`);
+            return;
+        }
+
+        // 2. Check text content
+        const text = e.clipboardData?.getData('text') || '';
+        const lineCount = text.split('\n').length;
+        const isLargeText = text.length >= 2000 || lineCount >= 35;
+
+        if (isLargeText && onFilesAdd) {
+            e.preventDefault();
+            const { filename, mimeType } = detectPastedFormat(text);
+            const blob = new Blob([text], { type: mimeType });
+            const file = new File([blob], filename, { type: mimeType, lastModified: Date.now() });
+            onFilesAdd([file]);
+            toast.success(`Pasted text converted to attachment (${filename})`);
+            return;
+        }
+    }, [onFilesAdd]);
 
     const handleTranscript = (text: string, isFinal: boolean) => {
         if (isFinal) {
@@ -190,13 +276,15 @@ export function ChatInput({
                             Upgrade
                         </button>
                     )}
-                    <button
-                        onClick={() => setWarningDismissed(true)}
-                        className="shrink-0 ml-0.5 opacity-40 hover:opacity-80 transition-opacity"
-                        title="Dismiss"
-                    >
-                        <X className="w-3 h-3" />
-                    </button>
+                    <ActionTooltip label="Dismiss warning" side="top">
+                        <button
+                            onClick={() => setWarningDismissed(true)}
+                            className="shrink-0 ml-0.5 opacity-40 hover:opacity-80 transition-opacity cursor-pointer"
+                            aria-label="Dismiss warning"
+                        >
+                            <X className="w-3 h-3" />
+                        </button>
+                    </ActionTooltip>
                 </div>
             )}
             {/* Upload error banner — transient, auto-dismisses */}
@@ -227,13 +315,15 @@ export function ChatInput({
                                 <AlertTriangle className={cn('w-3.5 h-3.5 shrink-0 mt-0.5', isCritical ? 'text-red-500' : 'text-amber-500')} />
                                 <span className="flex-1 leading-relaxed">{warning.message}</span>
                                 {onDismissWarning && (
-                                    <button
-                                        onClick={() => onDismissWarning(warning.id)}
-                                        className="shrink-0 ml-0.5 opacity-40 hover:opacity-80 transition-opacity"
-                                        title="Dismiss"
-                                    >
-                                        <X className="w-3 h-3" />
-                                    </button>
+                                    <ActionTooltip label="Dismiss warning" side="top">
+                                        <button
+                                            onClick={() => onDismissWarning(warning.id)}
+                                            className="shrink-0 ml-0.5 opacity-40 hover:opacity-80 transition-opacity cursor-pointer"
+                                            aria-label="Dismiss warning"
+                                        >
+                                            <X className="w-3 h-3" />
+                                        </button>
+                                    </ActionTooltip>
                                 )}
                             </div>
                         );
@@ -258,12 +348,16 @@ export function ChatInput({
                                 <div key={i} className="flex items-center gap-2 bg-muted/50 border border-border/50 rounded-lg pl-2 pr-1 py-1 text-xs">
                                     <FileText className="w-3.5 h-3.5 text-muted-foreground" />
                                     <span className="truncate max-w-[120px] font-medium">{file.name}</span>
-                                    <button
-                                        className="h-4 w-4 flex items-center justify-center rounded-full hover:bg-muted text-muted-foreground"
-                                        onClick={() => onRemoveFile(i)}
-                                    >
-                                        <X className="w-2.5 h-2.5" />
-                                    </button>
+                                    <ActionTooltip label="Remove file" side="top">
+                                        <button
+                                            type="button"
+                                            className="h-4 w-4 flex items-center justify-center rounded-full hover:bg-muted text-muted-foreground cursor-pointer"
+                                            onClick={() => onRemoveFile(i)}
+                                            aria-label={`Remove ${file.name}`}
+                                        >
+                                            <X className="w-2.5 h-2.5" />
+                                        </button>
+                                    </ActionTooltip>
                                 </div>
                             ))}
                         </div>
@@ -286,6 +380,7 @@ export function ChatInput({
                             onChange={onInput}
                             onKeyDown={onKeyDown}
                             onScroll={onScroll}
+                            onPaste={handlePaste}
                             placeholder={quotaError ? 'Credit limit reached — upgrade to continue' : 'Ask about your data… (use @ to reference tables)'}
                             className="w-full min-h-[34px] sm:min-h-[38px] max-h-[160px] resize-none border-0 focus-visible:outline-none focus:ring-0 px-3.5 pt-2.5 pb-1 bg-transparent text-transparent text-[14px] sm:text-[14.5px] leading-[22px] font-sans antialiased font-normal shadow-none placeholder:text-muted-foreground/70 caret-foreground break-words scrollbar-none [&::-webkit-scrollbar]:hidden selection:bg-blue-500/30 selection:text-transparent"
                             rows={1}
@@ -302,48 +397,56 @@ export function ChatInput({
                                 onChange={onFileSelect}
                                 className="hidden"
                                 multiple
-                                accept=".pdf,.docx,.xlsx,.xls,.csv,.tsv,.pptx,.txt,.md,.json,.sql,.py,.ts,.js,.tsx,.jsx,.yaml,.yml,.xml,.html,.css,.sh,.env,.log,.toml,.rs,.go,.java"
+                                accept=".pdf,.docx,.xlsx,.xls,.csv,.tsv,.pptx,.txt,.md,.json,.sql,.py,.ts,.js,.tsx,.jsx,.yaml,.yml,.xml,.html,.css,.sh,.env,.log,.toml,.rs,.go,.java,.png,.jpg,.jpeg,.webp,.svg,.gif"
                             />
-                            <button
-                                type="button"
-                                className="h-8 w-8 flex items-center justify-center rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-                                onClick={() => fileInputRef.current?.click()}
-                                title="Attach file"
-                            >
-                                <Plus className="w-4 h-4" />
-                            </button>
-                            {connectionId && (
+                            <ActionTooltip label="Attach files" side="top">
                                 <button
                                     type="button"
-                                    className="h-8 w-8 flex items-center justify-center rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-                                    onClick={onMentionTrigger}
-                                    title="Mention Table (@)"
+                                    className="h-8 w-8 flex items-center justify-center rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                                    onClick={() => fileInputRef.current?.click()}
+                                    aria-label="Attach files"
                                 >
-                                    <AtSign className="w-4 h-4" />
+                                    <Plus className="w-4 h-4" />
                                 </button>
+                            </ActionTooltip>
+                            {connectionId && (
+                                <ActionTooltip label="Mention table" shortcut="@" side="top">
+                                    <button
+                                        type="button"
+                                        className="h-8 w-8 flex items-center justify-center rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                                        onClick={onMentionTrigger}
+                                        aria-label="Mention table"
+                                    >
+                                        <AtSign className="w-4 h-4" />
+                                    </button>
+                                </ActionTooltip>
                             )}
                             {dashboardCount > 0 && (
-                                <button
-                                    type="button"
-                                    className={cn('h-8 flex items-center gap-1 px-2 rounded-lg transition-colors text-xs',
-                                        showDashboard ? 'text-primary bg-primary/10' : 'text-muted-foreground hover:text-foreground')}
-                                    onClick={onToggleDashboard}
-                                    title="Dashboard"
-                                >
-                                    <LayoutDashboard className="w-3.5 h-3.5" />
-                                    <span className="tabular-nums">{dashboardCount}</span>
-                                </button>
+                                <ActionTooltip label="Dashboard insights" side="top">
+                                    <button
+                                        type="button"
+                                        className={cn('h-8 flex items-center gap-1 px-2 rounded-lg transition-colors text-xs cursor-pointer',
+                                            showDashboard ? 'text-primary bg-primary/10' : 'text-muted-foreground hover:text-foreground')}
+                                        onClick={onToggleDashboard}
+                                        aria-label="Dashboard insights"
+                                    >
+                                        <LayoutDashboard className="w-3.5 h-3.5" />
+                                        <span className="tabular-nums">{dashboardCount}</span>
+                                    </button>
+                                </ActionTooltip>
                             )}
                             {onToggleWorkspace && (
-                                <button
-                                    type="button"
-                                    className={cn('h-8 flex items-center gap-1 px-2 rounded-lg transition-colors text-xs',
-                                        showWorkspace ? 'text-primary bg-primary/10' : 'text-muted-foreground hover:text-foreground')}
-                                    onClick={onToggleWorkspace}
-                                    title="Workspace"
-                                >
-                                    <FolderOpen className="w-3.5 h-3.5" />
-                                </button>
+                                <ActionTooltip label="Workspace artifacts" side="top">
+                                    <button
+                                        type="button"
+                                        className={cn('h-8 flex items-center gap-1 px-2 rounded-lg transition-colors text-xs cursor-pointer',
+                                            showWorkspace ? 'text-primary bg-primary/10' : 'text-muted-foreground hover:text-foreground')}
+                                        onClick={onToggleWorkspace}
+                                        aria-label="Workspace artifacts"
+                                    >
+                                        <FolderOpen className="w-3.5 h-3.5" />
+                                    </button>
+                                </ActionTooltip>
                             )}
                         </div>
 
@@ -354,37 +457,47 @@ export function ChatInput({
                                     <ModeSelector mode={mode} thinking={thinking} onModeChange={onModeChange} onThinkingChange={onThinkingChange} disabled={isStreaming} />
                                 </div>
                             )}
-                            {!isStreaming && <MicButton onTranscript={handleTranscript} disabled={isStreaming} />}
+                            {!isStreaming && (
+                                <>
+                                    <MicButton onTranscript={handleTranscript} disabled={isStreaming} />
+                                    <VoicePanel connectionId={connectionId} />
+                                </>
+                            )}
                             {isStreaming ? (
-                                <button
-                                    type="button"
-                                    onClick={onAbort}
-                                    className="h-8 w-8 flex items-center justify-center rounded-lg bg-muted hover:bg-muted/80 text-foreground transition-colors"
-                                    title="Stop generation"
-                                >
-                                    <Square className="w-3.5 h-3.5 fill-current" />
-                                </button>
+                                <ActionTooltip label="Stop Generating" shortcut="Esc" side="top">
+                                    <button
+                                        type="button"
+                                        onClick={onAbort}
+                                        className="h-8 w-8 flex items-center justify-center rounded-lg bg-muted hover:bg-muted/80 text-foreground transition-colors cursor-pointer"
+                                        aria-label="Stop generation"
+                                    >
+                                        <Square className="w-3.5 h-3.5 fill-current" />
+                                    </button>
+                                </ActionTooltip>
                             ) : isUploading ? (
                                 <button
                                     type="button"
                                     disabled
                                     className="h-8 w-8 flex items-center justify-center rounded-lg bg-muted text-muted-foreground cursor-wait"
+                                    aria-label="Uploading files"
                                 >
                                     <Loader2 className="w-3.5 h-3.5 animate-spin" />
                                 </button>
                             ) : (
-                                <button
-                                    type="button"
-                                    onClick={onSend}
-                                    disabled={(!input.trim() && attachedFiles.length === 0) || !!quotaError}
-                                    className={cn('h-8 w-8 flex items-center justify-center rounded-lg transition-colors',
-                                        (input.trim() || attachedFiles.length > 0) && !quotaError
-                                            ? 'bg-foreground text-background hover:bg-foreground/90 shadow-xs'
-                                            : 'text-muted-foreground/40 cursor-default')}
-                                    title="Send message"
-                                >
-                                    <Send className="w-3.5 h-3.5" />
-                                </button>
+                                <ActionTooltip label="Send Message" shortcut="Enter" side="top">
+                                    <button
+                                        type="button"
+                                        onClick={onSend}
+                                        disabled={(!input.trim() && attachedFiles.length === 0) || !!quotaError}
+                                        className={cn('h-8 w-8 flex items-center justify-center rounded-lg transition-colors cursor-pointer',
+                                            (input.trim() || attachedFiles.length > 0) && !quotaError
+                                                ? 'bg-foreground text-background hover:bg-foreground/90 shadow-sm'
+                                                : 'text-muted-foreground/40 cursor-default')}
+                                        aria-label="Send message"
+                                    >
+                                        <Send className="w-3.5 h-3.5" />
+                                    </button>
+                                </ActionTooltip>
                             )}
                         </div>
                     </div>
@@ -426,20 +539,24 @@ export function ChatInput({
                 {banners}
 
                 {/* Active Chat Input Card */}
-                <div className="relative flex flex-col w-full bg-background border border-border/80 rounded-2xl shadow-xs focus-within:border-border/90 focus-within:ring-1 focus-within:ring-primary/20 transition-all">
+                <div className="relative flex flex-col w-full bg-background border border-border/80 rounded-2xl shadow-sm focus-within:border-border/90 focus-within:ring-1 focus-within:ring-primary/20 transition-all">
                     {/* Attached files chips */}
                     {attachedFiles.length > 0 && (
                         <div className="flex flex-wrap gap-1.5 px-3.5 pt-2.5 pb-0.5">
                             {attachedFiles.map((file, i) => (
-                                <div key={i} className="flex items-center gap-1.5 bg-muted/60 border border-border/60 rounded-lg pl-2 pr-1 py-0.5 text-xs shadow-2xs">
+                                <div key={i} className="flex items-center gap-1.5 bg-muted/60 border border-border/60 rounded-lg pl-2 pr-1 py-0.5 text-xs shadow-sm">
                                     <FileText className="w-3 h-3 text-muted-foreground" />
                                     <span className="truncate max-w-[120px] font-medium text-[11px]">{file.name}</span>
-                                    <button
-                                        className="h-3.5 w-3.5 flex items-center justify-center rounded-full hover:bg-muted text-muted-foreground"
-                                        onClick={() => onRemoveFile(i)}
-                                    >
-                                        <X className="w-2.5 h-2.5" />
-                                    </button>
+                                    <ActionTooltip label="Remove file" side="top">
+                                        <button
+                                            type="button"
+                                            className="h-3.5 w-3.5 flex items-center justify-center rounded-full hover:bg-muted text-muted-foreground cursor-pointer"
+                                            onClick={() => onRemoveFile(i)}
+                                            aria-label={`Remove ${file.name}`}
+                                        >
+                                            <X className="w-2.5 h-2.5" />
+                                        </button>
+                                    </ActionTooltip>
                                 </div>
                             ))}
                         </div>
@@ -461,6 +578,7 @@ export function ChatInput({
                             onChange={onInput}
                             onKeyDown={onKeyDown}
                             onScroll={onScroll}
+                            onPaste={handlePaste}
                             placeholder={quotaError ? 'Credit limit reached — upgrade to continue' : 'Reply to Resona AI…'}
                             className="w-full min-h-[26px] max-h-[160px] resize-none border-0 focus-visible:outline-none focus:ring-0 px-3.5 pt-2.5 pb-1 bg-transparent text-transparent text-[14px] sm:text-[14.5px] leading-[22px] font-sans antialiased font-normal shadow-none placeholder:text-muted-foreground/70 caret-foreground break-words scrollbar-none [&::-webkit-scrollbar]:hidden selection:bg-blue-500/30 selection:text-transparent"
                             rows={1}
@@ -477,48 +595,56 @@ export function ChatInput({
                                 onChange={onFileSelect}
                                 className="hidden"
                                 multiple
-                                accept=".pdf,.docx,.xlsx,.xls,.csv,.tsv,.pptx,.txt,.md,.json,.sql,.py,.ts,.js,.tsx,.jsx,.yaml,.yml,.xml,.html,.css,.sh,.env,.log,.toml,.rs,.go,.java"
+                                accept=".pdf,.docx,.xlsx,.xls,.csv,.tsv,.pptx,.txt,.md,.json,.sql,.py,.ts,.js,.tsx,.jsx,.yaml,.yml,.xml,.html,.css,.sh,.env,.log,.toml,.rs,.go,.java,.png,.jpg,.jpeg,.webp,.svg,.gif"
                             />
-                            <button
-                                type="button"
-                                className="h-8 w-8 flex items-center justify-center rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-                                onClick={() => fileInputRef.current?.click()}
-                                title="Attach file"
-                            >
-                                <Plus className="w-4 h-4" />
-                            </button>
-                            {connectionId && (
+                            <ActionTooltip label="Attach files" side="top">
                                 <button
                                     type="button"
-                                    className="h-8 w-8 flex items-center justify-center rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-                                    onClick={onMentionTrigger}
-                                    title="Mention Table (@)"
+                                    className="h-8 w-8 flex items-center justify-center rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                                    onClick={() => fileInputRef.current?.click()}
+                                    aria-label="Attach files"
                                 >
-                                    <AtSign className="w-3.5 h-3.5" />
+                                    <Plus className="w-4 h-4" />
                                 </button>
+                            </ActionTooltip>
+                            {connectionId && (
+                                <ActionTooltip label="Mention table" shortcut="@" side="top">
+                                    <button
+                                        type="button"
+                                        className="h-8 w-8 flex items-center justify-center rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                                        onClick={onMentionTrigger}
+                                        aria-label="Mention table"
+                                    >
+                                        <AtSign className="w-3.5 h-3.5" />
+                                    </button>
+                                </ActionTooltip>
                             )}
                             {dashboardCount > 0 && (
-                                <button
-                                    type="button"
-                                    className={cn('h-8 flex items-center gap-1 px-2 rounded-lg transition-colors text-xs',
-                                        showDashboard ? 'text-primary bg-primary/10' : 'text-muted-foreground hover:text-foreground')}
-                                    onClick={onToggleDashboard}
-                                    title="Dashboard"
-                                >
-                                    <LayoutDashboard className="w-3.5 h-3.5" />
-                                    <span className="tabular-nums text-[11px]">{dashboardCount}</span>
-                                </button>
+                                <ActionTooltip label="Dashboard insights" side="top">
+                                    <button
+                                        type="button"
+                                        className={cn('h-8 flex items-center gap-1 px-2 rounded-lg transition-colors text-xs cursor-pointer',
+                                            showDashboard ? 'text-primary bg-primary/10' : 'text-muted-foreground hover:text-foreground')}
+                                        onClick={onToggleDashboard}
+                                        aria-label="Dashboard insights"
+                                    >
+                                        <LayoutDashboard className="w-3.5 h-3.5" />
+                                        <span className="tabular-nums text-[11px]">{dashboardCount}</span>
+                                    </button>
+                                </ActionTooltip>
                             )}
                             {onToggleWorkspace && (
-                                <button
-                                    type="button"
-                                    className={cn('h-8 flex items-center gap-1 px-2 rounded-lg transition-colors text-xs',
-                                        showWorkspace ? 'text-primary bg-primary/10' : 'text-muted-foreground hover:text-foreground')}
-                                    onClick={onToggleWorkspace}
-                                    title="Workspace"
-                                >
-                                    <FolderOpen className="w-3.5 h-3.5" />
-                                </button>
+                                <ActionTooltip label="Workspace artifacts" side="top">
+                                    <button
+                                        type="button"
+                                        className={cn('h-8 flex items-center gap-1 px-2 rounded-lg transition-colors text-xs cursor-pointer',
+                                            showWorkspace ? 'text-primary bg-primary/10' : 'text-muted-foreground hover:text-foreground')}
+                                        onClick={onToggleWorkspace}
+                                        aria-label="Workspace artifacts"
+                                    >
+                                        <FolderOpen className="w-3.5 h-3.5" />
+                                    </button>
+                                </ActionTooltip>
                             )}
                         </div>
 
@@ -529,37 +655,47 @@ export function ChatInput({
                                     <ModeSelector mode={mode} thinking={thinking} onModeChange={onModeChange} onThinkingChange={onThinkingChange} disabled={isStreaming} />
                                 </div>
                             )}
-                            {!isStreaming && <MicButton onTranscript={handleTranscript} disabled={isStreaming} />}
+                            {!isStreaming && (
+                                <>
+                                    <MicButton onTranscript={handleTranscript} disabled={isStreaming} />
+                                    <VoicePanel connectionId={connectionId} />
+                                </>
+                            )}
                             {isStreaming ? (
-                                <button
-                                    type="button"
-                                    onClick={onAbort}
-                                    className="h-8 w-8 flex items-center justify-center rounded-lg bg-muted hover:bg-muted/80 text-foreground transition-colors"
-                                    title="Stop generation"
-                                >
-                                    <Square className="w-3.5 h-3.5 fill-current" />
-                                </button>
+                                <ActionTooltip label="Stop Generating" shortcut="Esc" side="top">
+                                    <button
+                                        type="button"
+                                        onClick={onAbort}
+                                        className="h-8 w-8 flex items-center justify-center rounded-lg bg-muted hover:bg-muted/80 text-foreground transition-colors cursor-pointer"
+                                        aria-label="Stop generation"
+                                    >
+                                        <Square className="w-3.5 h-3.5 fill-current" />
+                                    </button>
+                                </ActionTooltip>
                             ) : isUploading ? (
                                 <button
                                     type="button"
                                     disabled
                                     className="h-8 w-8 flex items-center justify-center rounded-lg bg-muted text-muted-foreground cursor-wait"
+                                    aria-label="Uploading files"
                                 >
                                     <Loader2 className="w-3.5 h-3.5 animate-spin" />
                                 </button>
                             ) : (
-                                <button
-                                    type="button"
-                                    onClick={onSend}
-                                    disabled={(!input.trim() && attachedFiles.length === 0) || !!quotaError}
-                                    className={cn('h-8 w-8 flex items-center justify-center rounded-lg transition-colors',
-                                        (input.trim() || attachedFiles.length > 0) && !quotaError
-                                            ? 'bg-foreground text-background hover:bg-foreground/90 shadow-2xs'
-                                            : 'text-muted-foreground/40 cursor-default')}
-                                    title="Send message"
-                                >
-                                    <Send className="w-3.5 h-3.5" />
-                                </button>
+                                <ActionTooltip label="Send Message" shortcut="Enter" side="top">
+                                    <button
+                                        type="button"
+                                        onClick={onSend}
+                                        disabled={(!input.trim() && attachedFiles.length === 0) || !!quotaError}
+                                        className={cn('h-8 w-8 flex items-center justify-center rounded-lg transition-colors cursor-pointer',
+                                            (input.trim() || attachedFiles.length > 0) && !quotaError
+                                                ? 'bg-foreground text-background hover:bg-foreground/90 shadow-sm'
+                                                : 'text-muted-foreground/40 cursor-default')}
+                                        aria-label="Send message"
+                                    >
+                                        <Send className="w-3.5 h-3.5" />
+                                    </button>
+                                </ActionTooltip>
                             )}
                         </div>
                     </div>

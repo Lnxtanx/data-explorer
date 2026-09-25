@@ -1,6 +1,17 @@
+import { useState } from 'react';
 import { FolderKanban, ArrowLeft, MessageSquare, Plus, Activity, Loader2, Trash2, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { useProjects, useProjectChats } from '@/hooks/useProjects';
 import { useDeleteAIChat } from '@/hooks/useAIChats';
 import type { AIProject } from '@/lib/api/projects';
@@ -37,6 +48,7 @@ export function ProjectDetailView({ projectId, onClose, onOpenChat, onNewChat }:
     const { data: projects } = useProjects();
     const { data: chats, isLoading: chatsLoading } = useProjectChats(projectId);
     const deleteChat = useDeleteAIChat();
+    const [pendingDeleteChatId, setPendingDeleteChatId] = useState<string | null>(null);
 
     const project = projects?.find(p => p.id === projectId);
 
@@ -176,7 +188,7 @@ export function ProjectDetailView({ projectId, onClose, onOpenChat, onNewChat }:
                                                     size="icon"
                                                     onClick={(e) => {
                                                         e.stopPropagation();
-                                                        deleteChat.mutate(chat.id);
+                                                        setPendingDeleteChatId(chat.id);
                                                     }}
                                                     className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-red-500 h-8 w-8"
                                                 >
@@ -190,6 +202,35 @@ export function ProjectDetailView({ projectId, onClose, onOpenChat, onNewChat }:
                     </div>
                 </div>
             </div>
+
+            {/* Delete Chat Confirmation Dialog */}
+            <AlertDialog
+                open={Boolean(pendingDeleteChatId)}
+                onOpenChange={(open) => !open && setPendingDeleteChatId(null)}
+            >
+                <AlertDialogContent className="sm:max-w-md">
+                    <AlertDialogHeader>
+                        <AlertDialogTitle className="text-sm font-semibold">Delete Conversation</AlertDialogTitle>
+                        <AlertDialogDescription className="text-xs text-muted-foreground">
+                            Are you sure you want to delete this conversation? It will be removed from your history.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter className="gap-2 sm:gap-0 mt-2">
+                        <AlertDialogCancel className="text-xs h-7">Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={() => {
+                                if (!pendingDeleteChatId) return;
+                                const targetId = pendingDeleteChatId;
+                                setPendingDeleteChatId(null);
+                                deleteChat.mutate(targetId);
+                            }}
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90 text-xs h-7 font-medium"
+                        >
+                            Delete
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </main>
     );
 }

@@ -58,7 +58,7 @@ export function PremiumAvatar({
 
     if (!isPaidPlan) {
         return (
-            <Avatar className={cn(cfg.container, 'p-0', outerRounded, 'border shadow-xs shrink-0', className)}>
+            <Avatar className={cn(cfg.container, 'p-0', outerRounded, 'border shadow-sm shrink-0', className)}>
                 {avatarUrl ? (
                     <AvatarImage src={avatarUrl} className={cn('object-cover', innerRounded)} />
                 ) : null}

@@ -35,6 +35,10 @@ import { getCsrfToken, API_BASE_URL } from '../lib/api/client';
 import { startAgentStream, connectDurableRunStream } from './useAgentStream';
 import { applyArtifactStart, applyArtifact, applyArtifactRows } from './useAgentArtifacts';
 import { applyPlan, applyPlanUpdate } from './useAgentPlan';
+import {
+    sanitizeToolInput,
+    sanitizeToolSummary,
+} from '../components/data-explorer/ai/tools/toolSanitize';
 
 // ─── Initial state ─────────────────────────────────────────────────────────────
 
@@ -214,7 +218,7 @@ export function useAIAgent(): UseAIAgentResult {
                 const evt = data as ToolCallEvent;
                 setState(prev => ({
                     ...prev,
-                    toolSteps: [...prev.toolSteps, { id: evt.id, name: evt.name, input: evt.input ?? {}, status: 'calling', startedAt: evt.startedAt ?? Date.now() }],
+                    toolSteps: [...prev.toolSteps, { id: evt.id, name: evt.name, input: sanitizeToolInput(evt.name, evt.input ?? {}), status: 'calling', startedAt: evt.startedAt ?? Date.now() }],
                     timeline: tl(prev, { kind: 'tool_call', id: evt.id, name: evt.name }),
                     isReconnecting: false,
                 }));
@@ -228,7 +232,7 @@ export function useAIAgent(): UseAIAgentResult {
                         s.id === evt.id
                             ? {
                                 ...s,
-                                result: { success: evt.success, summary: evt.summary },
+                                result: { success: evt.success, summary: sanitizeToolSummary(evt.summary || '') },
                                 status: evt.success ? 'done' as const : 'error' as const,
                                 latencyMs: evt.latency_ms !== undefined
                                     ? evt.latency_ms

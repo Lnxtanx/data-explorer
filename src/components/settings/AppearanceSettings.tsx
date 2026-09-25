@@ -45,7 +45,7 @@ export function AppearanceSettings() {
     return (
         <div className="p-6 space-y-8">
             <div>
-                <h3 className="text-lg font-semibold mb-1">Appearance</h3>
+                <h3 className="text-lg font-semibold tracking-tight text-foreground mb-1">Appearance</h3>
                 <p className="text-xs text-muted-foreground">
                     Customize themes and configure your default workspace launch mode.
                 </p>

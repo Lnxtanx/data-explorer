@@ -57,7 +57,7 @@ export function ConnectorDatabases({ onSelectConnection }: ConnectorDatabasesPro
                     size="sm"
                     onClick={handleRefresh}
                     disabled={isFetching}
-                    className="h-8 gap-1.5 text-xs rounded-lg shadow-xs shrink-0"
+                    className="h-8 gap-1.5 text-xs rounded-lg shadow-sm shrink-0"
                 >
                     <RefreshCw className={cn('w-3.5 h-3.5', isFetching && 'animate-spin text-primary')} />
                     <span>Refresh</span>
@@ -165,7 +165,7 @@ export function ConnectorDatabases({ onSelectConnection }: ConnectorDatabasesPro
                                                     toast.success(`Switched to database "${conn.name}"`);
                                                 }
                                             }}
-                                            className="h-7 px-3 text-xs rounded-lg font-medium gap-1.5 shadow-xs"
+                                            className="h-7 px-3 text-xs rounded-lg font-medium gap-1.5 shadow-sm"
                                         >
                                             <span>Explore</span>
                                             <ArrowRight className="w-3 h-3" />

@@ -91,7 +91,7 @@ export function ClarificationView({ artifact, onSelect, answered, answer }: Clar
                                     className={cn(
                                         'group flex items-center justify-between gap-3 px-3.5 py-2.5 rounded-lg border text-left text-xs transition-all duration-150 cursor-pointer',
                                         isRec
-                                            ? 'border-primary/40 bg-primary/[0.03] hover:bg-primary/[0.08] hover:border-primary/60 text-foreground font-medium shadow-2xs'
+                                            ? 'border-primary/40 bg-primary/[0.03] hover:bg-primary/[0.08] hover:border-primary/60 text-foreground font-medium shadow-sm'
                                             : 'border-border/60 bg-card hover:bg-muted/40 hover:border-border text-foreground/90 font-normal'
                                     )}
                                 >

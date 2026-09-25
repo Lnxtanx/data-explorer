@@ -5,7 +5,7 @@
 // =============================================================================
 
 import React, { useState, useMemo } from 'react';
-import { History, Search, Plus, Check, Clock } from 'lucide-react';
+import { History, Search, Plus, Check, Clock, Trash2 } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -13,15 +13,27 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 export interface SessionHistoryItem {
   id: string;
+  sessionId?: string;
   title: string;
   status?: string;
   createdAt?: number | string | null;
+  turnCount?: number;
   isActive?: boolean;
 }
 
@@ -31,6 +43,7 @@ export interface ResonaAISessionDialogProps {
   sessions: SessionHistoryItem[];
   onSelect: (id: string) => void;
   onNewSession: () => void;
+  onDeleteSession?: (id: string) => Promise<void> | void;
   title?: string;
   description?: string;
 }
@@ -61,6 +74,11 @@ const STATUS_CONFIG: Record<string, { dot: string; label: string; badge: string 
     label: 'Queued',
     badge: 'bg-muted text-muted-foreground border-border',
   },
+  pending: {
+    dot: 'bg-muted-foreground/50',
+    label: 'New chat',
+    badge: 'bg-muted text-muted-foreground border-border',
+  },
 };
 
 export function formatSessionTime(ts?: number | string | null): string {
@@ -81,10 +99,12 @@ export function ResonaAISessionDialog({
   sessions,
   onSelect,
   onNewSession,
+  onDeleteSession,
   title = 'Session History',
   description = 'Switch to a previous conversation or review historical analytics runs.',
 }: ResonaAISessionDialogProps) {
   const [searchQuery, setSearchQuery] = useState('');
+  const [pendingDeleteSession, setPendingDeleteSession] = useState<SessionHistoryItem | null>(null);
 
   const filtered = useMemo(() => {
     if (!searchQuery.trim()) return sessions;
@@ -140,21 +160,22 @@ export function ResonaAISessionDialog({
               {filtered.map((item) => {
                 const conf = item.status ? STATUS_CONFIG[item.status] : undefined;
                 return (
-                  <button
+                  <div
                     key={item.id}
-                    type="button"
-                    onClick={() => {
-                      onSelect(item.id);
-                      onClose();
-                    }}
                     className={cn(
-                      'w-full text-left p-2.5 rounded-lg border transition-all cursor-pointer flex items-start gap-2.5 select-none',
+                      'group w-full text-left p-2.5 rounded-lg border transition-all flex items-start gap-2.5 select-none relative',
                       item.isActive
-                        ? 'border-primary/70 bg-primary/5 shadow-xs'
+                        ? 'border-primary/70 bg-primary/5 shadow-sm'
                         : 'border-border/60 hover:border-border hover:bg-muted/40'
                     )}
                   >
-                    <div className="min-w-0 flex-1">
+                    <div
+                      className="min-w-0 flex-1 cursor-pointer"
+                      onClick={() => {
+                        onSelect(item.id);
+                        onClose();
+                      }}
+                    >
                       <div className="flex items-center justify-between gap-2 mb-1">
                         <p className="text-xs font-medium text-foreground line-clamp-2 leading-relaxed">
                           {item.title}
@@ -187,7 +208,21 @@ export function ResonaAISessionDialog({
                         )}
                       </div>
                     </div>
-                  </button>
+
+                    {onDeleteSession && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setPendingDeleteSession(item);
+                        }}
+                        className="opacity-0 group-hover:opacity-100 p-1.5 rounded hover:bg-destructive/15 text-muted-foreground hover:text-destructive transition-all shrink-0 self-center cursor-pointer"
+                        title="Delete session"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
                 );
               })}
             </div>
@@ -203,7 +238,7 @@ export function ResonaAISessionDialog({
               onNewSession();
               onClose();
             }}
-            className="text-xs h-7.5 gap-1.5 cursor-pointer text-primary hover:text-primary hover:bg-primary/5 border-primary/30"
+            className="text-xs h-7 gap-1.5 cursor-pointer text-primary hover:text-primary hover:bg-primary/5 border-primary/30"
           >
             <Plus className="w-3.5 h-3.5" />
             <span>New Session</span>
@@ -213,12 +248,45 @@ export function ResonaAISessionDialog({
             variant="ghost"
             size="sm"
             onClick={onClose}
-            className="text-xs h-7.5 cursor-pointer"
+            className="text-xs h-7 cursor-pointer"
           >
             Close
           </Button>
         </div>
       </DialogContent>
+
+      {/* Delete Session Confirmation Dialog */}
+      <AlertDialog
+        open={Boolean(pendingDeleteSession)}
+        onOpenChange={(open) => !open && setPendingDeleteSession(null)}
+      >
+        <AlertDialogContent className="sm:max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-sm font-semibold">Delete Session</AlertDialogTitle>
+            <AlertDialogDescription className="text-xs text-muted-foreground">
+              Are you sure you want to delete this session? It will be removed from your history.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2 sm:gap-0 mt-2">
+            <AlertDialogCancel className="text-xs h-7">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={async () => {
+                if (!pendingDeleteSession) return;
+                const targetId = pendingDeleteSession.id;
+                const wasActive = pendingDeleteSession.isActive;
+                setPendingDeleteSession(null);
+                await onDeleteSession?.(targetId);
+                if (wasActive) {
+                  onNewSession?.();
+                }
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90 text-xs h-7 font-medium"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   );
 }

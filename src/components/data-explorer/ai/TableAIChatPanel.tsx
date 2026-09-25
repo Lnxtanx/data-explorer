@@ -3,9 +3,9 @@
 // =============================================================================
 
 import { useState, useRef, useEffect } from 'react';
-import { X, Send, Sparkles } from 'lucide-react';
+import { X, Send, Bot } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
+import { cn, stripTemporalTag } from '@/lib/utils';
 
 interface Message {
   id: string;
@@ -87,21 +87,14 @@ export function TableAIChatPanel({ tableName, schemaName, onClose }: TableAIChat
         <div className="flex items-center justify-between h-11 px-4 border-b border-border shrink-0">
           <div className="flex items-center gap-2">
             <img src="/resona.png" alt="Resona" className="w-4 h-4" />
-            <span className="text-sm font-medium">Resona AI</span>
+            <div>
+              <h3 className="text-sm font-semibold text-foreground leading-none">Table Assistant</h3>
+              <p className="text-[11px] text-muted-foreground mt-0.5 font-mono">{schemaName}.{tableName}</p>
+            </div>
           </div>
-          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onClose}>
+          <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={onClose}>
             <X className="w-4 h-4" />
           </Button>
-        </div>
-
-        {/* Table reference tag */}
-        <div className="px-4 py-2 border-b border-border/50 bg-muted/30">
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <span>Context:</span>
-            <span className="inline-flex items-center gap-1 bg-primary/10 text-primary px-2 py-0.5 rounded-full text-[11px] font-medium">
-              @{schemaName}.{tableName}
-            </span>
-          </div>
         </div>
 
         {/* Messages */}
@@ -109,7 +102,7 @@ export function TableAIChatPanel({ tableName, schemaName, onClose }: TableAIChat
           {messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-center">
               <div className="w-12 h-12 rounded-2xl bg-primary/5 flex items-center justify-center mb-3">
-                <Sparkles className="w-6 h-6 text-primary/40" />
+                <Bot className="w-6 h-6 text-primary/40" />
               </div>
               <p className="text-sm font-medium text-foreground mb-1">Ask about {tableName}</p>
               <p className="text-xs text-muted-foreground max-w-[250px]">
@@ -147,7 +140,7 @@ export function TableAIChatPanel({ tableName, schemaName, onClose }: TableAIChat
                       ? 'bg-primary text-primary-foreground'
                       : 'bg-muted text-foreground'
                   )}>
-                    {msg.content}
+                    {msg.role === 'user' ? stripTemporalTag(msg.content) : msg.content}
                   </div>
                 </div>
               ))}

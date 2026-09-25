@@ -98,7 +98,7 @@ export function DashboardEmptyState({
             {GENERATION_POINTS.map((point) => (
               <div key={point.step} className="relative flex items-start sm:items-center min-h-[28px]">
                 {/* Node indicator on the timeline */}
-                <div className="absolute -left-[37px] top-0.5 sm:top-auto w-6.5 h-6.5 rounded-full border border-border/90 bg-card flex items-center justify-center text-[11px] font-mono font-semibold text-foreground/80 shadow-2xs shrink-0">
+                <div className="absolute -left-[37px] top-0.5 sm:top-auto w-6 h-6 rounded-full border border-border/90 bg-card flex items-center justify-center text-[11px] font-mono font-semibold text-foreground/80 shadow-sm shrink-0">
                   {point.step}
                 </div>
                 <p className="text-[13.5px] sm:text-[14px] lg:text-[14.5px] text-foreground/85 font-medium leading-relaxed">

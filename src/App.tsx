@@ -4,12 +4,24 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { queryClient } from "@/lib/queryClient";
 import { AuthProvider } from "@/components/auth/AuthProvider";
-import { ThemeProvider } from "next-themes";
+import { ThemeProvider, useTheme } from "next-themes";
 import DataExplorerPage from "./pages/DataExplorerPage";
 import PublicReportViewer from "./pages/PublicReportViewer";
 import { useEffect, useState } from "react";
 import { initCsrfToken } from "./lib/api/client";
 import { restoreExplorerCache } from "./lib/persist";
+
+function DarkClassSync() {
+  const { resolvedTheme } = useTheme();
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const isDark = resolvedTheme === "dark" || resolvedTheme === "dark-black" || resolvedTheme === "blue-gray";
+    root.classList.toggle("dark", isDark);
+  }, [resolvedTheme]);
+
+  return null;
+}
 
 function CacheHydrationGate({ children }: { children: React.ReactNode }) {
   const [cacheReady, setCacheReady] = useState(false);
@@ -47,7 +59,8 @@ export default function App() {
           enableSystem={false}
           themes={["light", "dark", "dark-black", "blue-gray", "system"]}
         >
-          <TooltipProvider>
+          <DarkClassSync />
+          <TooltipProvider delayDuration={150} skipDelayDuration={100}>
             <AuthProvider>
               <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
                 <Routes>

@@ -164,7 +164,7 @@ export async function exportPdf(artifact: AgentArtifact, title?: string): Promis
                 const keys = Object.keys(coeffs[0]);
                 addAutoTable(
                     [keys.map(k => k === 'pValue' ? 'p-value' : k.replace(/_/g, ' '))],
-                    coeffs.map(c => keys.map(k => str((c as Record<string, unknown>)[k]))),
+                    coeffs.map(c => keys.map(k => str((c as unknown as Record<string, unknown>)[k]))),
                 );
             }
             break;
@@ -175,13 +175,16 @@ export async function exportPdf(artifact: AgentArtifact, title?: string): Promis
             if (Array.isArray(artifact.stages) && artifact.stages.length > 0) {
                 addT(
                     ['Stage', 'Count', 'Conversion'],
-                    artifact.stages.map(s => [str((s as Record<string, unknown>).name ?? (s as Record<string, unknown>).label ?? '—'), (s as Record<string, unknown>).count, (s as Record<string, unknown>).conversion != null ? Number((s as Record<string, unknown>).conversion).toFixed(2) + '%' : '—']),
+                    artifact.stages.map(s => {
+                        const row = s as unknown as Record<string, unknown>;
+                        return [str(row.name ?? row.label ?? '—'), row.count, row.conversion != null ? Number(row.conversion).toFixed(2) + '%' : '—'];
+                    }),
                 );
             } else if (Array.isArray(artifact.labels) && Array.isArray(artifact.values)) {
                 addT(['Label', 'Value'], artifact.labels.map((l, i) => [l, artifact.values![i]]));
             } else if (Array.isArray(artifact.matrix) && artifact.matrix.length > 0 && typeof artifact.matrix[0] === 'object') {
-                const keys = Object.keys(artifact.matrix[0] as Record<string, unknown>);
-                addT(keys, artifact.matrix.map(m => keys.map(k => (m as Record<string, unknown>)[k])));
+                const keys = Object.keys(artifact.matrix[0] as unknown as Record<string, unknown>);
+                addT(keys, artifact.matrix.map(m => keys.map(k => (m as unknown as Record<string, unknown>)[k])));
             } else if (Array.isArray(artifact.historicalLabels) && Array.isArray(artifact.forecastLabels)) {
                 addT(['Series', 'Label', 'Value'], [
                     ...artifact.historicalLabels.map((l, i) => ['Historical', l, artifact.historicalValues?.[i]]),

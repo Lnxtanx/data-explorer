@@ -34,7 +34,7 @@ export function DocumentationSettings() {
                         <img src="/resona.png" alt="Schema Weaver" className="w-9 h-9 object-contain" />
                     </div>
                     <div>
-                        <h3 className="text-2xl font-bold text-foreground tracking-tight">Schema Weaver</h3>
+                        <h3 className="text-lg font-semibold text-foreground tracking-tight">Schema Weaver</h3>
                         <p className="text-muted-foreground font-medium text-sm">Data Explorer v1.0.0</p>
                     </div>
                 </div>
@@ -87,21 +87,21 @@ export function DocumentationSettings() {
             <div className="pt-12 mt-12 border-t border-border/50">
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-8 mb-12">
                     <div className="space-y-4">
-                        <h5 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">Products</h5>
+                        <h5 className="text-2xs font-bold uppercase tracking-widest text-muted-foreground/60">Products</h5>
                         <ul className="space-y-2.5">
                             <li><a href="https://sql-editor.schemaweaver.vivekmind.com" className="text-sm text-muted-foreground hover:text-foreground transition-colors">SQL Editor</a></li>
                             <li><a href="https://data-explorer.schemaweaver.vivekmind.com" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Data Explorer</a></li>
                         </ul>
                     </div>
                     <div className="space-y-4">
-                        <h5 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">Resources</h5>
+                        <h5 className="text-2xs font-bold uppercase tracking-widest text-muted-foreground/60">Resources</h5>
                         <ul className="space-y-2.5">
                             <li><a href="https://docs.schemaweaver.vivekmind.com" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Documentation</a></li>
                             <li><a href="https://schemaweaver.vivekmind.com" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Schema Weaver</a></li>
                         </ul>
                     </div>
                     <div className="space-y-4">
-                        <h5 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">Company</h5>
+                        <h5 className="text-2xs font-bold uppercase tracking-widest text-muted-foreground/60">Company</h5>
                         <ul className="space-y-2.5">
                             <li><a href="https://vivekmind.com" className="text-sm text-muted-foreground hover:text-foreground transition-colors">VivekMind</a></li>
                             <li><a href="https://vivekmind.com/contact" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Contact</a></li>
@@ -112,14 +112,14 @@ export function DocumentationSettings() {
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 pt-8 border-t border-border/30">
                     <div className="space-y-3">
                         <img src="https://vivekmind.com/vivekmind-logo.png" alt="VivekMind" className="h-4 w-auto" />
-                        <p className="text-[11px] text-muted-foreground/60">
+                        <p className="text-2xs text-muted-foreground/60">
                             © {currentYear} Schema Weaver by VivekMind. All rights reserved.
                         </p>
                     </div>
                     <div className="flex items-center gap-6">
-                        <a href="https://vivekmind.com/privacy" className="text-[11px] text-muted-foreground/60 hover:text-foreground transition-colors">Privacy</a>
-                        <a href="https://vivekmind.com/terms" className="text-[11px] text-muted-foreground/60 hover:text-foreground transition-colors">Terms</a>
-                        <a href="https://vivekmind.com/contact" className="text-[11px] text-muted-foreground/60 hover:text-foreground transition-colors">Support</a>
+                        <a href="https://vivekmind.com/privacy" className="text-2xs text-muted-foreground/60 hover:text-foreground transition-colors">Privacy</a>
+                        <a href="https://vivekmind.com/terms" className="text-2xs text-muted-foreground/60 hover:text-foreground transition-colors">Terms</a>
+                        <a href="https://vivekmind.com/contact" className="text-2xs text-muted-foreground/60 hover:text-foreground transition-colors">Support</a>
                     </div>
                 </div>
             </div>

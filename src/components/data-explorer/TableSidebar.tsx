@@ -79,7 +79,7 @@ export const TableSidebar = memo(function TableSidebar({
             variant="outline"
             size="sm"
             onClick={onRetry}
-            className="h-7 text-xs px-3 gap-1.5 mt-2 rounded-lg font-medium shadow-xs"
+            className="h-7 text-xs px-3 gap-1.5 mt-2 rounded-lg font-medium shadow-sm"
           >
             <RefreshCw className="w-3 h-3" />
             <span>Try again</span>

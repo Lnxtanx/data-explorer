@@ -222,7 +222,7 @@ export function CellInspectorModal({
                   className={cn(
                     'px-2.5 py-1 rounded-md text-[11px] font-medium transition-all',
                     viewMode === 'formatted'
-                      ? 'bg-background shadow-xs text-foreground font-semibold'
+                      ? 'bg-background shadow-sm text-foreground font-semibold'
                       : 'text-muted-foreground hover:text-foreground'
                   )}
                 >
@@ -233,7 +233,7 @@ export function CellInspectorModal({
                   className={cn(
                     'px-2.5 py-1 rounded-md text-[11px] font-medium transition-all',
                     viewMode === 'raw'
-                      ? 'bg-background shadow-xs text-foreground font-semibold'
+                      ? 'bg-background shadow-sm text-foreground font-semibold'
                       : 'text-muted-foreground hover:text-foreground'
                   )}
                 >
@@ -281,7 +281,7 @@ export function CellInspectorModal({
               variant="outline"
               size="sm"
               onClick={handleCopy}
-              className="h-7 text-xs px-2.5 gap-1.5 shadow-xs"
+              className="h-7 text-xs px-2.5 gap-1.5 shadow-sm"
             >
               {copied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
               <span>{copied ? 'Copied' : 'Copy'}</span>

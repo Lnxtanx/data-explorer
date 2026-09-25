@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ChevronDown, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { ActionTooltip } from '@/components/ui/tooltip';
 
 export type AgentMode = 'flash' | 'deep';
 
@@ -42,38 +43,40 @@ export function ModeSelector({
 
     return (
         <Popover open={open} onOpenChange={setOpen}>
-            <PopoverTrigger asChild>
-                <button
-                    type="button"
-                    disabled={disabled}
-                    className={cn(
-                        'h-7 inline-flex items-center gap-1.5 px-2.5 rounded-lg text-xs font-medium select-none transition-colors',
-                        'bg-muted/50 hover:bg-muted text-foreground/80 hover:text-foreground border border-border/50',
-                        'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
-                        open && 'bg-muted border-border',
-                        disabled && 'opacity-40 cursor-not-allowed',
-                    )}
-                    title={
-                        thinking
-                            ? `${isFlash ? 'Flash' : 'Deep'} (Thinking enabled)`
-                            : `${isFlash ? 'Flash' : 'Deep'} (Thinking disabled)`
-                    }
-                >
-                    <span className="capitalize">{mode}</span>
-                    {thinking && (
-                        <span
-                            className="w-1.5 h-1.5 rounded-full bg-primary shrink-0"
-                            aria-label="Thinking active"
-                        />
-                    )}
-                    <ChevronDown
+            <ActionTooltip
+                disabled={open}
+                label={isFlash ? 'Flash mode' : 'Deep mode'}
+                side="top"
+            >
+                <PopoverTrigger asChild>
+                    <button
+                        type="button"
+                        disabled={disabled}
                         className={cn(
-                            'w-3 h-3 text-muted-foreground/60 transition-transform duration-150',
-                            open && 'rotate-180',
+                            'h-7 inline-flex items-center gap-1.5 px-2.5 rounded-lg text-xs font-medium select-none transition-colors cursor-pointer',
+                            'bg-muted/50 hover:bg-muted text-foreground/80 hover:text-foreground border border-border/50',
+                            'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
+                            open && 'bg-muted border-border',
+                            disabled && 'opacity-40 cursor-not-allowed',
                         )}
-                    />
-                </button>
-            </PopoverTrigger>
+                        aria-label={`Select model mode: current is ${mode}`}
+                    >
+                        <span className="capitalize">{mode}</span>
+                        {thinking && (
+                            <span
+                                className="w-1.5 h-1.5 rounded-full bg-primary shrink-0"
+                                aria-label="Thinking active"
+                            />
+                        )}
+                        <ChevronDown
+                            className={cn(
+                                'w-3 h-3 text-muted-foreground/60 transition-transform duration-150',
+                                open && 'rotate-180',
+                            )}
+                        />
+                    </button>
+                </PopoverTrigger>
+            </ActionTooltip>
 
             <PopoverContent
                 side="top"
@@ -137,7 +140,7 @@ export function ModeSelector({
                     >
                         <div
                             className={cn(
-                                'w-3 h-3 rounded-full bg-background shadow-xs transition-transform duration-150',
+                                'w-3 h-3 rounded-full bg-background shadow-sm transition-transform duration-150',
                                 thinking ? 'translate-x-3' : 'translate-x-0',
                             )}
                         />

@@ -22,8 +22,10 @@ import type { AgentMode } from './models/ModeSelector';
 import type { AgentArtifact, AgentToolStep } from '@/hooks/useAIAgent';
 import { uploadFilesForAI, getChatMessages, type AIMessage } from '@/lib/api/ai';
 import type { LocalMessage } from './chat/types';
+import { sanitizeToolInput, sanitizeToolSummary } from './tools/toolSanitize';
 import { logger } from '@/lib/logger';
 import { getDraft, saveDraft, clearDraft } from '@/lib/chatDrafts';
+import { toast } from 'sonner';
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -37,6 +39,7 @@ interface AIChatMainProps {
     aiContextSchema?: string;
     onTableClick?: (tableName: string) => void;
     onOpenPlans?: () => void;
+    onNewChat?: () => void;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -48,6 +51,7 @@ const ALLOWED_FILE_EXTENSIONS = new Set([
     '.txt', '.md', '.json', '.sql', '.py', '.ts', '.js', '.tsx', '.jsx',
     '.yaml', '.yml', '.xml', '.html', '.css', '.sh', '.env', '.log',
     '.toml', '.rs', '.go', '.java', '.dockerfile',
+    '.png', '.jpg', '.jpeg', '.webp', '.svg', '.gif',
 ]);
 
 function validateFiles(files: File[]): { valid: File[]; errors: string[] } {
@@ -94,6 +98,7 @@ function hasArtifactData(a: NonNullable<AIMessage['artifacts']>[number]): boolea
         case 'stat_block': return !!((a as any).stats || (a as any).stat_block || a.summary || (a as any).columnStats);
         case 'diagram':  return !!a.mermaid;
         case 'file':     return !!((a as any).download_url || (a as any).downloadUrl || (a as any).url || (a as any).filename);
+        case 'attachment': return !!((a as any).download_url || (a as any).downloadUrl || (a as any).url || (a as any).filename || (a as any).fileName || (a as any).file_id);
         case 'chart':    return true;
         case 'query':    return !!(a.sql || (a.rows && a.columns));
         case 'report':   return !!((a as any).sections || (a as any).insights);
@@ -114,11 +119,13 @@ function toLocal(m: AIMessage, index?: number, allMessages?: AIMessage[]): Local
         .map(a => ({
             type: a.type ?? 'table',
             downloadUrl: (a as any).download_url || (a as any).downloadUrl || (a as any).url,
-            filename: (a as any).filename,
+            filename: (a as any).filename || (a as any).fileName,
             fileSize: (a as any).file_size || (a as any).size_bytes || (a as any).fileSize,
             rowCount: (a as any).row_count ?? (a as any).rowCount,
             question: (a as any).question,
             options: (a as any).options,
+            preview: (a as any).preview,
+            rawContent: (a as any).text_content || (a as any).rawContent,
             ...a,
         } as AgentArtifact));
 
@@ -166,6 +173,7 @@ function toLocal(m: AIMessage, index?: number, allMessages?: AIMessage[]): Local
     }
 
     // Restore tool steps from execution_trace if available, or fall back to tool_call artifacts
+    // Inputs/summaries are sanitized so internal ids / SQL never reach the UI.
     const rawSteps = (m as any).execution_trace?.toolSteps ?? [];
     let toolSteps: AgentToolStep[] | undefined = undefined;
 
@@ -173,9 +181,11 @@ function toLocal(m: AIMessage, index?: number, allMessages?: AIMessage[]): Local
         toolSteps = rawSteps.map((s: any) => ({
             id: s.id,
             name: s.name,
-            input: s.input ?? {},
+            input: sanitizeToolInput(s.name, s.input ?? {}),
             status: s.status === 'done' ? 'done' as const : s.status === 'error' ? 'error' as const : 'calling' as const,
-            result: s.result,
+            result: s.result
+                ? { ...s.result, summary: sanitizeToolSummary(s.result.summary ?? '') }
+                : undefined,
             latencyMs: s.latency_ms ?? s.latencyMs,
             startedAt: s.startedAt,
             downloadUrl: s.downloadUrl ?? s.download_url,
@@ -184,16 +194,23 @@ function toLocal(m: AIMessage, index?: number, allMessages?: AIMessage[]): Local
     } else {
         const toolArtifacts = rawArtifacts.filter(a => (a as any).type === 'tool_call');
         if (toolArtifacts.length > 0) {
-            toolSteps = toolArtifacts.map((a: any, idx: number) => ({
-                id: a.id || `step-${idx}`,
-                name: a.tool || a.name || 'tool',
-                input: a.input ?? {},
-                status: (a.status === 'error' ? 'error' : 'done') as 'calling' | 'done' | 'error',
-                result: a.result || (a.summary ? { success: true, summary: a.summary } : undefined),
-                latencyMs: a.latency_ms ?? a.latencyMs,
-                downloadUrl: a.download_url ?? a.downloadUrl,
-                filename: a.filename,
-            }));
+            toolSteps = toolArtifacts.map((a: any, idx: number) => {
+                const toolName = a.tool || a.name || 'tool';
+                const rawResult =
+                    a.result || (a.summary ? { success: true, summary: a.summary } : undefined);
+                return {
+                    id: a.id || `step-${idx}`,
+                    name: toolName,
+                    input: sanitizeToolInput(toolName, a.input ?? {}),
+                    status: (a.status === 'error' ? 'error' : 'done') as 'calling' | 'done' | 'error',
+                    result: rawResult
+                        ? { ...rawResult, summary: sanitizeToolSummary(rawResult.summary ?? '') }
+                        : undefined,
+                    latencyMs: a.latency_ms ?? a.latencyMs,
+                    downloadUrl: a.download_url ?? a.downloadUrl,
+                    filename: a.filename,
+                };
+            });
         }
     }
 
@@ -265,6 +282,7 @@ export function AIChatMain({
     connectionId, chatId, projectId,
     onChatCreated, onProjectClick,
     aiContextTable, aiContextSchema, onTableClick, onOpenPlans,
+    onNewChat,
 }: AIChatMainProps) {
     const greeting = useGreeting();
 
@@ -440,7 +458,7 @@ export function AIChatMain({
         resume: resumeAgent,
     } = useAIAgent();
 
-    const { data: chatHistory, isLoading: isChatLoading } = useAIChatMessages(chatId ?? '', { enabled: !!chatId });
+    const { data: chatHistory, isLoading: isChatLoading, isError: isChatError } = useAIChatMessages(chatId ?? '', { enabled: !!chatId });
     const { data: projects } = useProjects();
     const { data: connections } = useConnections();
 
@@ -493,6 +511,13 @@ export function AIChatMain({
         }
         const isNavigating = chatId !== prevChatIdRef.current && !justCreatedChatRef.current;
         if (isNavigating && chatHistory?.messages && chatHistory.chat?.id === chatId) {
+            const chatUseCase = (chatHistory.chat as any)?.use_case || (chatHistory.chat as any)?.useCase;
+            if (chatUseCase && chatUseCase !== 'data_explorer' && chatUseCase !== 'general') {
+                toast.error('This conversation belongs to Dashboard AI and cannot be viewed in Resona AI Explorer.');
+                onNewChat?.();
+                return;
+            }
+
             prevChatIdRef.current = chatId;
             setLocalMessages(chatHistory.messages.filter(m => m.role !== 'system').map((m, idx, arr) => toLocal(m, idx, arr)));
             setHasMoreOlder(Boolean(chatHistory.hasMore));
@@ -502,7 +527,14 @@ export function AIChatMain({
             prevChatIdRef.current = chatId;
             justCreatedChatRef.current = false;
         }
-    }, [chatId, chatHistory]);
+    }, [chatId, chatHistory, onNewChat]);
+
+    useEffect(() => {
+        if (isChatError && chatId) {
+            toast.error('Unable to load chat conversation.');
+            onNewChat?.();
+        }
+    }, [isChatError, chatId, onNewChat]);
 
     const handleLoadOlderMessages = useCallback(async () => {
         if (!chatId || !oldestCursor || isLoadingOlder) return;
@@ -864,19 +896,39 @@ export function AIChatMain({
         ]);
         let fileIds: string[] = [];
         let uploadedFileNames: string[] = [];
+        let userAttachmentArtifacts: AgentArtifact[] = [];
         if (filesToUpload.length > 0) {
             try {
                 const uploadRes = await uploadFilesForAI(filesToUpload, { chatId: chatId ?? undefined });
                 if (uploadRes.ok && uploadRes.files && uploadRes.files.length > 0) {
                     fileIds = uploadRes.files.map(f => f.file_id);
                     uploadedFileNames = uploadRes.files.map(f => f.filename);
+                    userAttachmentArtifacts = uploadRes.files.map(f => ({
+                        type: 'attachment',
+                        id: f.file_id,
+                        file_id: f.file_id,
+                        fileName: f.filename,
+                        filename: f.filename,
+                        fileType: f.file_type,
+                        fileSize: f.size_bytes,
+                        size_bytes: f.size_bytes,
+                        downloadUrl: f.download_url || `/api/ai/files/${f.file_id}/content`,
+                        preview: f.preview,
+                        rawContent: (f as any).text_content,
+                        extracted_components: f.extracted_components,
+                    }));
                 }
             } catch (err) {
                 logger.warn('[AIChatMain] QuickSend failed to upload files:', err);
             } finally {
+                setWorkspaceRefreshCount(c => c + 1);
                 setLocalMessages(prev => prev.map(m =>
                     m.id === userMessageId
-                        ? { ...m, files: uploadedFileNames.length > 0 ? uploadedFileNames : undefined }
+                        ? {
+                            ...m,
+                            files: uploadedFileNames.length > 0 ? uploadedFileNames : undefined,
+                            artifacts: userAttachmentArtifacts.length > 0 ? userAttachmentArtifacts : undefined,
+                          }
                         : m
                 ));
             }
@@ -948,6 +1000,7 @@ export function AIChatMain({
 
         let fileIds: string[] = [];
         let uploadedFileNames: string[] = [];
+        let userAttachmentArtifacts: AgentArtifact[] = [];
         if (filesToUpload.length > 0) {
             setIsUploading(true);
             try {
@@ -955,6 +1008,20 @@ export function AIChatMain({
                 if (uploadRes.ok && uploadRes.files && uploadRes.files.length > 0) {
                     fileIds = uploadRes.files.map(f => f.file_id);
                     uploadedFileNames = uploadRes.files.map(f => f.filename);
+                    userAttachmentArtifacts = uploadRes.files.map(f => ({
+                        type: 'attachment',
+                        id: f.file_id,
+                        file_id: f.file_id,
+                        fileName: f.filename,
+                        filename: f.filename,
+                        fileType: f.file_type,
+                        fileSize: f.size_bytes,
+                        size_bytes: f.size_bytes,
+                        downloadUrl: f.download_url || `/api/ai/files/${f.file_id}/content`,
+                        preview: f.preview,
+                        rawContent: (f as any).text_content,
+                        extracted_components: f.extracted_components,
+                    }));
                 } else {
                     showUploadError('File upload failed — files were not attached to this message.');
                 }
@@ -963,10 +1030,15 @@ export function AIChatMain({
                 showUploadError('File upload failed. Your message will be sent without file context.');
             } finally {
                 setIsUploading(false);
-                // Update the bubble to show real uploaded filenames (or clear if failed)
+                setWorkspaceRefreshCount(c => c + 1);
+                // Update the bubble to show real uploaded filenames and rich attachment artifacts
                 setLocalMessages(prev => prev.map(m =>
                     m.id === userMessageId
-                        ? { ...m, files: uploadedFileNames.length > 0 ? uploadedFileNames : undefined }
+                        ? {
+                            ...m,
+                            files: uploadedFileNames.length > 0 ? uploadedFileNames : undefined,
+                            artifacts: userAttachmentArtifacts.length > 0 ? userAttachmentArtifacts : undefined,
+                          }
                         : m
                 ));
             }
@@ -1029,6 +1101,23 @@ export function AIChatMain({
         return () => observer.disconnect();
     }, [displayMessages]);
 
+    const handleFilesAdd = useCallback((filesToAdd: File[]) => {
+        const { valid, errors } = validateFiles(filesToAdd);
+        if (errors.length > 0) {
+            showUploadError(errors.join('; '));
+        }
+        if (valid.length > 0) {
+            setAttachedFiles(prev => {
+                const combined = [...prev, ...valid];
+                if (combined.length > MAX_FILE_COUNT) {
+                    showUploadError(`Maximum ${MAX_FILE_COUNT} files allowed. Only the first ${MAX_FILE_COUNT} will be attached.`);
+                    return combined.slice(0, MAX_FILE_COUNT);
+                }
+                return combined;
+            });
+        }
+    }, [showUploadError]);
+
     // ── ChatInput Props ──────────────────────────────────────────────────────
 
     const chatInputProps: ChatInputProps = {
@@ -1055,22 +1144,10 @@ export function AIChatMain({
         onKeyDown: handleKeyDown,
         onSend: handleSend,
         onAbort: () => agentMode ? abortAgent() : abortStream(),
+        onFilesAdd: handleFilesAdd,
         onFileSelect: e => {
             if (!e.target.files) return;
-            const { valid, errors } = validateFiles(Array.from(e.target.files));
-            if (errors.length > 0) {
-                showUploadError(errors.join('; '));
-            }
-            if (valid.length > 0) {
-                setAttachedFiles(prev => {
-                    const combined = [...prev, ...valid];
-                    if (combined.length > MAX_FILE_COUNT) {
-                        showUploadError(`Maximum ${MAX_FILE_COUNT} files allowed. Only the first ${MAX_FILE_COUNT} will be attached.`);
-                        return combined.slice(0, MAX_FILE_COUNT);
-                    }
-                    return combined;
-                });
-            }
+            handleFilesAdd(Array.from(e.target.files));
             if (fileInputRef.current) fileInputRef.current.value = '';
         },
         onRemoveFile: i => setAttachedFiles(prev => prev.filter((_, j) => j !== i)),
@@ -1101,7 +1178,7 @@ export function AIChatMain({
                 <div className="absolute top-2.5 left-4 z-20 pointer-events-auto">
                     <button
                         onClick={() => onProjectClick?.(activeProject.id)}
-                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-background/90 hover:bg-muted border border-border/70 shadow-xs backdrop-blur-md text-foreground/80 hover:text-foreground transition-all duration-150 group cursor-pointer"
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-background/90 hover:bg-muted border border-border/70 shadow-sm backdrop-blur-md text-foreground/80 hover:text-foreground transition-all duration-150 group cursor-pointer"
                         title={`Project: ${activeProject.title} — click to view project`}
                     >
                         <FolderKanban className="w-3 h-3 text-primary" />
@@ -1154,7 +1231,7 @@ export function AIChatMain({
                                     <button
                                         key={prompt}
                                         onClick={() => { setInput(prompt); textareaRef.current?.focus(); }}
-                                        className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/70 bg-card rounded-full px-3.5 py-1.5 transition-all border border-border/60 hover:border-border shadow-2xs cursor-pointer"
+                                        className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/70 bg-card rounded-full px-3.5 py-1.5 transition-all border border-border/60 hover:border-border shadow-sm cursor-pointer"
                                     >
                                         <ChevronRight className="w-3.5 h-3.5 shrink-0 opacity-50" />
                                         <span>{prompt}</span>
@@ -1167,7 +1244,7 @@ export function AIChatMain({
                                     <button
                                         key={table}
                                         onClick={() => { setInput(`Tell me about the @${table} table`); textareaRef.current?.focus(); }}
-                                        className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/70 bg-card rounded-full px-3.5 py-1.5 transition-all border border-border/60 hover:border-border shadow-2xs cursor-pointer"
+                                        className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/70 bg-card rounded-full px-3.5 py-1.5 transition-all border border-border/60 hover:border-border shadow-sm cursor-pointer"
                                     >
                                         <span className="font-mono text-primary text-[11px]">@{table}</span>
                                         <span>overview</span>
@@ -1192,7 +1269,7 @@ export function AIChatMain({
                                     <button
                                         onClick={handleLoadOlderMessages}
                                         disabled={isLoadingOlder}
-                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium text-muted-foreground hover:text-foreground bg-muted/60 hover:bg-muted border border-border/60 transition-colors shadow-2xs cursor-pointer"
+                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium text-muted-foreground hover:text-foreground bg-muted/60 hover:bg-muted border border-border/60 transition-colors shadow-sm cursor-pointer"
                                     >
                                         {isLoadingOlder ? (
                                             <>

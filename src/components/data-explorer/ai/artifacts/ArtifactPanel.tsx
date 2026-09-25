@@ -33,7 +33,7 @@ export function ArtifactPanel({ artifact, onClose }: ArtifactPanelProps) {
     const artType = artifact.type as string;
     const isChart = artType === 'chart' || artifact.previewType === 'chart';
     const isStatBlock = artType === 'stat_block' || artifact.previewType === 'stat_block';
-    const isFile = artType === 'file' || Boolean(artifact.fileType) || Boolean(artifact.fileName) || Boolean((artifact as any).format) || Boolean(artifact.downloadUrl) || Boolean(artifact.key);
+    const isFile = artType === 'file' || artType === 'attachment' || Boolean(artifact.fileType) || Boolean(artifact.fileName) || Boolean((artifact as any).format) || Boolean(artifact.downloadUrl) || Boolean(artifact.key);
     const isSpecial = isChart || isStatBlock || isFile;
 
     const rows = artifact.rows ?? [];

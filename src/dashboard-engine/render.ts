@@ -5,8 +5,11 @@
 
 import type { PanelData, PanelRuntimeConfig } from './contract';
 import { renderChart } from './renderers/chart';
+import { renderCohort } from './renderers/cohort';
 import { renderDonut } from './renderers/donut';
-import { renderError } from './renderers/error';
+import { renderError, renderUnsupported } from './renderers/error';
+import { renderFunnel } from './renderers/funnel';
+import { renderGeo } from './renderers/geo';
 import { renderInsight } from './renderers/insight';
 import { renderKpi } from './renderers/kpi';
 import { renderTable } from './renderers/table';
@@ -48,7 +51,7 @@ export function renderPanel(selector: string, config?: PanelRuntimeConfig): void
     return;
   }
 
-  const type = String(effective.type || effective.chart_type || '').toLowerCase();
+  const type = String(effective.type || effective.chart_type || '').toLowerCase() || 'line';
 
   if (type === 'kpi') {
     renderKpi(container, data, effective);
@@ -56,10 +59,18 @@ export function renderPanel(selector: string, config?: PanelRuntimeConfig): void
     renderInsight(container, data, effective);
   } else if (type === 'table') {
     renderTable(container, data, effective);
+  } else if (type === 'cohort') {
+    renderCohort(container, data, effective);
+  } else if (type === 'funnel') {
+    renderFunnel(container, data, effective);
+  } else if (type === 'geo' || type === 'map' || type === 'world') {
+    renderGeo(container, data, effective);
   } else if (type === 'donut' || type === 'doughnut' || type === 'pie') {
     renderDonut(container, data, effective);
+  } else if (['line', 'bar', 'area'].includes(type)) {
+    renderChart(container, data, effective, type);
   } else {
-    renderChart(container, data, effective, ['line', 'bar', 'area'].includes(type) ? type : 'line');
+    renderUnsupported(container, type, data, effective);
   }
 
   container.dataset.rendered = 'true';

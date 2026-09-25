@@ -17,6 +17,7 @@ import {
     useQueryClient,
     type UseQueryOptions,
 } from '@tanstack/react-query';
+import { toast } from 'sonner';
 
 import {
     listChats,
@@ -57,14 +58,16 @@ export function useAIChatList(params?: {
     connectionId?: string;
     limit?: number;
     offset?: number;
+    useCase?: string;
     enabled?: boolean;
 }) {
     return useQuery<ListChatsResponse, Error>({
-        queryKey: aiQueryKeys.chats(params?.connectionId),
+        queryKey: [...aiQueryKeys.chats(params?.connectionId), params?.useCase ?? 'data_explorer'],
         queryFn: () => listChats({
             connectionId: params?.connectionId,
             limit: params?.limit ?? 20,
             offset: params?.offset ?? 0,
+            useCase: params?.useCase ?? 'data_explorer',
         }),
         enabled: params?.enabled !== false,
         staleTime: 30_000,        // 30s — chat list doesn't change that fast
@@ -133,6 +136,10 @@ export function useDeleteAIChat() {
             // Invalidate all chat list variants and project queries
             queryClient.invalidateQueries({ queryKey: ['ai', 'chats'] });
             queryClient.invalidateQueries({ queryKey: ['ai', 'projects'] });
+            toast.success('Conversation deleted from your history.');
+        },
+        onError: (err: any) => {
+            toast.error(err?.message || 'Failed to delete conversation');
         },
     });
 }

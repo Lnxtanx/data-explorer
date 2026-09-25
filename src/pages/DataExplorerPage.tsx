@@ -28,13 +28,29 @@ import {
 import { NotificationBanner } from '@/components/ui/NotificationBanner';
 import { logger } from '@/lib/logger';
 import { storePendingInvite, getPendingInvite, clearPendingInvite } from '@/lib/inviteToken';
+import { cn } from '@/lib/utils';
 
-// Lazy-load heavy modals so their subviews/dependencies are not loaded on first render
-const SettingsModal = lazy(() => import('@/components/settings/SettingsModal').then(m => ({ default: m.SettingsModal })));
-const ConnectorDialog = lazy(() => import('@/components/connector/ConnectorDialog').then(m => ({ default: m.ConnectorDialog })));
+// Lazy-load heavy modals with background preloading so they open instantaneously without UI freeze
+const preloadSettingsModal = () => import('@/components/settings/SettingsModal');
+const preloadConnectorDialog = () => import('@/components/connector/ConnectorDialog');
+
+const SettingsModal = lazy(() => preloadSettingsModal().then(m => ({ default: m.SettingsModal })));
+const ConnectorDialog = lazy(() => preloadConnectorDialog().then(m => ({ default: m.ConnectorDialog })));
 const InvitationReviewModal = lazy(() => import('@/components/auth/InvitationReviewModal').then(m => ({ default: m.InvitationReviewModal })));
 
+function ModalLoadingFallback() {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/50 backdrop-blur-sm animate-in fade-in duration-150">
+      <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl bg-card border border-border shadow-md">
+        <Loader2 className="w-4 h-4 animate-spin text-primary" />
+        <span className="text-xs font-medium text-muted-foreground">Opening...</span>
+      </div>
+    </div>
+  );
+}
+
 const STORAGE_KEY = 'sw-data-explorer:connection-id';
+const STORAGE_AI_PANEL_OPEN_KEY = 'sw-data-explorer:dashboard-ai-panel-open';
 
 export default function DataExplorerPage() {
   const { user, loading: authLoading, isLoggingIn, signOut, signInWithGoogle, signInWithGithub } = useAuth();
@@ -46,7 +62,10 @@ export default function DataExplorerPage() {
   const [hasShownSelectToast, setHasShownSelectToast] = useState(false);
   const [showConnectorDialog, setShowConnectorDialog] = useState(false);
   const [connectorDialogTab, setConnectorDialogTab] = useState<'overview' | 'connectors' | 'databases' | 'logs' | 'settings' | 'health' | 'connect'>('connect');
-  const [isAiPanelOpen, setIsAiPanelOpen] = useState(false);
+  const [isAiPanelOpen, setIsAiPanelOpen] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem(STORAGE_AI_PANEL_OPEN_KEY) === 'true';
+  });
 
   const { data: connections, isSuccess: connectionsLoaded, refetch: refetchConnections } = useConnections();
 
@@ -128,11 +147,55 @@ export default function DataExplorerPage() {
     }
   }, [mode]);
 
+  const handleToggleAiPanel = useCallback(() => {
+    setIsAiPanelOpen(prev => {
+      const next = !prev;
+      try {
+        localStorage.setItem(STORAGE_AI_PANEL_OPEN_KEY, String(next));
+      } catch {}
+      return next;
+    });
+  }, []);
+
+  const handleCloseAiPanel = useCallback(() => {
+    setIsAiPanelOpen(false);
+    try {
+      localStorage.setItem(STORAGE_AI_PANEL_OPEN_KEY, 'false');
+    } catch {}
+  }, []);
+
+  const handleOpenAiPanel = useCallback(() => {
+    setIsAiPanelOpen(true);
+    try {
+      localStorage.setItem(STORAGE_AI_PANEL_OPEN_KEY, 'true');
+    } catch {}
+  }, []);
+
   useEffect(() => {
-    if (mode !== 'dashboard') {
+    if (mode === 'dashboard') {
+      try {
+        const saved = localStorage.getItem(STORAGE_AI_PANEL_OPEN_KEY);
+        if (saved === 'true') {
+          setIsAiPanelOpen(true);
+        }
+      } catch {}
+    } else {
       setIsAiPanelOpen(false);
     }
   }, [mode]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'j') {
+        if (mode === 'dashboard') {
+          e.preventDefault();
+          handleToggleAiPanel();
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [mode, handleToggleAiPanel]);
 
   useEffect(() => {
     if (!authLoading && !user && mode !== 'explorer') {
@@ -272,6 +335,21 @@ export default function DataExplorerPage() {
     setShowConnectorDialog(true);
   }, [user]);
 
+  // Preload heavy modals in background during idle time so click-to-open is instantaneous
+  useEffect(() => {
+    const preload = () => {
+      preloadSettingsModal();
+      preloadConnectorDialog();
+    };
+    if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+      const handle = (window as any).requestIdleCallback(preload, { timeout: 1500 });
+      return () => (window as any).cancelIdleCallback(handle);
+    } else {
+      const timer = setTimeout(preload, 600);
+      return () => clearTimeout(timer);
+    }
+  }, []);
+
   if (isLoggingIn) {
     return (
       <div className="h-screen w-screen flex flex-col items-center justify-center gap-3 bg-background">
@@ -310,7 +388,7 @@ export default function DataExplorerPage() {
                     onOpenConnectWizard={() => handleOpenConnector('connect')}
                   />
                 </div>
-                {selectedTable.table && (
+                {selectedTable.table && mode !== 'dashboard' && (
                   <div className="flex items-center gap-1 text-xs text-muted-foreground ml-1">
                     <ChevronRight className="w-3 h-3" />
                     <span>{selectedTable.schema}</span>
@@ -318,25 +396,35 @@ export default function DataExplorerPage() {
                     <span className="font-medium text-foreground">{selectedTable.table.name}</span>
                   </div>
                 )}
-                <div id="table-actions-portal" className="flex items-center gap-1 ml-2" />
+                {/* Portal host stays mounted (createPortal needs it) but is hidden on
+                    dashboard so the portaled grid toolbar never shows there. */}
+                <div
+                  id="table-actions-portal"
+                  className={
+                    mode === 'dashboard'
+                      ? 'hidden'
+                      : 'flex items-center gap-1 ml-2'
+                  }
+                />
               </div>
 
               <div className="flex items-center gap-1.5 shrink-0">
-                {/* Resona AI Side Panel Toggle (Dashboard AI only) */}
-                {mode === 'dashboard' && (
+                {/* Resona AI Side Panel Toggle (Dashboard AI only) - hidden when panel is open */}
+                {mode === 'dashboard' && !isAiPanelOpen && (
                   <Button
-                    variant={isAiPanelOpen ? 'secondary' : 'outline'}
-                    size="icon"
-                    onClick={() => setIsAiPanelOpen(!isAiPanelOpen)}
-                    className="h-7 w-7 cursor-pointer shadow-none transition-all duration-150 select-none"
-                    title={isAiPanelOpen ? 'Close Dashboard AI' : 'Open Dashboard AI'}
+                    variant="outline"
+                    size="sm"
+                    onClick={handleOpenAiPanel}
+                    className="h-8 px-2.5 gap-2 cursor-pointer shadow-xs transition-all duration-150 select-none font-medium text-xs rounded-lg border hover:bg-muted/70 text-foreground border-border/80 animate-in fade-in zoom-in-95 duration-150"
+                    title="Open Resona AI panel (Ctrl+J)"
                   >
-                    <img src="/resona.png" alt="Dashboard AI" className="w-4 h-4 object-contain" />
+                    <img src="/resona.png" alt="Resona AI" className="w-3.5 h-3.5 object-contain shrink-0" />
+                    <span>Resona AI</span>
                   </Button>
                 )}
 
-                {/* Export Button - Preserved at last */}
-                {exportButton}
+                {/* Export Button - grid only, never on dashboard */}
+                {mode !== 'dashboard' && exportButton}
                 <div id="table-export-portal" className="hidden" />
                 {!user && !authLoading && (
                   <Button
@@ -363,13 +451,13 @@ export default function DataExplorerPage() {
           aiContextTable={aiContextTable}
           aiContextSchema={selectedTable.schema}
           isAiPanelOpen={isAiPanelOpen}
-          onCloseAiPanel={() => setIsAiPanelOpen(false)}
-          onOpenAiPanel={() => setIsAiPanelOpen(true)}
+          onCloseAiPanel={handleCloseAiPanel}
+          onOpenAiPanel={handleOpenAiPanel}
         />
       </div>
 
       {showSettings && (
-        <Suspense fallback={null}>
+        <Suspense fallback={<ModalLoadingFallback />}>
           <SettingsModal
             isOpen={showSettings}
             onClose={() => setShowSettings(false)}
@@ -399,7 +487,7 @@ export default function DataExplorerPage() {
       )}
 
       {showConnectorDialog && (
-        <Suspense fallback={null}>
+        <Suspense fallback={<ModalLoadingFallback />}>
           <ConnectorDialog
             open={showConnectorDialog}
             onClose={() => setShowConnectorDialog(false)}

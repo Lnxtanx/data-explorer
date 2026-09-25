@@ -8,6 +8,7 @@
     "build": "tsc && vite build",
     "build:engine": "node scripts/build-dashboard-engine.mjs",
     "preview": "vite preview",
+    "test": "vitest run --config vitest.engine.config.ts",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0"
   },
   "dependencies": {
@@ -55,7 +56,6 @@
     "lucide-react": "^0.462.0",
     "mermaid": "^11.13.0",
     "next-themes": "^0.3.0",
-    "pptxgenjs": "^4.0.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-hook-form": "^7.61.1",
@@ -81,10 +81,12 @@
     "eslint": "^9.0.0",
     "eslint-plugin-react-hooks": "^5.0.0",
     "eslint-plugin-react-refresh": "^0.4.7",
+    "jsdom": "^29.1.1",
     "postcss": "^8.4.38",
     "tailwindcss": "^3.4.4",
     "typescript": "^5.5.3",
     "vite": "^6.0.0",
-    "vite-plugin-pwa": "^0.21.0"
+    "vite-plugin-pwa": "^0.21.0",
+    "vitest": "^4.1.11"
   }
 }

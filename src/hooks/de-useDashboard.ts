@@ -11,9 +11,14 @@ import {
   refreshDashboard,
   refreshPanel,
   deleteDashboard,
+  deletePanel,
+  reorderPanels,
+  resizePanel,
+  setPanelVisibility,
   generateDashboard,
   getDashboardSessions,
   getDashboardRunState,
+  deleteDashboardSession,
   DashboardProgressEvent,
   GetDashboardResponse,
   DashboardRunSummary,
@@ -22,11 +27,13 @@ import {
   PanelData,
 } from '@/lib/api/dashboard';
 import type { AgentToolStep } from '@/hooks/useAIAgent';
+import { sanitizeToolInput, sanitizeToolSummary } from '@/components/data-explorer/ai/tools/toolSanitize';
 
 export interface GenerationProgress {
   phase: string;
   message: string;
   percent: number;
+  text?: string;
   toolSteps?: AgentToolStep[];
   warnings?: string[];
 }
@@ -43,7 +50,7 @@ const PHASE_PROGRESS: Record<string, number> = {
 
 export function useDashboard(connectionId: string | null, theme?: string) {
   return useQuery<GetDashboardResponse>({
-    queryKey: ['dashboard', connectionId, theme || 'dark'],
+    queryKey: ['dashboard', connectionId],
     queryFn: () => getDashboard(connectionId!, theme),
     enabled: Boolean(connectionId),
     staleTime: 5 * 60 * 1000,
@@ -110,6 +117,7 @@ export function useGenerateDashboard(connectionId: string | null) {
     abortControllerRef.current = controller;
     const toolSteps: AgentToolStep[] = [];
     const warnings: string[] = [];
+    let accumulatedText = '';
 
     try {
       const result = await generateDashboard(
@@ -117,11 +125,12 @@ export function useGenerateDashboard(connectionId: string | null) {
         (event: DashboardProgressEvent) => {
           if (event.eventType === 'tool_call' || event.phase === 'tool_call') {
             const stepId = event.id || `step-${Date.now()}-${toolSteps.length}`;
+            const toolName = event.name || 'tool';
             const existingIdx = toolSteps.findIndex(s => s.id === stepId);
             const newStep: AgentToolStep = {
               id: stepId,
-              name: event.name || 'tool',
-              input: event.input || {},
+              name: toolName,
+              input: sanitizeToolInput(toolName, event.input || {}),
               status: 'calling',
               startedAt: Date.now(),
             };
@@ -138,7 +147,7 @@ export function useGenerateDashboard(connectionId: string | null) {
               toolSteps[targetIdx] = {
                 ...toolSteps[targetIdx],
                 status: event.success ? 'done' : 'error',
-                result: { success: !!event.success, summary: event.summary },
+                result: { success: !!event.success, summary: sanitizeToolSummary(event.summary || '') },
                 latencyMs: event.latency_ms,
               };
             }
@@ -148,12 +157,23 @@ export function useGenerateDashboard(connectionId: string | null) {
             }
           }
 
-          if (event.phase && event.phase !== 'delta') {
+          if (event.phase === 'delta' && (event.delta || event.text)) {
+            accumulatedText += event.delta || event.text || '';
+            setProgress((prev) => ({
+              phase: 'delta',
+              message: prev?.message || 'Synthesizing analysis…',
+              percent: 98,
+              text: accumulatedText,
+              toolSteps: [...toolSteps],
+              warnings: [...warnings],
+            }));
+          } else if (event.phase && event.phase !== 'delta') {
             const percent = PHASE_PROGRESS[event.phase] || 50;
             setProgress({
               phase: event.phase,
               message: event.message || 'Processing...',
               percent,
+              text: accumulatedText || undefined,
               toolSteps: [...toolSteps],
               warnings: [...warnings],
             });
@@ -162,6 +182,7 @@ export function useGenerateDashboard(connectionId: string | null) {
               phase: prev?.phase || 'plan',
               message: prev?.message || 'Executing tools…',
               percent: prev?.percent || 50,
+              text: accumulatedText || undefined,
               toolSteps: [...toolSteps],
               warnings: [...warnings],
             }));
@@ -181,23 +202,27 @@ export function useGenerateDashboard(connectionId: string | null) {
         }
       );
 
-      setProgress({ phase: 'done', message: 'Dashboard ready!', percent: 100 });
+      const completionText = accumulatedText.trim() || result.text?.trim() || (result.title ? `Dashboard ready: ${result.title}` : 'Dashboard ready!');
+      setProgress({ phase: 'done', message: completionText, text: completionText, percent: 100, toolSteps: [...toolSteps], warnings: [...warnings] });
       if (result.run_id) setLatestRunId(result.run_id);
       if (result.session_id) setLatestSessionId(result.session_id);
 
-      // Invalidate and pre-populate query data
-      queryClient.setQueryData<GetDashboardResponse>(['dashboard', connectionId], (prev) => ({
-        dashboard: {
-          id: result.dashboard_id || prev?.dashboard?.id || '',
-          title: result.title || prev?.dashboard?.title || 'Analytics Dashboard',
-          description: prev?.dashboard?.description || '',
-          sections: prev?.dashboard?.sections || [],
-          panelCount: typeof result.html === 'string' ? 5 : (prev?.dashboard?.panelCount || 0),
-          refreshedAt: new Date().toISOString(),
-        },
-        html: result.html || prev?.html || '',
-        panelData: result.panelData || prev?.panelData || {},
-      }));
+      // Invalidate and pre-populate query data across all theme variants
+      queryClient.setQueriesData<GetDashboardResponse>(
+        { queryKey: ['dashboard', connectionId] },
+        (prev) => ({
+          dashboard: {
+            id: result.dashboard_id || prev?.dashboard?.id || '',
+            title: result.title || prev?.dashboard?.title || 'Analytics Dashboard',
+            description: prev?.dashboard?.description || '',
+            sections: prev?.dashboard?.sections || [],
+            panelCount: typeof result.html === 'string' ? 5 : (prev?.dashboard?.panelCount || 0),
+            refreshedAt: new Date().toISOString(),
+          },
+          html: result.html || prev?.html || '',
+          panelData: result.panelData || prev?.panelData || {},
+        })
+      );
 
       await queryClient.invalidateQueries({ queryKey: ['dashboard', connectionId] });
       await queryClient.invalidateQueries({ queryKey: ['dashboard', 'sessions', connectionId] });
@@ -212,6 +237,7 @@ export function useGenerateDashboard(connectionId: string | null) {
       throw err;
     } finally {
       setIsGenerating(false);
+      setProgress(null);
       abortControllerRef.current = null;
     }
   }, [connectionId, queryClient]);
@@ -319,7 +345,7 @@ export function useDashboardSessions(connectionId: string | null) {
     },
     enabled: Boolean(connectionId),
     staleTime: 30 * 1000,
-    refetchOnWindowFocus: false,
+    refetchOnWindowFocus: true,
   });
 }
 
@@ -331,7 +357,38 @@ export function useDashboardRunState(runId: string | null) {
     queryKey: ['dashboard', 'session', runId],
     queryFn: () => getDashboardRunState(runId!),
     enabled: Boolean(runId),
-    staleTime: 30 * 1000,
+    staleTime: 5 * 1000,
+    refetchOnWindowFocus: true,
+  });
+}
+
+/**
+ * Soft-delete a dashboard-generation session run from the user's history.
+ */
+export function useDeleteDashboardSession(connectionId: string | null) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (runId: string) => deleteDashboardSession(runId),
+    onMutate: async (runId: string) => {
+      await queryClient.cancelQueries({ queryKey: ['dashboard', 'sessions', connectionId] });
+      const previous = queryClient.getQueryData<DashboardRunSummary[]>(['dashboard', 'sessions', connectionId]);
+      if (previous) {
+        queryClient.setQueryData<DashboardRunSummary[]>(
+          ['dashboard', 'sessions', connectionId],
+          previous.filter((s) => s.run_id !== runId)
+        );
+      }
+      return { previous };
+    },
+    onError: (_err, _runId, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(['dashboard', 'sessions', connectionId], context.previous);
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['dashboard', 'sessions', connectionId] });
+    },
   });
 }
 
@@ -366,6 +423,10 @@ export function useDashboardGenerate(connectionId: string | null) {
           controller.signal,
           options
         );
+        if (result?.run_id) {
+          await queryClient.invalidateQueries({ queryKey: ['dashboard', 'session', result.run_id] });
+        }
+        await queryClient.invalidateQueries({ queryKey: ['dashboard', 'session'] });
         await queryClient.invalidateQueries({ queryKey: ['dashboard', 'sessions', connectionId] });
         await queryClient.invalidateQueries({ queryKey: ['dashboard', connectionId] });
         return result;
@@ -377,6 +438,10 @@ export function useDashboardGenerate(connectionId: string | null) {
       } finally {
         setIsGenerating(false);
         abortControllerRef.current = null;
+        // Run settled (success OR failure) — always resync history so a failed
+        // first run still surfaces its session in the list.
+        await queryClient.invalidateQueries({ queryKey: ['dashboard', 'sessions', connectionId] });
+        await queryClient.invalidateQueries({ queryKey: ['dashboard', 'session'] });
       }
     },
     [connectionId, queryClient]
@@ -389,4 +454,106 @@ export function useDashboardGenerate(connectionId: string | null) {
   }, []);
 
   return { generate, cancel, isGenerating, error };
+}
+
+export function useDeletePanel(connectionId: string | null) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ dashboardId, panelKey, explanation }: { dashboardId: string; panelKey: string; explanation?: string }) =>
+      deletePanel(dashboardId, panelKey, explanation),
+    onSuccess: (data) => {
+      // Optimistically update panel count and version without reloading iframe srcDoc
+      queryClient.setQueriesData<GetDashboardResponse>(
+        { queryKey: ['dashboard', connectionId] },
+        (prev) => {
+          if (!prev || !prev.dashboard) return prev;
+          return {
+            ...prev,
+            dashboard: {
+              ...prev.dashboard,
+              panelCount: Math.max(0, (prev.dashboard.panelCount || 1) - 1),
+              version: data.version ?? prev.dashboard.version,
+            },
+          };
+        }
+      );
+    },
+  });
+}
+
+export function useReorderPanels(connectionId: string | null) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ dashboardId, panelKey, direction }: { dashboardId: string; panelKey: string; direction: 'up' | 'down' }) =>
+      reorderPanels(dashboardId, panelKey, direction),
+    onSuccess: (data) => {
+      // Update in-memory panels & version without reloading iframe srcDoc (DOM was moved in-place)
+      queryClient.setQueriesData<GetDashboardResponse>(
+        { queryKey: ['dashboard', connectionId] },
+        (prev) => {
+          if (!prev || !prev.dashboard) return prev;
+          return {
+            ...prev,
+            dashboard: {
+              ...prev.dashboard,
+              panels: data.panels ?? prev.dashboard.panels,
+              version: data.version ?? prev.dashboard.version,
+            },
+          };
+        }
+      );
+    },
+  });
+}
+
+export function useResizePanel(connectionId: string | null) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ dashboardId, panelKey, colSpan, height }: { dashboardId: string; panelKey: string; colSpan?: 1 | 2 | 3; height?: number }) =>
+      resizePanel(dashboardId, panelKey, colSpan, height),
+    onSuccess: (data) => {
+      queryClient.setQueriesData<GetDashboardResponse>(
+        { queryKey: ['dashboard', connectionId] },
+        (prev) => {
+          if (!prev || !prev.dashboard) return prev;
+          return {
+            ...prev,
+            dashboard: {
+              ...prev.dashboard,
+              panels: data.panels ?? prev.dashboard.panels,
+              version: data.version ?? prev.dashboard.version,
+            },
+          };
+        }
+      );
+    },
+  });
+}
+
+export function useSetPanelVisibility(connectionId: string | null) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ dashboardId, panelKey, isHidden }: { dashboardId: string; panelKey: string; isHidden: boolean }) =>
+      setPanelVisibility(dashboardId, panelKey, isHidden),
+    onSuccess: (data) => {
+      queryClient.setQueriesData<GetDashboardResponse>(
+        { queryKey: ['dashboard', connectionId] },
+        (prev) => {
+          if (!prev || !prev.dashboard) return prev;
+          return {
+            ...prev,
+            dashboard: {
+              ...prev.dashboard,
+              panels: data.panels ?? prev.dashboard.panels,
+              version: data.version ?? prev.dashboard.version,
+            },
+          };
+        }
+      );
+    },
+  });
 }

@@ -19,9 +19,10 @@ export interface DashboardSection {
 export interface DashboardPanel {
   id: string;
   panel_key: string;
+  key?: string;
   section_id: string;
   title: string;
-  chart_type: 'kpi' | 'line' | 'bar' | 'donut' | 'area' | 'table' | 'insight';
+  chart_type: 'kpi' | 'line' | 'bar' | 'donut' | 'area' | 'table' | 'insight' | 'cohort' | 'funnel' | 'geo';
   sql: string;
   config: Record<string, unknown>;
   sort_order: number;
@@ -33,6 +34,7 @@ export interface Dashboard {
   description: string;
   sections: DashboardSection[];
   panelCount: number;
+  panels?: DashboardPanel[];
   version?: number;
   refreshedAt?: string;
   createdAt?: string;
@@ -99,6 +101,7 @@ export interface DashboardRunSummary {
   completion_reason?: string;
   completion_message?: string;
   context?: Record<string, any>;
+  turn_count?: number;
 }
 
 export interface DashboardRunState {
@@ -188,6 +191,75 @@ export async function deleteDashboard(id: string): Promise<{ deleted: boolean }>
 }
 
 /**
+ * Delete a single panel from a dashboard.
+ */
+export async function deletePanel(
+  id: string,
+  panelKey: string,
+  explanation?: string
+): Promise<{ dashboard_id: string; panelKey: string; deleted: boolean; version?: number; html?: string }> {
+  return apiRequest<{ dashboard_id: string; panelKey: string; deleted: boolean; version?: number; html?: string }>(
+    `/api/de/dashboards/${encodeURIComponent(id)}/panels/${encodeURIComponent(panelKey)}`,
+    {
+      method: 'DELETE',
+      body: JSON.stringify({ explanation }),
+    }
+  );
+}
+
+/**
+ * Reorder panels in a dashboard (move up/left or down/right).
+ */
+export async function reorderPanels(
+  id: string,
+  panelKey: string,
+  direction: 'up' | 'down'
+): Promise<{ dashboard_id: string; panelKey: string; panels: DashboardPanel[]; version: number; html?: string }> {
+  return apiRequest<{ dashboard_id: string; panelKey: string; panels: DashboardPanel[]; version: number; html?: string }>(
+    `/api/de/dashboards/${encodeURIComponent(id)}/panels/reorder`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ panelKey, direction }),
+    }
+  );
+}
+
+/**
+ * Resize a panel column span (1, 2, or 3) and/or height in a dashboard.
+ */
+export async function resizePanel(
+  id: string,
+  panelKey: string,
+  colSpan?: 1 | 2 | 3,
+  height?: number
+): Promise<{ dashboard_id: string; panelKey: string; col_span?: number; height?: number; panels: DashboardPanel[]; version: number }> {
+  return apiRequest<{ dashboard_id: string; panelKey: string; col_span?: number; height?: number; panels: DashboardPanel[]; version: number }>(
+    `/api/de/dashboards/${encodeURIComponent(id)}/panels/resize`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ panelKey, colSpan, height }),
+    }
+  );
+}
+
+/**
+ * Hide or unhide a panel in a dashboard.
+ */
+export async function setPanelVisibility(
+  id: string,
+  panelKey: string,
+  isHidden: boolean
+): Promise<{ dashboard_id: string; panelKey: string; is_hidden: boolean; panels: DashboardPanel[]; version: number }> {
+  return apiRequest<{ dashboard_id: string; panelKey: string; is_hidden: boolean; panels: DashboardPanel[]; version: number }>(
+    `/api/de/dashboards/${encodeURIComponent(id)}/panels/visibility`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ panelKey, isHidden }),
+    }
+  );
+}
+
+/**
  * Generate a new dashboard via backend-ai SSE stream.
  * `opts.message` / `opts.resumeOf` continue a durable dashboard session
  * (opencode/Claude Code style), keeping the same conversation for follow-ups.
@@ -259,6 +331,8 @@ export async function generateDashboard(
           onProgress?.({ eventType, phase: 'delta', delta: parsed.text || parsed.delta, text: parsed.text });
         } else if (eventType === 'thinking_chunk' || eventType === 'thinking') {
           onProgress?.({ eventType, phase: 'thinking', delta: parsed.text, text: parsed.text });
+        } else if (eventType === 'thinking_clear') {
+          onProgress?.({ eventType: 'thinking_clear', phase: 'thinking_clear' });
         } else if (eventType === 'tool_call') {
           onProgress?.({
             eventType,
@@ -317,11 +391,21 @@ export async function generateDashboard(
 
     for (const block of blocks) {
       processBlock(block);
+      if (finalResult) break;
+    }
+
+    if (finalResult) {
+      try {
+        await reader.cancel();
+      } catch {
+        /* ignore cancel error on closed stream */
+      }
+      break;
     }
   }
 
-  // Flush any remaining trailing block in buffer
-  if (buffer.trim()) {
+  // Flush any remaining trailing block in buffer if not finished yet
+  if (!finalResult && buffer.trim()) {
     processBlock(buffer.trim());
   }
 
@@ -348,4 +432,14 @@ export async function getDashboardSessions(connectionId: string): Promise<{ runs
  */
 export async function getDashboardRunState(runId: string): Promise<DashboardRunState> {
   return apiRequest<DashboardRunState>(`/api/ai/runs/${encodeURIComponent(runId)}`);
+}
+
+/**
+ * Soft-delete a durable dashboard-generation session from the user's history.
+ */
+export async function deleteDashboardSession(runId: string): Promise<{ success: boolean }> {
+  return apiRequest<{ success: boolean }>(
+    `/api/de/dashboards/generate/sessions/${encodeURIComponent(runId)}`,
+    { method: 'DELETE' }
+  );
 }

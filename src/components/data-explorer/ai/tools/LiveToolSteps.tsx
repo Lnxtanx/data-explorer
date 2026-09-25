@@ -17,6 +17,7 @@ function formatDuration(ms: number): string {
 function getLiveLabel(steps: AgentToolStep[]): string {
     const activeStep = steps.find(s => s.status === 'calling') || steps[steps.length - 1];
     if (activeStep?.status === 'calling') {
+        if (activeStep.type === 'thinking') return 'Thinking…';
         const name = activeStep.name?.toLowerCase() || '';
         if (name.includes('query')) return 'Running query…';
         if (name.includes('export')) return 'Exporting file…';
@@ -120,6 +121,7 @@ export function LiveToolSteps({ steps, isLive, defaultExpanded = false }: LiveTo
                             key={step.id}
                             step={step}
                             isLive={isLive}
+                            defaultExpanded={step.type === 'thinking' && (steps.length === 1 || (isLive && step.status === 'calling'))}
                         />
                     ))}
                 </div>

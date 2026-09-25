@@ -275,6 +275,14 @@ export interface AgentArtifact {
     reportVersion?: number;
     /** Superseded versions of this file if regenerated/edited */
     previousVersions?: AgentArtifact[];
+    /** Attachment & uploaded file fields */
+    fileId?: string;
+    file_id?: string;
+    fileSize?: number;
+    size_bytes?: number;
+    rawContent?: string;
+    preview?: string;
+    extracted_components?: Record<string, unknown>;
 
     // ─── Suggestions artifact (type === 'suggestions') ────────────────────
     suggestions?: AnalysisSuggestion[];

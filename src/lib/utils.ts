@@ -49,3 +49,13 @@ export function formatShortType(typeStr: string): string {
   if (lower.startsWith('numeric') || lower.startsWith('decimal')) return 'numeric';
   return typeStr.length > 12 ? typeStr.slice(0, 10) + '…' : typeStr;
 }
+
+/**
+ * Strips internal AI temporal tags like `[Sent: Saturday, September 19, 2026 at 21:11:20 IST (Asia/Calcutta)]`
+ * from user message content so internal reasoning metadata is never displayed in user-facing UI bubbles.
+ */
+export function stripTemporalTag(content?: string): string {
+  if (!content) return '';
+  return content.replace(/^\s*(?:\[Sent:[^\]]*\]\s*\n*)+/i, '').trim();
+}
+

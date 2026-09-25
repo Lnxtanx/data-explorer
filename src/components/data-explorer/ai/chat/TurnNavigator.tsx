@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { ArrowDown, ArrowUp, X, MessageSquare } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, stripTemporalTag } from '@/lib/utils';
+import { ActionTooltip } from '@/components/ui/tooltip';
 import type { LocalMessage } from './types';
 
 export interface UserTurn {
@@ -43,7 +44,7 @@ export function TurnNavigator({
                 turns.push({
                     id: m.id,
                     index: count,
-                    content: m.content || '',
+                    content: stripTemporalTag(m.content || ''),
                     timestamp: m.createdAt,
                 });
             }
@@ -119,8 +120,7 @@ export function TurnNavigator({
                     {/* Vertical Dash Rail (hover or click opens popover; no extra icon button) */}
                     <div
                         onClick={() => setPopoverOpen(prev => !prev)}
-                        className="flex flex-col items-center gap-1.5 py-2.5 px-1 rounded-full bg-background/70 hover:bg-background/95 backdrop-blur-md border border-border/30 hover:border-border/60 transition-all shadow-xs cursor-pointer group"
-                        title="Conversation turns (hover to preview)"
+                        className="flex flex-col items-center gap-1.5 py-2.5 px-1 rounded-full bg-background/70 hover:bg-background/95 backdrop-blur-md border border-border/30 hover:border-border/60 transition-all shadow-sm cursor-pointer group"
                         role="button"
                         tabIndex={0}
                         aria-label="Conversation turn navigation"
@@ -142,7 +142,7 @@ export function TurnNavigator({
                                             className={cn(
                                                 "h-[3px] rounded-full transition-all duration-200 cursor-pointer block",
                                                 isActive
-                                                    ? "w-4 bg-primary shadow-xs"
+                                                    ? "w-4 bg-primary shadow-sm"
                                                     : "w-2 bg-muted-foreground/30 hover:w-3.5 hover:bg-muted-foreground/80 group-hover:bg-muted-foreground/60"
                                             )}
                                             aria-label={`Jump to turn ${turn.index}: ${promptPreview}`}
@@ -245,23 +245,24 @@ export function TurnNavigator({
             {/* ── Icon-Only Floating Scroll-to-Bottom Button ────────────────── */}
             {!isAtBottom && (
                 <div className="absolute bottom-24 right-4 sm:right-6 z-20 animate-in fade-in-0 slide-in-from-bottom-2 duration-200">
-                    <button
-                        type="button"
-                        onClick={onScrollToBottom}
-                        className={cn(
-                            "relative w-8 h-8 rounded-full shadow-lg border flex items-center justify-center transition-all duration-150 cursor-pointer backdrop-blur-md",
-                            hasNewMessages
-                                ? "bg-primary text-primary-foreground border-primary/40 hover:bg-primary/90 shadow-primary/25"
-                                : "bg-background/90 text-muted-foreground hover:text-foreground border-border/60 hover:border-border hover:bg-muted/60"
-                        )}
-                        title={hasNewMessages ? "New response — Scroll to bottom" : "Scroll to bottom"}
-                        aria-label="Scroll to bottom"
-                    >
-                        <ArrowDown className="w-4 h-4 shrink-0" />
-                        {hasNewMessages && (
-                            <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-primary ring-2 ring-background animate-pulse" />
-                        )}
-                    </button>
+                    <ActionTooltip label={hasNewMessages ? "New response — Scroll to bottom" : "Scroll to bottom"} side="left">
+                        <button
+                            type="button"
+                            onClick={onScrollToBottom}
+                            className={cn(
+                                "relative w-8 h-8 rounded-full shadow-lg border flex items-center justify-center transition-all duration-150 cursor-pointer backdrop-blur-md",
+                                hasNewMessages
+                                    ? "bg-primary text-primary-foreground border-primary/40 hover:bg-primary/90 shadow-primary/25"
+                                    : "bg-background/90 text-muted-foreground hover:text-foreground border-border/60 hover:border-border hover:bg-muted/60"
+                            )}
+                            aria-label="Scroll to bottom"
+                        >
+                            <ArrowDown className="w-4 h-4 shrink-0" />
+                            {hasNewMessages && (
+                                <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-primary ring-2 ring-background animate-pulse" />
+                            )}
+                        </button>
+                    </ActionTooltip>
                 </div>
             )}
         </>

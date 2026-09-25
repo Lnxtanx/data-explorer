@@ -66,10 +66,10 @@ export function EmptyState({ hasConnection, onOpenConnectWizard }: EmptyStatePro
       {!hasConnection ? (
         <div className="w-full max-w-xl text-center space-y-4">
           {/* ─── Unified Hero Card with Video & Actions ─── */}
-          <div className="rounded-2xl border border-border/70 bg-card/70 p-2 shadow-lg backdrop-blur-xs overflow-hidden text-left">
+          <div className="rounded-2xl border border-border/70 bg-card/70 p-2 shadow-lg backdrop-blur-sm overflow-hidden text-left">
             {/* Video Player Container */}
             <div 
-              className="relative aspect-[16/9] w-full rounded-xl overflow-hidden bg-muted/40 border border-border/40 shadow-xs select-none"
+              className="relative aspect-[16/9] w-full rounded-xl overflow-hidden bg-muted/40 border border-border/40 shadow-sm select-none"
               onContextMenu={(e) => e.preventDefault()}
             >
               {/* Active Playing Video */}
@@ -120,7 +120,7 @@ export function EmptyState({ hasConnection, onOpenConnectWizard }: EmptyStatePro
                     className={cn(
                       "px-2.5 py-0.5 rounded-md text-[10px] font-medium transition-all duration-150 cursor-pointer",
                       selectedVideo === v.src
-                        ? "bg-background text-foreground shadow-xs font-semibold"
+                        ? "bg-background text-foreground shadow-sm font-semibold"
                         : "text-muted-foreground hover:text-foreground"
                     )}
                   >

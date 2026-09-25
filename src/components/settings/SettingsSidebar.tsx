@@ -57,7 +57,7 @@ export function SettingsSidebar({ activeSection, onSelect }: SettingsSidebarProp
             </nav>
 
             <div className="p-3 border-t border-border">
-                <p className="text-[10px] text-muted-foreground text-center">
+                <p className="text-2xs text-muted-foreground text-center">
                     Data Explorer v1.0
                 </p>
             </div>

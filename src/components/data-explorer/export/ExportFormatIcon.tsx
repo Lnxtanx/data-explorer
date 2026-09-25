@@ -18,7 +18,7 @@ export function ExportFormatIcon({ format, className, size = 24 }: ExportFormatI
           viewBox="0 0 32 32"
           fill="none"
           xmlns="http://www.w3.org/2000/svg"
-          className={cn('shrink-0 drop-shadow-xs', className)}
+          className={cn('shrink-0 drop-shadow-sm', className)}
         >
           {/* File body */}
           <rect x="5" y="3" width="22" height="26" rx="3.5" fill="#107C41" />
@@ -56,7 +56,7 @@ export function ExportFormatIcon({ format, className, size = 24 }: ExportFormatI
           viewBox="0 0 32 32"
           fill="none"
           xmlns="http://www.w3.org/2000/svg"
-          className={cn('shrink-0 drop-shadow-xs', className)}
+          className={cn('shrink-0 drop-shadow-sm', className)}
         >
           {/* File body */}
           <rect x="5" y="3" width="22" height="26" rx="3.5" fill="#F59E0B" />
@@ -102,7 +102,7 @@ export function ExportFormatIcon({ format, className, size = 24 }: ExportFormatI
           viewBox="0 0 32 32"
           fill="none"
           xmlns="http://www.w3.org/2000/svg"
-          className={cn('shrink-0 drop-shadow-xs', className)}
+          className={cn('shrink-0 drop-shadow-sm', className)}
         >
           {/* File body */}
           <rect x="5" y="3" width="22" height="26" rx="3.5" fill="#059669" />
@@ -140,7 +140,7 @@ export function ExportFormatIcon({ format, className, size = 24 }: ExportFormatI
           viewBox="0 0 24 24"
           fill="none"
           xmlns="http://www.w3.org/2000/svg"
-          className={cn('shrink-0 drop-shadow-xs', className)}
+          className={cn('shrink-0 drop-shadow-sm', className)}
         >
           <path
             d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
@@ -169,7 +169,7 @@ export function ExportFormatIcon({ format, className, size = 24 }: ExportFormatI
           viewBox="0 0 32 32"
           fill="none"
           xmlns="http://www.w3.org/2000/svg"
-          className={cn('shrink-0 drop-shadow-xs', className)}
+          className={cn('shrink-0 drop-shadow-sm', className)}
         >
           {/* File body */}
           <rect x="5" y="3" width="22" height="26" rx="3.5" fill="#2563EB" />

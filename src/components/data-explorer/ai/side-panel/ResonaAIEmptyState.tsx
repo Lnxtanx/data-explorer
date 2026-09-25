@@ -19,7 +19,7 @@ export function ResonaAIEmptyState({
   // Use existing official greeting pipeline
   const { subtitle, firstName } = useGreeting();
   const cleanFirstName = (firstName || '').replace(/\.[a-zA-Z0-9_-]+/g, '').trim() || firstName;
-  const greeting = cleanFirstName ? `Hi ${cleanFirstName}, what's on your mind?` : "Hi there, what's on your mind?";
+  const greeting = cleanFirstName ? `Hi ${cleanFirstName}, I'm Resona Dashboard AI.` : "Hi, I'm Resona Dashboard AI.";
 
   const suggestions = [
     'What are our primary revenue drivers and growth trends?',
@@ -33,8 +33,8 @@ export function ResonaAIEmptyState({
       <div className="mb-4">
         <img
           src="/resona.png"
-          alt="Dashboard AI"
-          className="w-9 h-9 object-contain drop-shadow-2xs"
+          alt="Resona Dashboard AI"
+          className="w-9 h-9 object-contain drop-shadow-sm"
         />
       </div>
 
@@ -42,6 +42,9 @@ export function ResonaAIEmptyState({
       <h2 className="text-[17px] font-medium text-foreground tracking-tight">
         {greeting}
       </h2>
+      <p className="text-xs text-muted-foreground mt-1.5 max-w-[290px] leading-relaxed">
+        Your dedicated live dashboard analytics &amp; visualization partner.
+      </p>
 
       {/* Suggestion Pills (Rounded-full, centered, founder/business perspective) */}
       <div className="mt-7 flex flex-col gap-2.5 w-full items-center max-w-[340px]">
@@ -50,7 +53,7 @@ export function ResonaAIEmptyState({
             key={suggestion}
             type="button"
             onClick={() => onSelectPrompt(suggestion)}
-            className="w-full text-center px-4 py-2.5 rounded-full border border-border/80 bg-card hover:bg-muted/40 hover:border-border text-xs text-foreground/85 font-normal transition-all cursor-pointer shadow-2xs leading-snug"
+            className="w-full text-center px-4 py-2.5 rounded-full border border-border/80 bg-card hover:bg-muted/40 hover:border-border text-[13px] text-foreground/85 font-normal transition-all cursor-pointer shadow-sm leading-snug"
           >
             {suggestion}
           </button>

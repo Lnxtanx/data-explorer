@@ -56,7 +56,7 @@ export function ProfileSettings({ user, signOut, signInWithGoogle, signInWithGit
         <div className="w-16 h-16 bg-muted rounded-2xl flex items-center justify-center mb-6">
           <Shield className="w-8 h-8 text-muted-foreground" />
         </div>
-        <h3 className="text-xl font-semibold mb-2">Secure Access</h3>
+        <h3 className="text-lg font-semibold tracking-tight text-foreground mb-2">Secure Access</h3>
         <p className="text-muted-foreground mb-8 max-w-sm text-sm">
           Sign in to access your profile, sync repository projects, and manage schemas across your devices.
         </p>
@@ -64,7 +64,7 @@ export function ProfileSettings({ user, signOut, signInWithGoogle, signInWithGit
           {signInWithGoogle && (
             <Button
               onClick={signInWithGoogle}
-              className="gap-2.5 rounded-xl flex-1 border shadow-xs"
+              className="gap-2.5 rounded-xl flex-1 border shadow-sm"
               variant="outline"
             >
               <GoogleIcon className="w-4 h-4" />
@@ -74,7 +74,7 @@ export function ProfileSettings({ user, signOut, signInWithGoogle, signInWithGit
           {handleGithubSignIn && (
             <Button
               onClick={handleGithubSignIn}
-              className="gap-2.5 rounded-xl flex-1 bg-[#24292e] hover:bg-[#1b1f23] text-white shadow-xs"
+              className="gap-2.5 rounded-xl flex-1 bg-[#24292e] hover:bg-[#1b1f23] text-white shadow-sm"
               variant="default"
             >
               <Github className="w-4 h-4" />
@@ -213,7 +213,7 @@ export function ProfileSettings({ user, signOut, signInWithGoogle, signInWithGit
             {/* GitHub Account */}
             <div className="flex items-center justify-between gap-4 px-4 py-3.5">
               <div className="flex items-center gap-3.5 min-w-0">
-                <div className="w-8 h-8 rounded-lg bg-[#24292e] text-white flex items-center justify-center shrink-0 shadow-xs">
+                <div className="w-8 h-8 rounded-lg bg-[#24292e] text-white flex items-center justify-center shrink-0 shadow-sm">
                   <Github className="w-4 h-4" />
                 </div>
                 <div className="min-w-0">
@@ -235,7 +235,7 @@ export function ProfileSettings({ user, signOut, signInWithGoogle, signInWithGit
                   size="sm"
                   variant="outline"
                   onClick={handleGithubSignIn}
-                  className="gap-1.5 rounded-lg text-xs font-medium h-8 px-3"
+                  className="gap-1.5"
                 >
                   <Github className="w-3.5 h-3.5" />
                   Connect

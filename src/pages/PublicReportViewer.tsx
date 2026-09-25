@@ -124,7 +124,7 @@ export default function PublicReportViewer() {
     return (
         <div className="flex flex-col h-screen w-screen bg-white text-slate-900 overflow-hidden select-none">
             {/* Top Brand & Actions Navigation Bar — White / Clean Theme */}
-            <header className="flex items-center justify-between px-4 py-2.5 bg-white border-b border-slate-200/80 shrink-0 gap-3 shadow-2xs">
+            <header className="flex items-center justify-between px-4 py-2.5 bg-white border-b border-slate-200/80 shrink-0 gap-3 shadow-sm">
                 {/* Brand & Title */}
                 <div className="flex items-center gap-3 min-w-0 flex-1 overflow-hidden">
                     {/* Schema Weaver Data Explorer Brand */}
@@ -161,7 +161,7 @@ export default function PublicReportViewer() {
                             "flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-lg border transition-all cursor-pointer",
                             copied
                                 ? "bg-emerald-50 text-emerald-700 border-emerald-300 font-semibold"
-                                : "bg-white hover:bg-slate-50 text-slate-700 border-slate-200 shadow-2xs hover:border-slate-300"
+                                : "bg-white hover:bg-slate-50 text-slate-700 border-slate-200 shadow-sm hover:border-slate-300"
                         )}
                         title="Copy public share link"
                     >
@@ -173,7 +173,7 @@ export default function PublicReportViewer() {
                     <a
                         href={meta.downloadUrl}
                         download={meta.filename}
-                        className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-2xs cursor-pointer"
+                        className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-sm cursor-pointer"
                         title="Download report file"
                     >
                         <Download className="w-3.5 h-3.5" />

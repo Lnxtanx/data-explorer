@@ -24,12 +24,18 @@ const KEYBOARD_SHORTCUTS = [
             { action: 'Previous Page', keys: ['←'] },
         ]
     },
+    {
+        category: 'Dashboard',
+        shortcuts: [
+            { action: 'Toggle Resona AI', keys: ['Ctrl', 'J'] },
+        ]
+    },
 ];
 
 export function ShortcutsSettings() {
     return (
         <div className="p-6">
-            <h3 className="text-lg font-semibold mb-6">Keyboard Shortcuts</h3>
+            <h3 className="text-lg font-semibold tracking-tight text-foreground mb-6">Keyboard Shortcuts</h3>
             <p className="text-sm text-muted-foreground mb-6">
                 Quick reference for keyboard shortcuts available in Data Explorer.
             </p>

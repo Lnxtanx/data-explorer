@@ -62,7 +62,7 @@ export function ConnectorHealth() {
                     size="sm"
                     onClick={() => refetch()}
                     disabled={isFetching}
-                    className="h-8 gap-1.5 text-xs rounded-lg shadow-xs shrink-0"
+                    className="h-8 gap-1.5 text-xs rounded-lg shadow-sm shrink-0"
                 >
                     <RefreshCw className={cn("w-3.5 h-3.5", isFetching && "animate-spin text-primary")} />
                     <span>Refresh</span>
@@ -118,7 +118,7 @@ export function ConnectorHealth() {
 
             {/* 4 Metric Cards */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 shrink-0">
-                <div className="p-3 rounded-xl border bg-background space-y-1 shadow-xs">
+                <div className="p-3 rounded-xl border bg-background space-y-1 shadow-sm">
                     <div className="flex items-center justify-between text-muted-foreground">
                         <span className="text-[10px] font-semibold uppercase tracking-wider">Relay Status</span>
                         <PostgresIcon className="w-3.5 h-3.5" />
@@ -139,7 +139,7 @@ export function ConnectorHealth() {
                     </p>
                 </div>
 
-                <div className="p-3 rounded-xl border bg-background space-y-1 shadow-xs">
+                <div className="p-3 rounded-xl border bg-background space-y-1 shadow-sm">
                     <div className="flex items-center justify-between text-muted-foreground">
                         <span className="text-[10px] font-semibold uppercase tracking-wider">Avg Latency</span>
                         <Zap className="w-3.5 h-3.5 text-emerald-500" />
@@ -156,7 +156,7 @@ export function ConnectorHealth() {
                     </p>
                 </div>
 
-                <div className="p-3 rounded-xl border bg-background space-y-1 shadow-xs">
+                <div className="p-3 rounded-xl border bg-background space-y-1 shadow-sm">
                     <div className="flex items-center justify-between text-muted-foreground">
                         <span className="text-[10px] font-semibold uppercase tracking-wider">P95 Latency</span>
                         <Clock className="w-3.5 h-3.5 text-blue-500" />
@@ -169,7 +169,7 @@ export function ConnectorHealth() {
                     </p>
                 </div>
 
-                <div className="p-3 rounded-xl border bg-background space-y-1 shadow-xs">
+                <div className="p-3 rounded-xl border bg-background space-y-1 shadow-sm">
                     <div className="flex items-center justify-between text-muted-foreground">
                         <span className="text-[10px] font-semibold uppercase tracking-wider">Success Rate</span>
                         <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
@@ -230,7 +230,7 @@ export function ConnectorHealth() {
                                                 <div
                                                     style={{ height: `${barHeight}%` }}
                                                     className={cn(
-                                                        "w-full rounded-t-md transition-all shadow-xs",
+                                                        "w-full rounded-t-md transition-all shadow-sm",
                                                         !isHealthy
                                                             ? "bg-destructive/60 group-hover:bg-destructive"
                                                             : lat < 100

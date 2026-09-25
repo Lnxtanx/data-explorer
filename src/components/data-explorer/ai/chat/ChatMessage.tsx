@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
-import { Check, Copy, AtSign, FileText, Download, Database, ChevronDown, ChevronUp } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { Check, Copy, AtSign, FileText, Download, Database, ChevronDown, ChevronUp, Eye } from 'lucide-react';
+import { cn, stripTemporalTag } from '@/lib/utils';
 import { MarkdownText } from '../messages/MarkdownText';
 import { AgentStatusBar } from '../messages/AgentStatusBar';
 import { PlanSteps } from '../messages/PlanSteps';
 import { LiveToolSteps } from '../tools/LiveToolSteps';
 import { ArtifactView } from '../artifacts/ArtifactView';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
+import { ActionTooltip } from '@/components/ui/tooltip';
 import { TablePreview } from '../messages/TablePreview';
 import type { AgentPhase, AgentStatus } from '@/hooks/useAIAgent';
 import type { LocalMessage } from './types';
@@ -54,8 +55,10 @@ export const ChatMessage = React.memo(function ChatMessage({
 }: ChatMessageProps) {
     const isUser = msg.role === 'user';
     const [isUserExpanded, setIsUserExpanded] = useState(false);
-    const userLineCount = isUser ? (msg.content || '').split('\n').length : 0;
-    const isUserLong = isUser && ((msg.content || '').length > 240 || userLineCount > 4);
+    const rawContent = msg.content || '';
+    const displayContent = isUser ? stripTemporalTag(rawContent) : rawContent;
+    const userLineCount = isUser ? displayContent.split('\n').length : 0;
+    const isUserLong = isUser && (displayContent.length > 240 || userLineCount > 4);
 
     return (
         <div 
@@ -122,36 +125,80 @@ export const ChatMessage = React.memo(function ChatMessage({
                             {((msg.artifacts?.filter(a => (a as any).type === 'attachment') ?? []).length > 0 || (msg.files && msg.files.length > 0)) && (
                                 <div className="flex flex-wrap gap-1.5 mb-2">
                                     {msg.artifacts?.filter(a => (a as any).type === 'attachment').map((att: any, i: number) => (
-                                        <div key={i} className="flex items-center gap-2 bg-background/80 border border-border/60 rounded-lg px-2.5 py-1.5 text-xs shadow-xs">
-                                            <FileText className="w-3.5 h-3.5 text-primary" />
+                                        <div
+                                            key={i}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                onExpand?.(att);
+                                            }}
+                                            className="flex items-center gap-2 bg-background/80 hover:bg-background border border-border/60 hover:border-primary/50 rounded-lg px-2.5 py-1.5 text-xs shadow-sm cursor-pointer transition-all group"
+                                            title="Click to preview file"
+                                        >
+                                            <FileText className="w-3.5 h-3.5 text-primary group-hover:scale-110 transition-transform" />
                                             <div className="flex flex-col text-left">
-                                                <span className="font-medium text-foreground truncate max-w-[140px]">{att.filename || 'Attachment'}</span>
-                                                {att.size_bytes && <span className="text-[10px] text-muted-foreground">{(att.size_bytes / 1024).toFixed(0)} KB</span>}
+                                                <span className="font-medium text-foreground truncate max-w-[140px] group-hover:text-primary transition-colors">
+                                                    {att.filename || att.fileName || 'Attachment'}
+                                                </span>
+                                                {(att.size_bytes || att.fileSize) && (
+                                                    <span className="text-[10px] text-muted-foreground">
+                                                        {((att.size_bytes || att.fileSize) / 1024).toFixed(0)} KB
+                                                    </span>
+                                                )}
                                             </div>
-                                            {att.download_url && (
-                                                <a
-                                                    href={att.download_url}
-                                                    target="_blank"
-                                                    rel="noreferrer"
-                                                    download={att.filename}
-                                                    className="ml-1 p-1 hover:bg-muted rounded text-muted-foreground hover:text-foreground transition-colors"
-                                                    title="Download file"
+                                            <div className="flex items-center gap-0.5 ml-1">
+                                                <button
+                                                    type="button"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        onExpand?.(att);
+                                                    }}
+                                                    className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-foreground transition-colors"
+                                                    title="Preview file"
                                                 >
-                                                    <Download className="w-3 h-3" />
-                                                </a>
-                                            )}
+                                                    <Eye className="w-3 h-3" />
+                                                </button>
+                                                {att.download_url && (
+                                                    <a
+                                                        href={att.download_url}
+                                                        target="_blank"
+                                                        rel="noreferrer"
+                                                        download={att.filename || att.fileName}
+                                                        onClick={(e) => e.stopPropagation()}
+                                                        className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-foreground transition-colors"
+                                                        title="Download file"
+                                                    >
+                                                        <Download className="w-3 h-3" />
+                                                    </a>
+                                                )}
+                                            </div>
                                         </div>
                                     ))}
                                     {!msg.artifacts?.some(a => (a as any).type === 'attachment') && msg.files?.map((f, i) => (
-                                        <span key={i} className="flex items-center gap-1.5 bg-background/50 border border-border/50 rounded-lg px-2 py-1 text-xs">
-                                            <FileText className="w-3 h-3 text-muted-foreground" />{f}
-                                        </span>
+                                        <div
+                                            key={i}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                const syntheticAtt = {
+                                                    type: 'attachment' as const,
+                                                    fileName: f,
+                                                    filename: f,
+                                                    fileType: f.split('.').pop() || 'text',
+                                                };
+                                                onExpand?.(syntheticAtt as any);
+                                            }}
+                                            className="flex items-center gap-1.5 bg-background/50 hover:bg-background/80 border border-border/50 hover:border-primary/40 rounded-lg px-2.5 py-1 text-xs cursor-pointer transition-colors"
+                                            title="Click to preview file"
+                                        >
+                                            <FileText className="w-3 h-3 text-muted-foreground" />
+                                            <span>{f}</span>
+                                            <Eye className="w-2.5 h-2.5 text-muted-foreground/60 ml-0.5" />
+                                        </div>
                                     ))}
                                 </div>
                             )}
 
                             <div className={cn(isUserExpanded && isUserLong && "max-h-[380px] overflow-y-auto pr-1")}>
-                                <MarkdownText text={msg.content} onTableClick={onTableClick} connectionId={connectionId} availableTables={availableTables} />
+                                <MarkdownText text={displayContent} onTableClick={onTableClick} connectionId={connectionId} availableTables={availableTables} />
                             </div>
 
                             {/* Fade gradient when collapsed */}
@@ -178,7 +225,7 @@ export const ChatMessage = React.memo(function ChatMessage({
                                 ) : (
                                     <>
                                         <ChevronDown className="w-3 h-3" />
-                                        <span>Show more ({userLineCount > 1 ? `${userLineCount} lines` : `${msg.content.length} chars`})</span>
+                                        <span>Show more ({userLineCount > 1 ? `${userLineCount} lines` : `${displayContent.length} chars`})</span>
                                     </>
                                 )}
                             </button>
@@ -276,13 +323,18 @@ export const ChatMessage = React.memo(function ChatMessage({
                 {!msg.isStreaming && msg.content && (
                     <div className={cn('flex opacity-0 group-hover:opacity-100 transition-opacity mt-0.5',
                         msg.role === 'user' ? 'justify-end' : 'justify-start')}>
-                        <button
-                            className="flex items-center gap-1 text-[11px] text-muted-foreground/75 hover:text-foreground transition-colors px-1 py-0.5 rounded cursor-pointer"
-                            onClick={() => onCopy(msg.id, msg.content)}>
-                            {copiedId === msg.id
-                                ? <Check className="h-3 w-3 text-green-500" />
-                                : <Copy className="h-3 w-3" />}
-                        </button>
+                        <ActionTooltip label={copiedId === msg.id ? "Copied to clipboard" : "Copy text"} side="top">
+                            <button
+                                type="button"
+                                className="flex items-center gap-1 text-[11px] text-muted-foreground/75 hover:text-foreground transition-colors px-1 py-0.5 rounded cursor-pointer"
+                                onClick={() => onCopy(msg.id, msg.content)}
+                                aria-label="Copy message"
+                            >
+                                {copiedId === msg.id
+                                    ? <Check className="h-3 w-3 text-emerald-500" />
+                                    : <Copy className="h-3 w-3" />}
+                            </button>
+                        </ActionTooltip>
                     </div>
                 )}
             </div>

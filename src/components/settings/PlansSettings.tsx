@@ -474,9 +474,9 @@ export function PlansSettings({ user, onOpenCollaboration }: PlansSettingsProps)
                                 <Badge
                                     variant="outline"
                                     className={cn(
-                                        'text-[11px] font-medium px-2 py-0.5 rounded-full',
+                                        'text-2xs font-medium px-2 py-0.5 rounded-full',
                                         isPaid && (currentPlanId === 'team_monthly' || currentPlanId === 'pro_monthly')
-                                            ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-semibold shadow-xs'
+                                            ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-semibold shadow-sm'
                                             : statusBadge.className,
                                     )}
                                 >
@@ -502,7 +502,6 @@ export function PlansSettings({ user, onOpenCollaboration }: PlansSettingsProps)
                                 <Button
                                     size="sm"
                                     variant="outline"
-                                    className="h-8 text-xs"
                                     onClick={() => setIsUpgradeModalOpen(true)}
                                 >
                                     Change Plan
@@ -510,7 +509,6 @@ export function PlansSettings({ user, onOpenCollaboration }: PlansSettingsProps)
                                 <Button
                                     size="sm"
                                     variant="default"
-                                    className="h-8 text-xs"
                                     onClick={handleRenew}
                                 >
                                     <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
@@ -521,7 +519,6 @@ export function PlansSettings({ user, onOpenCollaboration }: PlansSettingsProps)
                             <Button
                                 size="sm"
                                 variant="default"
-                                className="h-8 text-xs"
                                 onClick={() => setIsUpgradeModalOpen(true)}
                             >
                                 Upgrade Plan
@@ -533,26 +530,26 @@ export function PlansSettings({ user, onOpenCollaboration }: PlansSettingsProps)
                 {/* Plan Metrics */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1">
                     <div className="rounded-lg bg-muted/40 border border-border/50 p-3">
-                        <p className="text-[11px] font-medium text-muted-foreground">Price</p>
+                        <p className="text-2xs font-medium text-muted-foreground">Price</p>
                         <p className="text-sm font-semibold text-foreground mt-0.5">
                             {currentPlan && currentPlan.price_usd > 0 ? formatUSD(currentPlan.price_usd) : 'Free'}
                             {isPaid && <span className="text-xs font-normal text-muted-foreground">/mo</span>}
                         </p>
                     </div>
                     <div className="rounded-lg bg-muted/40 border border-border/50 p-3">
-                        <p className="text-[11px] font-medium text-muted-foreground">Credits</p>
+                        <p className="text-2xs font-medium text-muted-foreground">Credits</p>
                         <p className="text-sm font-semibold text-foreground mt-0.5">
                             {formatCompact(currentPlan?.credit_limit_monthly ?? 0)}
                         </p>
                     </div>
                     <div className="rounded-lg bg-muted/40 border border-border/50 p-3">
-                        <p className="text-[11px] font-medium text-muted-foreground">Concurrency</p>
+                        <p className="text-2xs font-medium text-muted-foreground">Concurrency</p>
                         <p className="text-sm font-semibold text-foreground mt-0.5">
                             {currentPlan?.concurrent_limit ?? 1} {currentPlan?.concurrent_limit === 1 ? 'agent' : 'agents'}
                         </p>
                     </div>
                     <div className="rounded-lg bg-muted/40 border border-border/50 p-3">
-                        <p className="text-[11px] font-medium text-muted-foreground">Modes</p>
+                        <p className="text-2xs font-medium text-muted-foreground">Modes</p>
                         <p className="text-sm font-semibold text-foreground mt-0.5">
                             {formatModes(currentPlan?.allowed_modes)}
                         </p>
@@ -568,10 +565,10 @@ export function PlansSettings({ user, onOpenCollaboration }: PlansSettingsProps)
                             Billing Records
                         </h4>
                         <TabsList className="h-7 p-0.5 bg-muted/60">
-                            <TabsTrigger value="history" className="text-[11px] px-2.5 h-6">
+                            <TabsTrigger value="history" className="text-2xs px-2.5 h-6">
                                 History ({payments.length})
                             </TabsTrigger>
-                            <TabsTrigger value="invoices" className="text-[11px] px-2.5 h-6">
+                            <TabsTrigger value="invoices" className="text-2xs px-2.5 h-6">
                                 Invoices ({invoices.length})
                             </TabsTrigger>
                         </TabsList>
@@ -594,12 +591,12 @@ export function PlansSettings({ user, onOpenCollaboration }: PlansSettingsProps)
                                 <Table>
                                     <TableHeader>
                                         <TableRow className="hover:bg-transparent border-border/40">
-                                            <TableHead className="h-8 px-4 text-[11px] font-medium text-muted-foreground">Date</TableHead>
-                                            <TableHead className="h-8 text-[11px] font-medium text-muted-foreground">Plan</TableHead>
-                                            <TableHead className="h-8 text-[11px] font-medium text-muted-foreground">Amount</TableHead>
-                                            <TableHead className="h-8 text-[11px] font-medium text-muted-foreground">Method</TableHead>
-                                            <TableHead className="h-8 text-[11px] font-medium text-muted-foreground">Reference</TableHead>
-                                            <TableHead className="h-8 px-4 text-right text-[11px] font-medium text-muted-foreground">Status</TableHead>
+                                            <TableHead className="h-8 px-4 text-2xs font-medium text-muted-foreground">Date</TableHead>
+                                            <TableHead className="h-8 text-2xs font-medium text-muted-foreground">Plan</TableHead>
+                                            <TableHead className="h-8 text-2xs font-medium text-muted-foreground">Amount</TableHead>
+                                            <TableHead className="h-8 text-2xs font-medium text-muted-foreground">Method</TableHead>
+                                            <TableHead className="h-8 text-2xs font-medium text-muted-foreground">Reference</TableHead>
+                                            <TableHead className="h-8 px-4 text-right text-2xs font-medium text-muted-foreground">Status</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
@@ -618,7 +615,7 @@ export function PlansSettings({ user, onOpenCollaboration }: PlansSettingsProps)
                                                         <div className="flex items-center gap-1.5 flex-wrap">
                                                             <span>{allPlans.find((p) => p.id === payment.planId)?.name ?? RETIRED_PLAN_NAMES[payment.planId] ?? payment.planId}</span>
                                                             {payment.metadata?.team?.seatCount ? (
-                                                                <Badge variant="secondary" className="px-1.5 py-0 h-4 text-[10px] font-normal">
+                                                                <Badge variant="secondary" className="px-1.5 py-0 h-4 text-2xs font-normal">
                                                                     {payment.metadata.team.seatCount} seats
                                                                 </Badge>
                                                             ) : null}
@@ -630,20 +627,20 @@ export function PlansSettings({ user, onOpenCollaboration }: PlansSettingsProps)
                                                     <TableCell className="py-2.5 text-muted-foreground">
                                                         {payment.paymentMethod ?? 'Online'}
                                                     </TableCell>
-                                                    <TableCell className="py-2.5 font-mono text-[11px] text-muted-foreground">
+                                                    <TableCell className="py-2.5 font-mono text-2xs text-muted-foreground">
                                                         {String(reference).slice(0, 14)}…
                                                     </TableCell>
                                                     <TableCell className="px-4 py-2.5 text-right">
                                                         <div className="flex items-center justify-end gap-1.5">
-                                                            <Badge variant="outline" className={cn('gap-1 rounded-full px-2 py-0.5 text-[10px]', meta.className)}>
+                                                            <Badge variant="outline" className={cn('gap-1 rounded-full px-2 py-0.5 text-2xs', meta.className)}>
                                                                 <StatusIcon className="h-3 w-3" />
                                                                 {meta.label}
                                                             </Badge>
                                                             {retryable && (
                                                                 <Button
                                                                     variant="ghost"
-                                                                    size="sm"
-                                                                    className="h-6 px-1.5 text-[11px] text-muted-foreground hover:text-foreground"
+                                                                    size="xs"
+                                                                    className="text-muted-foreground hover:text-foreground"
                                                                     onClick={() => handleRetry(payment.id)}
                                                                     disabled={retryingId === payment.id}
                                                                 >
@@ -683,17 +680,17 @@ export function PlansSettings({ user, onOpenCollaboration }: PlansSettingsProps)
                                 <Table>
                                     <TableHeader>
                                         <TableRow className="hover:bg-transparent border-border/40">
-                                            <TableHead className="h-8 px-4 text-[11px] font-medium text-muted-foreground">Invoice #</TableHead>
-                                            <TableHead className="h-8 text-[11px] font-medium text-muted-foreground">Issued</TableHead>
-                                            <TableHead className="h-8 text-[11px] font-medium text-muted-foreground">Plan</TableHead>
-                                            <TableHead className="h-8 px-4 text-right text-[11px] font-medium text-muted-foreground">Amount</TableHead>
-                                            <TableHead className="h-8 px-4 text-right text-[11px] font-medium text-muted-foreground">Actions</TableHead>
+                                            <TableHead className="h-8 px-4 text-2xs font-medium text-muted-foreground">Invoice #</TableHead>
+                                            <TableHead className="h-8 text-2xs font-medium text-muted-foreground">Issued</TableHead>
+                                            <TableHead className="h-8 text-2xs font-medium text-muted-foreground">Plan</TableHead>
+                                            <TableHead className="h-8 px-4 text-right text-2xs font-medium text-muted-foreground">Amount</TableHead>
+                                            <TableHead className="h-8 px-4 text-right text-2xs font-medium text-muted-foreground">Actions</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
                                         {invoices.map((inv) => (
                                             <TableRow key={inv.id} className="text-xs">
-                                                <TableCell className="px-4 py-2.5 font-mono text-[11px] font-medium text-foreground">
+                                                <TableCell className="px-4 py-2.5 font-mono text-2xs font-medium text-foreground">
                                                     {inv.invoice_number}
                                                 </TableCell>
                                                 <TableCell className="py-2.5 text-muted-foreground">
@@ -703,7 +700,7 @@ export function PlansSettings({ user, onOpenCollaboration }: PlansSettingsProps)
                                                     <div className="flex items-center gap-1.5 flex-wrap">
                                                         <span>{allPlans.find((p) => p.id === inv.plan_id)?.name ?? inv.plan_id}</span>
                                                         {inv.metadata?.seat_count ? (
-                                                            <Badge variant="secondary" className="px-1.5 py-0 h-4 text-[10px] font-normal">
+                                                            <Badge variant="secondary" className="px-1.5 py-0 h-4 text-2xs font-normal">
                                                                 {String(inv.metadata.seat_count)} seats
                                                             </Badge>
                                                         ) : null}
@@ -711,15 +708,15 @@ export function PlansSettings({ user, onOpenCollaboration }: PlansSettingsProps)
                                                 </TableCell>
                                                 <TableCell className="px-4 py-2.5 text-right font-medium text-foreground">
                                                     {formatMoneyFromPaise(inv.net_paise || inv.amount_paise)}
-                                                    <Badge variant="outline" className="ml-2 rounded-full px-1.5 py-0 text-[10px] capitalize">
+                                                    <Badge variant="outline" className="ml-2 rounded-full px-1.5 py-0 text-2xs capitalize">
                                                         {inv.status}
                                                     </Badge>
                                                 </TableCell>
                                                 <TableCell className="px-4 py-2.5 text-right whitespace-nowrap">
                                                     <Button
                                                         variant="ghost"
-                                                        size="sm"
-                                                        className="h-7 px-2.5 text-[11px] gap-1.5"
+                                                        size="xs"
+                                                        className="gap-1.5"
                                                         onClick={() => openInvoice(inv.id)}
                                                         disabled={invoiceLoadingId === inv.id}
                                                     >
@@ -732,8 +729,8 @@ export function PlansSettings({ user, onOpenCollaboration }: PlansSettingsProps)
                                                     </Button>
                                                     <Button
                                                         variant="ghost"
-                                                        size="sm"
-                                                        className="h-7 px-2.5 text-[11px] gap-1.5"
+                                                        size="xs"
+                                                        className="gap-1.5"
                                                         disabled={invoiceLoadingId === inv.id}
                                                         onClick={() => openInvoice(inv.id)}
                                                     >
@@ -756,8 +753,8 @@ export function PlansSettings({ user, onOpenCollaboration }: PlansSettingsProps)
                 <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto p-6">
                     <DialogHeader>
                         <DialogTitle>Choose a Plan</DialogTitle>
-                        <DialogDescription className="sr-only">
-                            Choose a plan for your account or team.
+                        <DialogDescription className="text-sm text-muted-foreground">
+                            Pick the plan that fits your workflow. You can switch plans anytime from this page.
                         </DialogDescription>
                     </DialogHeader>
 
@@ -771,16 +768,30 @@ export function PlansSettings({ user, onOpenCollaboration }: PlansSettingsProps)
                             {plans.map((plan) => {
                                 const meta = PLAN_META[plan.id] ?? PLAN_META.free;
                                 const isCurrent = plan.id === currentPlanId;
+                                const isFeatured = plan.id === 'pro_monthly';
                                 const PlanIcon = meta.icon;
 
                                 return (
                                     <div
                                         key={plan.id}
                                         className={cn(
-                                            'rounded-xl border bg-card p-5 flex flex-col justify-between transition-colors',
-                                            isCurrent ? 'border-primary/40 ring-1 ring-primary/20 bg-primary/[0.02]' : 'border-border hover:border-border/80',
+                                            'rounded-xl border bg-card p-5 flex flex-col justify-between transition-colors relative',
+                                            isFeatured && 'ring-2 ring-primary/30 border-primary/40',
+                                            isCurrent && !isFeatured && 'border-primary/40 ring-1 ring-primary/20 bg-primary/[0.02]',
+                                            !isCurrent && !isFeatured && 'border-border hover:border-border/80',
                                         )}
                                     >
+                                        {/* Blue corner slash (diagonal ribbon) on the Pro card */}
+                                        {isFeatured && (
+                                            <div
+                                                className="absolute top-0 right-0 w-28 h-28 overflow-hidden pointer-events-none"
+                                                aria-hidden="true"
+                                            >
+                                                <div className="absolute top-[18px] right-[-38px] w-[140px] rotate-45 bg-blue-600 text-center text-2xs font-semibold uppercase tracking-wider text-white py-1 shadow-md">
+                                                    Popular
+                                                </div>
+                                            </div>
+                                        )}
                                         <div className="space-y-3.5">
                                             <div className="flex items-center justify-between">
                                                 <div className="flex items-center gap-2">
@@ -790,7 +801,13 @@ export function PlansSettings({ user, onOpenCollaboration }: PlansSettingsProps)
                                                     <h5 className="text-sm font-semibold text-foreground">{plan.name}</h5>
                                                 </div>
                                                 {isCurrent && (
-                                                    <Badge variant="outline" className="text-[10px] font-medium border-primary/30 text-primary bg-primary/5">
+                                                    <Badge
+                                                        variant="outline"
+                                                        className={cn(
+                                                            'text-2xs font-medium border-primary/30 text-primary bg-primary/5',
+                                                            isFeatured && 'mr-12',
+                                                        )}
+                                                    >
                                                         Current
                                                     </Badge>
                                                 )}
@@ -798,7 +815,7 @@ export function PlansSettings({ user, onOpenCollaboration }: PlansSettingsProps)
 
                                             <div>
                                                 <div className="flex items-baseline gap-1">
-                                                    <span className="text-xl font-bold tracking-tight text-foreground">
+                                                    <span className="text-3xl font-bold tracking-tight text-foreground tabular-nums">
                                                         {plan.price_usd > 0 ? formatUSD(plan.price_usd) : 'Free'}
                                                     </span>
                                                     {plan.price_usd > 0 && (
@@ -807,11 +824,6 @@ export function PlansSettings({ user, onOpenCollaboration }: PlansSettingsProps)
                                                         </span>
                                                     )}
                                                 </div>
-                                                {plan.price_inr > 0 && (
-                                                    <p className="text-[11px] text-muted-foreground mt-0.5">
-                                                        ≈ {formatMoneyFromPaise(plan.price_inr)} / month
-                                                    </p>
-                                                )}
                                             </div>
 
                                             <div className="space-y-1.5 text-xs border-t border-border/50 pt-3">
@@ -850,8 +862,8 @@ export function PlansSettings({ user, onOpenCollaboration }: PlansSettingsProps)
 
                                         <Button
                                             size="sm"
-                                            className="mt-4 w-full h-8 text-xs"
-                                            variant={isCurrent ? 'secondary' : 'default'}
+                                            className="mt-4 w-full"
+                                            variant={isCurrent ? 'outline' : 'default'}
                                             disabled={isCurrent}
                                             onClick={isCurrent ? undefined : () => handleUpgrade(plan)}
                                         >
@@ -866,7 +878,7 @@ export function PlansSettings({ user, onOpenCollaboration }: PlansSettingsProps)
                             })}
 
                             {/* ─── Team / Enterprise card (always last) ─────── */}
-                            <div className="sm:col-span-2 rounded-xl border border-primary/20 bg-gradient-to-br from-primary/5 via-card to-card p-5">
+                            <div className="sm:col-span-2 rounded-xl border border-border bg-card p-5">
                                 <div className="flex flex-wrap items-start justify-between gap-4">
                                     <div className="flex items-start gap-3">
                                         <div className="flex h-8 w-8 items-center justify-center rounded-md border border-primary/20 bg-primary/10">
@@ -876,7 +888,7 @@ export function PlansSettings({ user, onOpenCollaboration }: PlansSettingsProps)
                                             <div className="flex flex-wrap items-center gap-2">
                                                 <h5 className="text-sm font-semibold text-foreground">Team Workspace</h5>
                                                 {teamSubActive && (
-                                                    <Badge variant="outline" className="rounded-full border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px] font-medium">
+                                                    <Badge variant="outline" className="rounded-full border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-2xs font-medium">
                                                         ACTIVE
                                                     </Badge>
                                                 )}
@@ -887,8 +899,8 @@ export function PlansSettings({ user, onOpenCollaboration }: PlansSettingsProps)
                                         </div>
                                     </div>
                                     <div className="text-right">
-                                        <p className="text-xl font-bold tracking-tight text-foreground">{teamPricingKnown ? `$${seatPriceUsd}` : '$—'}</p>
-                                        <p className="text-[11px] text-muted-foreground">per seat / month</p>
+                                        <p className="text-3xl font-bold tracking-tight text-foreground tabular-nums">{teamPricingKnown ? `$${seatPriceUsd}` : '$—'}</p>
+                                        <p className="text-2xs text-muted-foreground">per seat / month</p>
                                     </div>
                                 </div>
 
@@ -901,7 +913,7 @@ export function PlansSettings({ user, onOpenCollaboration }: PlansSettingsProps)
                                                     You&apos;re a <span className="font-semibold">{memberTeam?.role === 'admin' ? 'team admin' : 'member'}</span> seat on{' '}
                                                     <span className="font-semibold">&quot;{memberTeam?.name}&quot;</span>.
                                                 </p>
-                                                <p className="text-[11px] text-muted-foreground">
+                                                <p className="text-2xs text-muted-foreground">
                                                     {teamSubActive
                                                         ? `${teamSeatOccupied} / ${teamSeatSeats} seats used — the workspace owner pays the seat bill for this team.`
                                                         : 'This workspace has no active team plan — ask the owner to set it up.'}
@@ -912,7 +924,7 @@ export function PlansSettings({ user, onOpenCollaboration }: PlansSettingsProps)
                                             <Button
                                                 size="sm"
                                                 variant="ghost"
-                                                className="h-8 text-xs gap-1 text-muted-foreground"
+                                                className="gap-1 text-muted-foreground"
                                                 onClick={onOpenCollaboration}
                                             >
                                                 <ExternalLink className="h-3.5 w-3.5" />
@@ -967,7 +979,7 @@ export function PlansSettings({ user, onOpenCollaboration }: PlansSettingsProps)
                                                                 disabled={!!teamBusy}
                                                                 onClick={() => setTeamSeatCount(n)}
                                                                 className={cn(
-                                                                    'rounded-md px-2 py-1 text-[11px] font-medium transition-colors cursor-pointer',
+                                                                    'rounded-md px-2 py-1 text-2xs font-medium transition-colors cursor-pointer',
                                                                     teamSeatCount === n
                                                                         ? 'bg-primary/15 text-primary'
                                                                         : 'bg-muted/50 text-muted-foreground hover:bg-muted',
@@ -980,7 +992,7 @@ export function PlansSettings({ user, onOpenCollaboration }: PlansSettingsProps)
                                                     <div className="ml-auto text-right">
                                                         <p className="text-sm font-semibold tracking-tight text-foreground">
                                                             {teamTotalUsd !== null ? `$${teamTotalUsd.toFixed(2)}` : '$—'}
-                                                            <span className="text-[11px] font-normal text-muted-foreground"> /mo</span>
+                                                            <span className="text-2xs font-normal text-muted-foreground"> /mo</span>
                                                         </p>
                                                     </div>
                                                 </>
@@ -988,7 +1000,7 @@ export function PlansSettings({ user, onOpenCollaboration }: PlansSettingsProps)
                                             {teamSubActive && (
                                                 <div className="ml-auto text-right">
                                                     <p className="text-sm font-semibold text-foreground">+{teamSeatCount} seat{teamSeatCount === 1 ? '' : 's'}</p>
-                                                    <p className="text-[11px] text-muted-foreground">prorated to this period — paid now</p>
+                                                    <p className="text-2xs text-muted-foreground">prorated to this period — paid now</p>
                                                 </div>
                                             )}
                                         </div>
@@ -1010,7 +1022,7 @@ export function PlansSettings({ user, onOpenCollaboration }: PlansSettingsProps)
                                                 )}
                                                 <Button
                                                     size="sm"
-                                                    className="h-8 px-4 text-xs font-medium shrink-0 gap-1.5 cursor-pointer"
+                                                    className="shrink-0 gap-1.5 cursor-pointer"
                                                     onClick={handleBuyTeam}
                                                     disabled={!!teamBusy || !teamPricingKnown}
                                                 >
@@ -1036,13 +1048,13 @@ export function PlansSettings({ user, onOpenCollaboration }: PlansSettingsProps)
                                             <span className="font-semibold">{teamSeatOccupied}</span>
                                             <span className="text-muted-foreground"> / {teamSeatSeats} seats used</span>
                                             {teamSub?.cancelAtPeriodEnd && (
-                                                <span className="ml-1.5 text-[11px] text-amber-600 dark:text-amber-400">cancels at period end</span>
+                                                <span className="ml-1.5 text-2xs text-amber-600 dark:text-amber-400">cancels at period end</span>
                                             )}
                                         </p>
                                         <Button
                                             size="sm"
                                             variant="outline"
-                                            className="h-8 text-xs gap-1"
+                                            className="gap-1"
                                             onClick={handleAddTeamSeats}
                                             disabled={!!teamBusy || !teamPricingKnown}
                                         >
@@ -1053,7 +1065,7 @@ export function PlansSettings({ user, onOpenCollaboration }: PlansSettingsProps)
                                             <Button
                                                 size="sm"
                                                 variant="ghost"
-                                                className="h-8 text-xs gap-1 text-muted-foreground"
+                                                className="gap-1 text-muted-foreground"
                                                 onClick={onOpenCollaboration}
                                             >
                                                 <ExternalLink className="h-3.5 w-3.5" />

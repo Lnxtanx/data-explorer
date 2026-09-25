@@ -1,6 +1,7 @@
 import { Mic, MicOff, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useSpeechToText } from '@/hooks/useSpeechToText';
+import { ActionTooltip } from '@/components/ui/tooltip';
 
 interface MicButtonProps {
     onTranscript: (text: string, isFinal: boolean) => void;
@@ -20,41 +21,46 @@ export function MicButton({ onTranscript, disabled, className }: MicButtonProps)
 
     return (
         <div className="relative flex items-center">
-            <button
-                type="button"
-                onClick={toggle}
-                disabled={disabled || isProcessing}
-                title={
+            <ActionTooltip
+                label={
                     isListening
                         ? 'Stop recording'
                         : isError
-                        ? errorMessage ?? 'Error'
-                        : 'Start voice input'
+                        ? errorMessage ?? 'Microphone error'
+                        : 'Dictate message'
                 }
-                className={cn(
-                    'h-8 w-8 flex items-center justify-center rounded-lg transition-all duration-150',
-                    isListening
-                        ? 'text-red-500 bg-red-50 dark:bg-red-950/40'
-                        : isError
-                        ? 'text-amber-500'
-                        : 'text-muted-foreground/50 hover:text-muted-foreground',
-                    className,
-                )}
+                side="top"
             >
-                {isProcessing ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                ) : isListening ? (
-                    /* pulsing ring + mic icon */
-                    <span className="relative flex items-center justify-center">
-                        <span className="absolute w-6 h-6 rounded-full bg-red-500/20 animate-ping" />
-                        <Mic className="w-4 h-4 relative" />
-                    </span>
-                ) : isError ? (
-                    <MicOff className="w-4 h-4" />
-                ) : (
-                    <Mic className="w-4 h-4" />
-                )}
-            </button>
+                <button
+                    type="button"
+                    onClick={toggle}
+                    disabled={disabled || isProcessing}
+                    aria-label={isListening ? 'Stop recording' : 'Start voice input'}
+                    className={cn(
+                        'h-8 w-8 flex items-center justify-center rounded-lg transition-all duration-150',
+                        isListening
+                            ? 'text-red-500 bg-red-50 dark:bg-red-950/40'
+                            : isError
+                            ? 'text-amber-500'
+                            : 'text-muted-foreground/50 hover:text-muted-foreground',
+                        className,
+                    )}
+                >
+                    {isProcessing ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : isListening ? (
+                        /* pulsing ring + mic icon */
+                        <span className="relative flex items-center justify-center">
+                            <span className="absolute w-6 h-6 rounded-full bg-red-500/20 animate-ping" />
+                            <Mic className="w-4 h-4 relative" />
+                        </span>
+                    ) : isError ? (
+                        <MicOff className="w-4 h-4" />
+                    ) : (
+                        <Mic className="w-4 h-4" />
+                    )}
+                </button>
+            </ActionTooltip>
 
             {/* Error tooltip */}
             {isError && errorMessage && (

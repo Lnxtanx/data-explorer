@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import {
     Plus,
     Trash2,
@@ -32,8 +32,18 @@ import {
     DropdownMenuSubTrigger,
     DropdownMenuSubContent,
 } from '@/components/ui/dropdown-menu';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { useQueryClient } from '@tanstack/react-query';
-import { cn } from '@/lib/utils';
+import { cn, stripTemporalTag } from '@/lib/utils';
 import { toast } from 'sonner';
 import { useAIChatList, useDeleteAIChat, useUpdateAIChat, aiQueryKeys } from '@/hooks/useAIChats';
 import { useProjects, useDeleteProject, useCreateProject } from '@/hooks/useProjects';
@@ -81,7 +91,8 @@ async function downloadChatAsMarkdown(chatId: string, chatTitle: string) {
         let md = `# ${chatTitle}\n\n*Exported on ${new Date().toLocaleString()}*\n\n---\n\n`;
         for (const msg of messages) {
             const author = msg.role === 'user' ? (msg.authorName ? `**${msg.authorName}** (You)` : '**You**') : '**Resona AI**';
-            md += `### ${author}\n\n${msg.content || ''}\n\n`;
+            const userContent = msg.role === 'user' ? stripTemporalTag(msg.content || '') : (msg.content || '');
+            md += `### ${author}\n\n${userContent}\n\n`;
             if (msg.artifacts && msg.artifacts.length > 0) {
                 for (const art of msg.artifacts) {
                     if (art.sql) {
@@ -141,18 +152,24 @@ export function AIChatSidebar({
     const [editingChatId, setEditingChatId] = useState<string | null>(null);
     const [editTitle, setEditTitle] = useState('');
     const editInputRef = useRef<HTMLInputElement | null>(null);
+    const [pendingDeleteChat, setPendingDeleteChat] = useState<{ id: string; title: string } | null>(null);
 
     const chats = data?.chats ?? [];
 
+    // Defensively isolate chats: Dashboard AI and SQL Editor sessions must NEVER render here
+    const explorerChats = useMemo(() => {
+        return chats.filter(c => c.useCase !== 'dashboard' && c.useCase !== 'sql_editor');
+    }, [chats]);
+
     useEffect(() => {
-        if (activeChatId && chats.length > 0) {
-            const activeChat = chats.find(c => c.id === activeChatId);
+        if (activeChatId && explorerChats.length > 0) {
+            const activeChat = explorerChats.find(c => c.id === activeChatId);
             if (activeChat?.projectId) {
                 setExpandedProjects(prev => new Set([...prev, activeChat.projectId!]));
                 setIsProjectsSectionExpanded(true);
             }
         }
-    }, [activeChatId, chats]);
+    }, [activeChatId, explorerChats]);
 
     useEffect(() => {
         if (editingChatId && editInputRef.current) {
@@ -204,7 +221,9 @@ export function AIChatSidebar({
     };
 
     // Separate chats into project chats and standalone chats
-    const standaloneChats = chats.filter(c => !c.projectId);
+    const standaloneChats = useMemo(() => {
+        return explorerChats.filter(c => !c.projectId);
+    }, [explorerChats]);
 
     return (
         <div className="flex-1 flex flex-col h-full bg-muted/10 relative overflow-hidden select-none">
@@ -293,7 +312,7 @@ export function AIChatSidebar({
                             <div className="flex flex-col gap-0.5">
                                 {projects.map((project) => {
                                     const isExpanded = expandedProjects.has(project.id);
-                                    const projectChats = chats.filter(c => c.projectId === project.id);
+                                    const projectChats = explorerChats.filter(c => c.projectId === project.id);
                                     const colorClass = colorTextClass[project.color] || colorTextClass.blue;
 
                                     return (
@@ -488,8 +507,7 @@ export function AIChatSidebar({
 
                                                                             <DropdownMenuItem
                                                                                 onClick={() => {
-                                                                                    deleteChat.mutate(chat.id);
-                                                                                    if (activeChatId === chat.id) onNewChat?.();
+                                                                                    setPendingDeleteChat({ id: chat.id, title: chat.title || 'this conversation' });
                                                                                 }}
                                                                                 className="gap-2 text-destructive focus:text-destructive cursor-pointer font-normal"
                                                                             >
@@ -659,8 +677,7 @@ export function AIChatSidebar({
 
                                                             <DropdownMenuItem
                                                                 onClick={() => {
-                                                                    deleteChat.mutate(chat.id);
-                                                                    if (activeChatId === chat.id) onNewChat?.();
+                                                                    setPendingDeleteChat({ id: chat.id, title: chat.title || 'this conversation' });
                                                                 }}
                                                                 className="gap-2 text-destructive focus:text-destructive cursor-pointer font-normal"
                                                             >
@@ -693,6 +710,36 @@ export function AIChatSidebar({
                     }
                 }}
             />
+
+            {/* Delete Chat Confirmation Dialog */}
+            <AlertDialog
+                open={Boolean(pendingDeleteChat)}
+                onOpenChange={(open) => !open && setPendingDeleteChat(null)}
+            >
+                <AlertDialogContent className="sm:max-w-md">
+                    <AlertDialogHeader>
+                        <AlertDialogTitle className="text-sm font-semibold">Delete Conversation</AlertDialogTitle>
+                        <AlertDialogDescription className="text-xs text-muted-foreground">
+                            Are you sure you want to delete this conversation? It will be removed from your history.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter className="gap-2 sm:gap-0 mt-2">
+                        <AlertDialogCancel className="text-xs h-7">Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={() => {
+                                if (!pendingDeleteChat) return;
+                                const targetId = pendingDeleteChat.id;
+                                setPendingDeleteChat(null);
+                                deleteChat.mutate(targetId);
+                                if (activeChatId === targetId) onNewChat?.();
+                            }}
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90 text-xs h-7 font-medium"
+                        >
+                            Delete
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 }
