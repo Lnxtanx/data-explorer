@@ -360,9 +360,10 @@ export default function DataExplorerPage() {
 
   return (
     <>
-      <NotificationBanner />
-      <div className="h-screen flex bg-background">
-        <DataExplorerLayout
+      <div className="h-screen flex flex-col bg-background overflow-hidden">
+        <NotificationBanner />
+        <div className="flex-1 flex min-h-0 overflow-hidden">
+          <DataExplorerLayout
           mode={mode}
           onModeChange={setMode}
           connectionId={connectionId}
@@ -453,6 +454,7 @@ export default function DataExplorerPage() {
           onCloseAiPanel={handleCloseAiPanel}
           onOpenAiPanel={handleOpenAiPanel}
         />
+        </div>
       </div>
 
       {showSettings && (
