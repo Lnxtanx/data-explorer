@@ -49,6 +49,7 @@ export const VoiceSessionOverlay: React.FC<VoiceSessionOverlayProps> = ({
                         orbState={orbState}
                         audioLevelRef={audioLevelRef}
                         isCompact={isTypeOpen}
+                        size="hero"
                     />
                     <div className="w-full mt-6">
                         <VoiceControlBar
@@ -70,14 +71,15 @@ export const VoiceSessionOverlay: React.FC<VoiceSessionOverlayProps> = ({
 
     // Default: 'docked' bottom overlay during ongoing chat stream
     return (
-        <div className={`fixed bottom-0 left-0 right-0 z-30 p-4 pointer-events-none flex flex-col items-center ${className}`}>
+        <div className={`absolute bottom-0 left-0 right-0 z-30 p-4 pointer-events-none flex flex-col items-center ${className}`}>
             <VoiceOrbStage
                 orbState={orbState}
                 audioLevelRef={audioLevelRef}
                 isCompact={isTypeOpen}
+                size="docked"
                 className="pointer-events-auto"
             />
-            <div className="w-full max-w-3xl flex flex-col gap-2 pointer-events-auto">
+            <div className="w-full max-w-3xl mx-auto flex flex-col gap-2 pointer-events-auto">
                 <VoiceControlBar
                     orbState={orbState}
                     isMuted={isMuted}

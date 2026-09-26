@@ -171,7 +171,24 @@ export function useVoiceSession(
         (event: GeminiEvent) => {
             const content = event.server_content;
 
-            // 1. Spoken Audio Playback
+            // 1. Barge-In / Interruption (Top Priority per Gemini Live API spec)
+            const isInterrupted = Boolean(content?.interrupted || (content as any)?.wasInterrupted);
+            if (isInterrupted) {
+                playerRef.current?.stopAndClear();
+                setIsTalking(false);
+                setIsThinking(false);
+                if (pendingAssistantRef.current) {
+                    const finalInterrupted = { ...pendingAssistantRef.current, wasInterrupted: true, isInterim: false };
+                    pendingAssistantRef.current = null;
+                    turnCounterRef.current += 1;
+                    setMessages((prev) =>
+                        prev.map((m) => (m.id === finalInterrupted.id ? finalInterrupted : m)),
+                    );
+                }
+                return;
+            }
+
+            // 2. Spoken Audio Playback
             if (content?.model_turn?.parts) {
                 // If user was speaking, finalize user turn as model is now responding
                 if (pendingUserRef.current) {
@@ -188,7 +205,7 @@ export function useVoiceSession(
                 }
             }
 
-            // 2. User Input Transcription (Interim or Final)
+            // 3. User Input Transcription (Interim or Final)
             if (content?.input_transcription?.text) {
                 const txt = content.input_transcription.text;
                 const isFinished = Boolean(content.input_transcription.finished);
@@ -231,7 +248,7 @@ export function useVoiceSession(
                 });
             }
 
-            // 3. Model Output Transcription
+            // 4. Model Output Transcription
             if (content?.output_transcription?.text) {
                 const token = content.output_transcription.text;
                 setIsThinking(false);
@@ -268,22 +285,6 @@ export function useVoiceSession(
                     }
                     return [...prev, currentAssistant];
                 });
-            }
-
-            // 4. Barge-In / Interruption
-            const isInterrupted = Boolean(content?.interrupted || (content as any)?.wasInterrupted);
-            if (isInterrupted) {
-                playerRef.current?.stopAndClear();
-                setIsTalking(false);
-                setIsThinking(false);
-                if (pendingAssistantRef.current) {
-                    const finalInterrupted = { ...pendingAssistantRef.current, wasInterrupted: true, isInterim: false };
-                    pendingAssistantRef.current = null;
-                    turnCounterRef.current += 1;
-                    setMessages((prev) =>
-                        prev.map((m) => (m.id === finalInterrupted.id ? finalInterrupted : m)),
-                    );
-                }
             }
 
             // 5. Turn Complete

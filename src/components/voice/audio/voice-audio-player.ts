@@ -87,14 +87,12 @@ export class VoiceAudioPlayer {
         // Connect directly to gainNode which routes to destination & analyser
         source.connect(this.gainNode);
 
-        // Jitter buffer with drift protection: never start earlier than the previous
-        // chunk's end, and never allow scheduling to drift more than 500ms into future.
+        // Gapless sequential playback scheduling:
+        // If the queue drained or is starting fresh, schedule after a small lead-in.
+        // If chunks are already scheduled in the future, seamlessly append directly after the previous chunk.
         const now = this.ctx.currentTime;
         const minStart = now + JITTER_LEAD_SECONDS;
-        let startAt = this.nextPlayTime;
-        if (startAt < minStart || startAt > now + 0.5) {
-            startAt = minStart;
-        }
+        const startAt = Math.max(minStart, this.nextPlayTime);
         source.start(startAt);
         this.nextPlayTime = startAt + audioBuffer.duration;
 

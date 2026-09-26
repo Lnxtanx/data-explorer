@@ -16,6 +16,7 @@ interface VoiceOrbStageProps {
     orbState: OrbState;
     audioLevelRef: React.MutableRefObject<number>;
     isCompact?: boolean;
+    size?: 'hero' | 'docked';
     className?: string;
 }
 
@@ -23,20 +24,23 @@ export const VoiceOrbStage: React.FC<VoiceOrbStageProps> = ({
     orbState,
     audioLevelRef,
     isCompact = false,
+    size = 'hero',
     className,
 }) => {
     const webglSupported = useWebGLSupport();
     const [useShaderOrb, setUseShaderOrb] = useState<boolean>(true);
 
     const isWebGL = webglSupported && useShaderOrb;
+    const isDocked = size === 'docked';
 
-    // Orb dimension based on whether "+ Type" input is expanded
-    const orbSize = isCompact ? 96 : 160;
+    // Orb dimension based on display variant and whether "+ Type" input is expanded
+    const orbSize = isCompact ? 68 : isDocked ? 112 : 160;
 
     return (
         <div
             className={cn(
-                'relative flex flex-col items-center justify-center transition-all duration-300 pointer-events-none select-none my-3',
+                'relative flex flex-col items-center justify-center transition-all duration-300 pointer-events-none select-none',
+                isDocked ? 'my-1' : 'my-3',
                 className
             )}
         >
@@ -44,7 +48,7 @@ export const VoiceOrbStage: React.FC<VoiceOrbStageProps> = ({
             <div
                 className={cn(
                     'absolute rounded-full blur-3xl pointer-events-none transition-all duration-700 -z-10',
-                    isCompact ? 'w-32 h-32' : 'w-56 h-56',
+                    isCompact ? 'w-24 h-24' : isDocked ? 'w-36 h-36' : 'w-56 h-56',
                     orbState === 'speaking'
                         ? 'bg-sky-500/20 dark:bg-sky-400/25'
                         : orbState === 'listening'
@@ -59,7 +63,7 @@ export const VoiceOrbStage: React.FC<VoiceOrbStageProps> = ({
             <div
                 className={cn(
                     'relative rounded-full flex items-center justify-center cursor-pointer pointer-events-auto transition-transform duration-300 hover:scale-105 active:scale-95',
-                    isCompact ? 'w-24 h-24' : 'w-40 h-40'
+                    isCompact ? 'w-[68px] h-[68px]' : isDocked ? 'w-28 h-28' : 'w-40 h-40'
                 )}
                 title="Click to toggle Orb renderer style"
                 onClick={() => setUseShaderOrb((prev) => !prev)}

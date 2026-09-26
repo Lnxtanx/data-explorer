@@ -547,8 +547,12 @@ export function ChatInput({
     // ACTIVE STATE: Sleek Compact Bottom Pill Bar (Image 2 Claude Style)
     // ─────────────────────────────────────────────────────────────────────────────
     return (
-        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-background via-background/98 to-transparent pt-3 pb-3 px-4 z-20">
-            <div className="max-w-3xl mx-auto relative">
+        <div className={cn(
+            isVoiceActive
+                ? 'w-full relative mt-1'
+                : 'absolute bottom-0 left-0 right-0 bg-gradient-to-t from-background via-background/98 to-transparent pt-3 pb-3 px-4 z-20'
+        )}>
+            <div className={cn(isVoiceActive ? 'w-full relative' : 'max-w-3xl mx-auto relative')}>
                 {banners}
 
                 {/* Active Chat Input Card */}
