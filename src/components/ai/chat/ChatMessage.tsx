@@ -260,7 +260,10 @@ export const ChatMessage = React.memo(function ChatMessage({
                         {msg.toolSteps && msg.toolSteps.length > 0 && (
                             <LiveToolSteps
                                 steps={msg.toolSteps}
-                                isLive={Boolean(msg.isStreaming && (msg.toolSteps.some(s => s.status === 'calling') || (isStreaming && agentStatus === 'running')))}
+                                isLive={Boolean(
+                                    msg.toolSteps.some(s => s.status === 'calling') ||
+                                    (msg.isStreaming && isStreaming && agentStatus === 'running')
+                                )}
                                 defaultExpanded={false}
                             />
                         )}

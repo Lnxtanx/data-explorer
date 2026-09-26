@@ -18,42 +18,48 @@ export function useVoiceChatSync(
             let modified = false;
 
             for (const vm of voiceMessages) {
-                if (!vm.isInterim && (vm.text.trim() || (vm.toolSteps && vm.toolSteps.length > 0))) {
-                    const existingIdx = next.findIndex((m) => m.id === vm.id);
-                    if (existingIdx !== -1) {
-                        const existing = next[existingIdx];
-                        if (
-                            existing.content !== vm.text ||
-                            existing.creditsUsed !== vm.creditsUsed ||
-                            existing.toolSteps !== vm.toolSteps ||
-                            existing.artifacts !== vm.artifacts ||
-                            existing.sql !== vm.sql ||
-                            (vm.wasInterrupted && !existing.wasInterrupted)
-                        ) {
-                            next[existingIdx] = {
-                                ...existing,
+                const isAssistantToolActive = vm.role === 'assistant' && Boolean(vm.toolSteps && vm.toolSteps.length > 0);
+                if (!vm.isInterim || isAssistantToolActive) {
+                    if (vm.text.trim() || (vm.toolSteps && vm.toolSteps.length > 0)) {
+                        const existingIdx = next.findIndex((m) => m.id === vm.id);
+                        if (existingIdx !== -1) {
+                            const existing = next[existingIdx];
+                            if (
+                                existing.content !== vm.text ||
+                                existing.creditsUsed !== vm.creditsUsed ||
+                                existing.toolSteps !== vm.toolSteps ||
+                                existing.artifacts !== vm.artifacts ||
+                                existing.sql !== vm.sql ||
+                                existing.isStreaming !== vm.isInterim ||
+                                (vm.wasInterrupted && !existing.wasInterrupted)
+                            ) {
+                                next[existingIdx] = {
+                                    ...existing,
+                                    content: vm.text,
+                                    sql: vm.sql ?? existing.sql,
+                                    toolSteps: vm.toolSteps ?? existing.toolSteps,
+                                    artifacts: vm.artifacts ?? existing.artifacts,
+                                    creditsUsed: vm.creditsUsed ?? existing.creditsUsed,
+                                    wasInterrupted: vm.wasInterrupted ?? existing.wasInterrupted,
+                                    isStreaming: vm.isInterim,
+                                };
+                                modified = true;
+                            }
+                        } else {
+                            next.push({
+                                id: vm.id,
+                                role: vm.role,
                                 content: vm.text,
-                                sql: vm.sql ?? existing.sql,
-                                toolSteps: vm.toolSteps ?? existing.toolSteps,
-                                artifacts: vm.artifacts ?? existing.artifacts,
-                                creditsUsed: vm.creditsUsed ?? existing.creditsUsed,
-                                wasInterrupted: vm.wasInterrupted ?? existing.wasInterrupted,
-                            };
+                                isAgent: vm.role === 'assistant' ? agentMode : undefined,
+                                isStreaming: vm.isInterim,
+                                sql: vm.sql,
+                                toolSteps: vm.toolSteps,
+                                artifacts: vm.artifacts,
+                                creditsUsed: vm.creditsUsed,
+                                wasInterrupted: vm.wasInterrupted,
+                            });
                             modified = true;
                         }
-                    } else {
-                        next.push({
-                            id: vm.id,
-                            role: vm.role,
-                            content: vm.text,
-                            isAgent: vm.role === 'assistant' ? agentMode : undefined,
-                            sql: vm.sql,
-                            toolSteps: vm.toolSteps,
-                            artifacts: vm.artifacts,
-                            creditsUsed: vm.creditsUsed,
-                            wasInterrupted: vm.wasInterrupted,
-                        });
-                        modified = true;
                     }
                 }
             }

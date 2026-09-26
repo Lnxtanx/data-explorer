@@ -50,6 +50,7 @@ import { useAIChatList, useDeleteAIChat, useUpdateAIChat, aiQueryKeys } from './
 import { useProjects, useDeleteProject, useCreateProject } from './hooks/useProjects';
 import type { AIProject } from './api/projects';
 import { getChatMessages, type AIMessage } from './api/index';
+import { VoiceWaveformIcon } from '@/components/voice';
 
 interface AIChatSidebarProps {
     onCloseAI: () => void;
@@ -395,6 +396,12 @@ export function AIChatSidebar({
                                                         projectChats.map((chat) => {
                                                             const isEditing = editingChatId === chat.id;
                                                             const isActive = activeChatId === chat.id;
+                                                            const isVoiceChat = Boolean(
+                                                                chat.isVoice ||
+                                                                chat.modelUsed?.includes('live') ||
+                                                                chat.title?.toLowerCase().includes('voice conversation') ||
+                                                                chat.title?.toLowerCase().startsWith('voice:')
+                                                            );
 
                                                             return (
                                                                 <div
@@ -434,7 +441,10 @@ export function AIChatSidebar({
                                                                                 />
                                                                             </div>
                                                                         ) : (
-                                                                            <span className="truncate block font-normal">{chat.title || 'New chat'}</span>
+                                                                            <div className="flex items-center gap-1.5 min-w-0">
+                                                                                {isVoiceChat && <VoiceWaveformIcon className="w-3 h-3 shrink-0 text-primary" />}
+                                                                                <span className="truncate block font-normal">{chat.title || 'New chat'}</span>
+                                                                            </div>
                                                                         )}
                                                                     </div>
 
@@ -564,6 +574,12 @@ export function AIChatSidebar({
                                     {standaloneChats.map((chat) => {
                                         const isEditing = editingChatId === chat.id;
                                         const isActive = activeChatId === chat.id;
+                                        const isVoiceChat = Boolean(
+                                            chat.isVoice ||
+                                            chat.modelUsed?.includes('live') ||
+                                            chat.title?.toLowerCase().includes('voice conversation') ||
+                                            chat.title?.toLowerCase().startsWith('voice:')
+                                        );
 
                                         return (
                                             <div
@@ -586,7 +602,11 @@ export function AIChatSidebar({
                                                     startRename(chat.id, chat.title || 'New chat');
                                                 }}
                                             >
-                                                <MessageSquare className="w-3.5 h-3.5 shrink-0 text-muted-foreground/80 group-hover:text-foreground transition-colors" />
+                                                {isVoiceChat ? (
+                                                    <VoiceWaveformIcon className="w-3.5 h-3.5 shrink-0 text-primary" />
+                                                ) : (
+                                                    <MessageSquare className="w-3.5 h-3.5 shrink-0 text-muted-foreground/80 group-hover:text-foreground transition-colors" />
+                                                )}
 
                                                 <div className="flex-1 min-w-0">
                                                     {isEditing ? (

@@ -30,8 +30,8 @@ export function ContextWindowBar({
     if (msgCount === 0 && tokens === null) return null;
 
     const isCompacted = contextMeta?.compacted || (contextMeta?.saved_tokens ?? 0) > 0;
-    const nearLimit = (pct !== null && pct >= 80) || msgCount >= 16;
-    const atLimit = (pct !== null && pct >= 95) || msgCount >= 20;
+    const nearLimit = pct !== null && pct >= 80;
+    const atLimit = pct !== null && pct >= 95;
 
     return (
         <div
@@ -53,7 +53,7 @@ export function ContextWindowBar({
             {isCompacted ? (
                 <Archive className="w-3 h-3 text-emerald-500 shrink-0" />
             ) : atLimit ? (
-                <Archive className="w-3 h-3 animate-pulse text-amber-500 shrink-0" />
+                <Archive className="w-3 h-3 text-amber-500 shrink-0" />
             ) : (
                 <MessageSquare className="w-3 h-3 shrink-0" />
             )}
@@ -62,7 +62,7 @@ export function ContextWindowBar({
                 {isCompacted ? (
                     `compacted (${Math.round((contextMeta?.saved_tokens ?? 0) / 1000)}k saved)`
                 ) : atLimit ? (
-                    'compacting context…'
+                    `${pct}% context (near limit)`
                 ) : pct !== null && pct > 0 ? (
                     `${msgCount > 0 ? `${msgCount} msgs · ` : ''}${pct}% context`
                 ) : (

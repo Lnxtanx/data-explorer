@@ -57,6 +57,7 @@ export interface AIChat {
     agentMode?: AgentMode;
     thinkingEnabled?: boolean;
     useCase?: string;
+    isVoice?: boolean;
 }
 
 export interface AIMessage {
