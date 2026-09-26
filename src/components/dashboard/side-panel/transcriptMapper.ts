@@ -288,6 +288,27 @@ export function transcriptToMessages(runState: DashboardRunState, _isResuming: b
     }
   }
 
-  return msgs;
+  // Defensive deduplication: coalesce adjacent duplicate assistant messages
+  const deduped: SidePanelMessage[] = [];
+  for (const m of msgs) {
+    const last = deduped[deduped.length - 1];
+    if (last && last.role === 'assistant' && m.role === 'assistant') {
+      if (last.content.trim() === m.content.trim() || !m.content.trim() || !last.content.trim()) {
+        if (!last.content.trim() && m.content.trim()) {
+          last.content = m.content;
+        }
+        if (m.toolSteps && m.toolSteps.length > 0) {
+          last.toolSteps = [...(last.toolSteps || []), ...m.toolSteps];
+        }
+        if (m.thinking && !last.thinking) {
+          last.thinking = m.thinking;
+        }
+        continue;
+      }
+    }
+    deduped.push(m);
+  }
+
+  return deduped;
 }
 

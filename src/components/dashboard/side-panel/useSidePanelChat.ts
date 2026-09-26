@@ -144,7 +144,7 @@ export function useSidePanelChat({
 
         if (!prev.length) return mapped;
         // Merge mapped with prev: preserve existing assistant content, toolSteps (with latency) & thinking
-        return mapped.map((m, idx) => {
+        const merged = mapped.map((m, idx) => {
           if (m.role === 'assistant') {
             // Only merge with an existing assistant turn if it corresponds to the exact same turn index
             // or the final turn of both mapped and prev. Never use a greedy prev.find() that clones
@@ -166,6 +166,24 @@ export function useSidePanelChat({
           }
           return m;
         });
+
+        // Deduplicate any consecutive duplicate messages
+        const deduped: SidePanelMessage[] = [];
+        for (const msg of merged) {
+          const last = deduped[deduped.length - 1];
+          if (last && last.role === msg.role && (last.content.trim() === msg.content.trim() || !msg.content.trim())) {
+            if (msg.toolSteps && msg.toolSteps.length > 0 && (!last.toolSteps || last.toolSteps.length === 0)) {
+              last.toolSteps = msg.toolSteps;
+            }
+            if (msg.thinking && !last.thinking) {
+              last.thinking = msg.thinking;
+            }
+            continue;
+          }
+          deduped.push(msg);
+        }
+        localMessagesRef.current = deduped;
+        return deduped;
       });
       const targetSessionId = runState.session_id || currentSessionId;
       if (targetSessionId) {
@@ -206,7 +224,8 @@ export function useSidePanelChat({
       isStreaming: true,
       timestamp: clientTime,
     };
-    const nextMessages = [...localMessagesRef.current, userMessage, pendingAssistant];
+    const cleanPrev = localMessagesRef.current.filter((m) => m.content.trim() || (m.toolSteps && m.toolSteps.length > 0));
+    const nextMessages = [...cleanPrev, userMessage, pendingAssistant];
     localMessagesRef.current = nextMessages;
     setLocalMessages(nextMessages);
 
@@ -463,27 +482,68 @@ export function useSidePanelChat({
 
       let finalMessages: SidePanelMessage[] = [];
       setLocalMessages((prev) => {
-        const hasUser = prev.some((m) => m.id === userMsgId || (m.role === 'user' && m.content === msg));
-        const hasAssistant = prev.some((m) => m.id === assistantMsgId);
+        const userIdx = prev.findIndex((m) => m.id === userMsgId || (m.role === 'user' && m.content === msg));
+        const assistantIdx = prev.findIndex(
+          (m, i) =>
+            m.id === assistantMsgId ||
+            (m.role === 'assistant' && (
+              (userIdx >= 0 && i === userIdx + 1) ||
+              (m.content && finalContent && m.content.trim() === finalContent.trim())
+            ))
+        );
 
         let next = [...prev];
-        if (hasAssistant) {
-          next = next.map((m) => (m.id === assistantMsgId ? completedAssistant : m));
+        if (assistantIdx >= 0) {
+          next[assistantIdx] = completedAssistant;
         } else {
-          next.push(completedAssistant);
+          // If the last message is already an assistant message, update it instead of pushing a duplicate
+          const lastIdx = next.length - 1;
+          if (lastIdx >= 0 && next[lastIdx].role === 'assistant') {
+            next[lastIdx] = completedAssistant;
+          } else {
+            next.push(completedAssistant);
+          }
         }
 
-        if (!hasUser) {
-          const astIdx = next.findIndex((m) => m.id === assistantMsgId);
+        if (userIdx < 0) {
+          const astIdx = next.findIndex((m) => m.id === completedAssistant.id);
           if (astIdx >= 0) {
             next.splice(astIdx, 0, userMessage);
           } else {
             next.unshift(userMessage);
           }
         }
-        finalMessages = next;
-        localMessagesRef.current = next;
-        return next;
+
+        // Deduplicate any consecutive duplicate assistant messages
+        const deduped: SidePanelMessage[] = [];
+        for (let i = 0; i < next.length; i++) {
+          const current = next[i];
+          if (current.role === 'assistant' && deduped.length > 0) {
+            const prevMsg = deduped[deduped.length - 1];
+            if (prevMsg.role === 'assistant') {
+              if (
+                !prevMsg.content.trim() ||
+                !current.content.trim() ||
+                prevMsg.content.trim() === current.content.trim()
+              ) {
+                deduped[deduped.length - 1] = {
+                  ...prevMsg,
+                  content: prevMsg.content.trim() ? prevMsg.content : current.content,
+                  thinking: prevMsg.thinking || current.thinking,
+                  toolSteps: (prevMsg.toolSteps && prevMsg.toolSteps.length > 0) ? prevMsg.toolSteps : current.toolSteps,
+                  warnings: (prevMsg.warnings && prevMsg.warnings.length > 0) ? prevMsg.warnings : current.warnings,
+                  isStreaming: false,
+                };
+                continue;
+              }
+            }
+          }
+          deduped.push(current);
+        }
+
+        finalMessages = deduped;
+        localMessagesRef.current = deduped;
+        return deduped;
       });
 
       if (result?.run_id) {

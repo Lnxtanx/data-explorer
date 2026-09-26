@@ -7,7 +7,7 @@
 import { ArrowDown } from 'lucide-react';
 import { ResonaAIMessageItem, type SidePanelMessage } from './ResonaAIMessageItem';
 import { ResonaAIEmptyState } from './ResonaAIEmptyState';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 interface ResonaAIMessageListProps {
   messages: SidePanelMessage[];
@@ -30,6 +30,32 @@ export function ResonaAIMessageList({
   const isProgrammaticScrollRef = useRef(false);
   const programmaticScrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isUserScrolledUp, setIsUserScrolledUp] = useState(false);
+
+  // Defensive deduplication: coalesce any consecutive duplicate assistant messages
+  const displayMessages = useMemo(() => {
+    const result: SidePanelMessage[] = [];
+    for (const msg of messages) {
+      const prev = result[result.length - 1];
+      if (
+        prev &&
+        prev.role === 'assistant' &&
+        msg.role === 'assistant' &&
+        ((prev.content.trim() && prev.content.trim() === msg.content.trim()) || (!prev.content.trim() && msg.content.trim()))
+      ) {
+        result[result.length - 1] = {
+          ...prev,
+          content: prev.content.trim() ? prev.content : msg.content,
+          thinking: prev.thinking || msg.thinking,
+          toolSteps: prev.toolSteps && prev.toolSteps.length > 0 ? prev.toolSteps : msg.toolSteps,
+          warnings: prev.warnings && prev.warnings.length > 0 ? prev.warnings : msg.warnings,
+          isStreaming: prev.isStreaming || msg.isStreaming,
+        };
+        continue;
+      }
+      result.push(msg);
+    }
+    return result;
+  }, [messages]);
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
     setIsUserScrolledUp(false);
@@ -65,10 +91,10 @@ export function ResonaAIMessageList({
 
   // When starting a fresh chat or when messages are few, reset isUserScrolledUp to false
   useEffect(() => {
-    if (messages.length <= 2) {
+    if (displayMessages.length <= 2) {
       setIsUserScrolledUp(false);
     }
-  }, [messages.length]);
+  }, [displayMessages.length]);
 
   // Auto-scroll to bottom when messages update or during active streaming,
   // UNLESS the user has actively scrolled up to inspect previous output.
@@ -85,7 +111,7 @@ export function ResonaAIMessageList({
     if (!isUserScrolledUp) {
       scrollToBottom(isStreaming ? 'auto' : 'smooth');
     }
-  }, [messages, isStreaming, isUserScrolledUp, scrollToBottom]);
+  }, [displayMessages, isStreaming, isUserScrolledUp, scrollToBottom]);
 
   // Clean up timer on unmount
   useEffect(() => {
@@ -96,7 +122,7 @@ export function ResonaAIMessageList({
     };
   }, []);
 
-  if (isLoading && messages.length === 0) {
+  if (isLoading && displayMessages.length === 0) {
     return (
       <div className="flex-1 p-4 space-y-4 animate-pulse">
         <div className="w-full h-11 rounded-2xl bg-muted/60" />
@@ -109,7 +135,7 @@ export function ResonaAIMessageList({
     );
   }
 
-  if (messages.length === 0) {
+  if (displayMessages.length === 0) {
     return (
       <ResonaAIEmptyState
         databaseName={databaseName}
@@ -125,7 +151,7 @@ export function ResonaAIMessageList({
         onScroll={handleScroll}
         className="flex-1 overflow-y-auto px-4 py-4 space-y-4"
       >
-        {messages.map((message) => (
+        {displayMessages.map((message) => (
           <ResonaAIMessageItem
             key={message.id}
             message={message}
