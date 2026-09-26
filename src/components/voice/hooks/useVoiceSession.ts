@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { VoiceAudioPlayer } from '../audio/voice-audio-player';
 import { VoiceAudioRecorder } from '../audio/voice-audio-recorder';
 import { VoiceSocketClient } from '../voice-socket-client';
-import type { AgentArtifact, AgentToolStep } from '../../ai/types';
+import type { AgentArtifact } from '../../ai/types';
 import { useVoiceAudioLevel } from './useVoiceAudioLevel';
 import type {
     GeminiEvent,
@@ -478,8 +478,7 @@ export function useVoiceSession(
                                           typeof c === 'string' ? { name: c } : c,
                                       )
                                     : [],
-                                rowCount: rowCount ?? (Array.isArray(payload.rows) ? payload.rows.length : 0),
-                                executionMs: payload?.executionMs,
+                                totalRows: rowCount ?? (Array.isArray(payload.rows) ? payload.rows.length : 0),
                             };
                             const artIdx = currentArtifacts.findIndex(
                                 (a) => (id && a.id === `art_${id}`) || (effectiveSql && a.sql === effectiveSql),
