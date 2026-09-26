@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { VoiceAudioPlayer } from '../audio/voice-audio-player';
 import { VoiceAudioRecorder } from '../audio/voice-audio-recorder';
 import { VoiceSocketClient } from '../voice-socket-client';
+import type { AgentArtifact, AgentToolStep } from '../../ai/types';
 import { useVoiceAudioLevel } from './useVoiceAudioLevel';
 import type {
     GeminiEvent,
@@ -305,9 +306,60 @@ export function useVoiceSession(
 
             // 6. Tool Calling
             if (event.tool_call?.function_calls && event.tool_call.function_calls.length > 0) {
-                const firstCall = event.tool_call.function_calls[0];
+                const calls = event.tool_call.function_calls;
+                const firstCall = calls[0];
                 setToolCallInfo({ name: firstCall.name, args: firstCall.args });
                 setIsThinking(true);
+
+                // Commit user turn now that model began responding / executing tool
+                if (pendingUserRef.current) {
+                    const finalUser = { ...pendingUserRef.current, isInterim: false };
+                    pendingUserRef.current = null;
+                    setMessages((prev) => prev.map((m) => (m.id === finalUser.id ? finalUser : m)));
+                }
+
+                if (!pendingAssistantRef.current) {
+                    pendingAssistantRef.current = {
+                        id: newId(),
+                        role: 'assistant',
+                        text: '',
+                        isInterim: true,
+                        turnIndex: turnCounterRef.current,
+                        toolSteps: [],
+                        artifacts: [],
+                    };
+                }
+
+                const currentSteps = [...(pendingAssistantRef.current.toolSteps || [])];
+                for (const call of calls) {
+                    const callId = call.id || `call_${Date.now()}_${currentSteps.length}`;
+                    const existingStepIdx = currentSteps.findIndex((s) => s.id === callId);
+                    const sqlArg = typeof call.args?.sql === 'string' ? call.args.sql : undefined;
+                    if (sqlArg) {
+                        pendingAssistantRef.current.sql = sqlArg;
+                    }
+                    if (existingStepIdx === -1) {
+                        currentSteps.push({
+                            id: callId,
+                            name: call.name || 'tool',
+                            input: (call.args as Record<string, unknown>) || {},
+                            status: 'calling',
+                            startedAt: Date.now(),
+                        });
+                    }
+                }
+                pendingAssistantRef.current.toolSteps = currentSteps;
+
+                const currentAssistant = pendingAssistantRef.current;
+                setMessages((prev) => {
+                    const idx = prev.findIndex((m) => m.id === currentAssistant.id);
+                    if (idx !== -1) {
+                        const copy = [...prev];
+                        copy[idx] = { ...currentAssistant };
+                        return copy;
+                    }
+                    return [...prev, { ...currentAssistant }];
+                });
             }
         },
         [],
@@ -356,19 +408,154 @@ export function useVoiceSession(
                     onGeminiEvent: (event) => {
                         handleGeminiEvent(event);
                     },
-                    onToolResult: () => {
+                    onToolResult: (name, sql, payload, id) => {
                         setIsThinking(true);
+
+                        if (!pendingAssistantRef.current) {
+                            pendingAssistantRef.current = {
+                                id: newId(),
+                                role: 'assistant',
+                                text: '',
+                                isInterim: true,
+                                turnIndex: turnCounterRef.current,
+                                toolSteps: [],
+                                artifacts: [],
+                            };
+                        }
+
+                        const currentAssistant = pendingAssistantRef.current;
+                        const toolSteps = [...(currentAssistant.toolSteps || [])];
+                        const isSuccess = payload?.success !== false;
+                        const rowCount =
+                            payload?.rowCount ??
+                            (Array.isArray(payload?.rows) ? payload.rows.length : undefined);
+                        const summary =
+                            payload?.error ||
+                            (rowCount !== undefined
+                                ? `${rowCount} row${rowCount === 1 ? '' : 's'}`
+                                : 'Completed');
+
+                        const targetStepIdx = id
+                            ? toolSteps.findIndex((s) => s.id === id)
+                            : toolSteps.findIndex((s) => s.name === name && s.status === 'calling');
+
+                        if (targetStepIdx !== -1) {
+                            const step = toolSteps[targetStepIdx];
+                            toolSteps[targetStepIdx] = {
+                                ...step,
+                                status: isSuccess ? 'done' : 'error',
+                                result: { success: isSuccess, summary },
+                                latencyMs:
+                                    payload?.executionMs ??
+                                    (step.startedAt ? Math.max(1, Date.now() - step.startedAt) : undefined),
+                            };
+                        } else {
+                            toolSteps.push({
+                                id: id || `call_${Date.now()}`,
+                                name: name || 'tool',
+                                input: sql ? { sql } : {},
+                                status: isSuccess ? 'done' : 'error',
+                                result: { success: isSuccess, summary },
+                                latencyMs: payload?.executionMs,
+                            });
+                        }
+                        currentAssistant.toolSteps = toolSteps;
+
+                        // If the tool returned table rows/columns, construct an AgentArtifact
+                        if (
+                            payload &&
+                            (Array.isArray(payload.rows) || Array.isArray(payload.columns))
+                        ) {
+                            const currentArtifacts = [...(currentAssistant.artifacts || [])];
+                            const effectiveSql = sql || currentAssistant.sql;
+                            const newArtifact: AgentArtifact = {
+                                id: `art_${id || Date.now()}`,
+                                type: 'table',
+                                sql: effectiveSql,
+                                rows: Array.isArray(payload.rows) ? payload.rows : [],
+                                columns: Array.isArray(payload.columns)
+                                    ? payload.columns.map((c: any) =>
+                                          typeof c === 'string' ? { name: c } : c,
+                                      )
+                                    : [],
+                                rowCount: rowCount ?? (Array.isArray(payload.rows) ? payload.rows.length : 0),
+                                executionMs: payload?.executionMs,
+                            };
+                            const artIdx = currentArtifacts.findIndex(
+                                (a) => (id && a.id === `art_${id}`) || (effectiveSql && a.sql === effectiveSql),
+                            );
+                            if (artIdx !== -1) {
+                                currentArtifacts[artIdx] = newArtifact;
+                            } else {
+                                currentArtifacts.push(newArtifact);
+                            }
+                            currentAssistant.artifacts = currentArtifacts;
+                            if (effectiveSql) {
+                                currentAssistant.sql = effectiveSql;
+                            }
+                        }
+
+                        setMessages((prev) => {
+                            const idx = prev.findIndex((m) => m.id === currentAssistant.id);
+                            if (idx !== -1) {
+                                const copy = [...prev];
+                                copy[idx] = { ...currentAssistant };
+                                return copy;
+                            }
+                            return [...prev, { ...currentAssistant }];
+                        });
                     },
                     onTurnFormatted: (frame) => {
                         setIsThinking(false);
+                        const artifactsFromFrame: AgentArtifact[] = (frame.artifacts || []).map((art: any) => ({
+                            ...art,
+                            columns: Array.isArray(art.columns)
+                                ? art.columns.map((c: any) => (typeof c === 'string' ? { name: c } : c))
+                                : [],
+                        }));
+                        const toolStepsFromFrame = frame.toolSteps;
+
                         if (
                             pendingAssistantRef.current &&
                             (frame.turn_index == null || pendingAssistantRef.current.turnIndex === frame.turn_index)
                         ) {
+                            const p = pendingAssistantRef.current;
+                            const baseSteps = toolStepsFromFrame && toolStepsFromFrame.length > 0
+                                ? toolStepsFromFrame
+                                : (p.toolSteps || []);
+                            const finalizedToolSteps = baseSteps.map((s) =>
+                                s.status === 'calling' ? { ...s, status: 'done' as const } : s,
+                            );
+                            const mergedArtifacts = artifactsFromFrame.length > 0
+                                ? artifactsFromFrame
+                                : (p.artifacts || []);
+
+                            const finalMsg: VoiceMessage = {
+                                ...p,
+                                text: frame.content || p.text,
+                                isInterim: false,
+                                turnIndex: frame.turn_index ?? p.turnIndex,
+                                toolSteps: finalizedToolSteps.length > 0 ? finalizedToolSteps : undefined,
+                                artifacts: mergedArtifacts.length > 0 ? mergedArtifacts : undefined,
+                                creditsUsed: frame.credits_charged ?? p.creditsUsed,
+                                wasInterrupted: frame.was_interrupted ?? p.wasInterrupted,
+                            };
                             pendingAssistantRef.current = null;
                             turnCounterRef.current = Math.max(turnCounterRef.current, (frame.turn_index || 0) + 1);
+
+                            setMessages((prev) => {
+                                const idx = prev.findIndex((m) => m.id === finalMsg.id);
+                                if (idx !== -1) {
+                                    const copy = [...prev];
+                                    copy[idx] = finalMsg;
+                                    return copy;
+                                }
+                                return [...prev, finalMsg];
+                            });
+                            return;
                         }
-                        if (frame.content) {
+
+                        if (frame.content || artifactsFromFrame.length > 0 || (toolStepsFromFrame && toolStepsFromFrame.length > 0)) {
                             setMessages((prev) => {
                                 let targetIdx = -1;
                                 if (frame.turn_index != null) {
@@ -385,10 +572,13 @@ export function useVoiceSession(
                                         idx === targetIdx
                                             ? {
                                                   ...m,
-                                                  text: frame.content!,
+                                                  text: frame.content || m.text,
                                                   isInterim: false,
                                                   turnIndex: frame.turn_index ?? m.turnIndex,
-                                                  artifacts: frame.artifacts ?? m.artifacts,
+                                                  toolSteps: toolStepsFromFrame?.length
+                                                      ? toolStepsFromFrame
+                                                      : m.toolSteps?.map((s) => (s.status === 'calling' ? { ...s, status: 'done' as const } : s)),
+                                                  artifacts: artifactsFromFrame.length > 0 ? artifactsFromFrame : m.artifacts,
                                                   creditsUsed: frame.credits_charged ?? m.creditsUsed,
                                                   wasInterrupted: frame.was_interrupted ?? m.wasInterrupted,
                                               }
@@ -400,10 +590,11 @@ export function useVoiceSession(
                                     {
                                         id: newId(),
                                         role: 'assistant',
-                                        text: frame.content!,
+                                        text: frame.content || '',
                                         isInterim: false,
                                         turnIndex: frame.turn_index,
-                                        artifacts: frame.artifacts,
+                                        toolSteps: toolStepsFromFrame,
+                                        artifacts: artifactsFromFrame.length > 0 ? artifactsFromFrame : undefined,
                                         creditsUsed: frame.credits_charged,
                                         wasInterrupted: frame.was_interrupted,
                                     },

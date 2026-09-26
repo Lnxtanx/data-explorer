@@ -4,6 +4,7 @@
 
 import type React from 'react';
 import type { OrbState } from './orbs/orb-state';
+import type { AgentToolStep, AgentArtifact } from '../ai/types';
 
 export interface VoiceMessage {
     id: string;
@@ -11,7 +12,9 @@ export interface VoiceMessage {
     text: string;
     isInterim?: boolean;
     turnIndex?: number;
-    artifacts?: any[];
+    sql?: string;
+    toolSteps?: AgentToolStep[];
+    artifacts?: AgentArtifact[];
     creditsUsed?: number;
     wasInterrupted?: boolean;
 }
@@ -36,12 +39,13 @@ export interface GeminiEvent {
 export type ServerFrame =
     | { type: 'session_ready'; model?: string; voice?: string }
     | { type: 'gemini_event'; data: GeminiEvent }
-    | { type: 'tool_result'; name?: string; sql?: string; payload?: any }
+    | { type: 'tool_result'; id?: string; name?: string; sql?: string; payload?: any }
     | {
           type: 'turn_formatted';
           turn_index?: number;
           content?: string;
           artifacts?: any[];
+          toolSteps?: AgentToolStep[];
           credits_charged?: number;
           was_interrupted?: boolean;
       }

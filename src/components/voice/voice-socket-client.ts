@@ -20,7 +20,7 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
 export interface VoiceSocketEvents {
     onSessionReady?: (model?: string, voice?: string) => void;
     onGeminiEvent?: (event: GeminiEvent) => void;
-    onToolResult?: (name?: string, sql?: string, payload?: any) => void;
+    onToolResult?: (name?: string, sql?: string, payload?: any, id?: string) => void;
     onTurnFormatted?: (frame: Extract<ServerFrame, { type: 'turn_formatted' }>) => void;
     onSessionEnded?: (reason?: string, message?: string) => void;
     onError?: (message: string, code?: string) => void;
@@ -146,7 +146,7 @@ export class VoiceSocketClient {
                 this.events.onGeminiEvent?.(frame.data);
                 break;
             case 'tool_result':
-                this.events.onToolResult?.(frame.name, frame.sql, frame.payload);
+                this.events.onToolResult?.(frame.name, frame.sql, frame.payload, frame.id);
                 break;
             case 'turn_formatted':
                 this.events.onTurnFormatted?.(frame);

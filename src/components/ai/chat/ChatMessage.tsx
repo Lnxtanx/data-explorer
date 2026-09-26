@@ -260,7 +260,7 @@ export const ChatMessage = React.memo(function ChatMessage({
                         {msg.toolSteps && msg.toolSteps.length > 0 && (
                             <LiveToolSteps
                                 steps={msg.toolSteps}
-                                isLive={!!msg.isStreaming && isStreaming && agentStatus === 'running'}
+                                isLive={Boolean(msg.isStreaming && (msg.toolSteps.some(s => s.status === 'calling') || (isStreaming && agentStatus === 'running')))}
                                 defaultExpanded={false}
                             />
                         )}
@@ -276,7 +276,7 @@ export const ChatMessage = React.memo(function ChatMessage({
                                             connectionId={connectionId}
                                             availableTables={availableTables}
                                         />
-                                        {msg.isStreaming && isStreaming && <StreamingCursor />}
+                                        {msg.isStreaming && <StreamingCursor />}
                                     </>
                                 ) : (
                                     msg.isStreaming && isStreaming && <StreamingCursor />

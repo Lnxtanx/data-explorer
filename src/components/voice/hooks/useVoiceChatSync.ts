@@ -18,19 +18,23 @@ export function useVoiceChatSync(
             let modified = false;
 
             for (const vm of voiceMessages) {
-                if (!vm.isInterim && vm.text.trim()) {
+                if (!vm.isInterim && (vm.text.trim() || (vm.toolSteps && vm.toolSteps.length > 0))) {
                     const existingIdx = next.findIndex((m) => m.id === vm.id);
                     if (existingIdx !== -1) {
                         const existing = next[existingIdx];
                         if (
                             existing.content !== vm.text ||
                             existing.creditsUsed !== vm.creditsUsed ||
-                            (vm.artifacts && !existing.artifacts) ||
+                            existing.toolSteps !== vm.toolSteps ||
+                            existing.artifacts !== vm.artifacts ||
+                            existing.sql !== vm.sql ||
                             (vm.wasInterrupted && !existing.wasInterrupted)
                         ) {
                             next[existingIdx] = {
                                 ...existing,
                                 content: vm.text,
+                                sql: vm.sql ?? existing.sql,
+                                toolSteps: vm.toolSteps ?? existing.toolSteps,
                                 artifacts: vm.artifacts ?? existing.artifacts,
                                 creditsUsed: vm.creditsUsed ?? existing.creditsUsed,
                                 wasInterrupted: vm.wasInterrupted ?? existing.wasInterrupted,
@@ -43,6 +47,8 @@ export function useVoiceChatSync(
                             role: vm.role,
                             content: vm.text,
                             isAgent: vm.role === 'assistant' ? agentMode : undefined,
+                            sql: vm.sql,
+                            toolSteps: vm.toolSteps,
                             artifacts: vm.artifacts,
                             creditsUsed: vm.creditsUsed,
                             wasInterrupted: vm.wasInterrupted,

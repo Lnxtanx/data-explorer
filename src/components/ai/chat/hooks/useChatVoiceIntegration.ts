@@ -68,10 +68,24 @@ export function useChatVoiceIntegration({
     // Merge active interim voice transcription into display messages
     const getFinalDisplayMessages = useCallback((displayMessages: LocalMessage[]): LocalMessage[] => {
         const activeInterimVoiceMessage = isVoiceActive
-            ? voiceMessages.find(m => m.isInterim && m.text.trim())
+            ? voiceMessages.find(m => m.isInterim && (m.text.trim() || (m.toolSteps && m.toolSteps.length > 0)))
             : null;
 
-        const finalMessages = [...displayMessages];
+        const finalMessages = displayMessages.map(m => {
+            if (activeInterimVoiceMessage && m.id === activeInterimVoiceMessage.id) {
+                return {
+                    ...m,
+                    content: activeInterimVoiceMessage.text,
+                    isStreaming: true,
+                    isAgent: activeInterimVoiceMessage.role === 'assistant' ? agentMode : undefined,
+                    sql: activeInterimVoiceMessage.sql ?? m.sql,
+                    toolSteps: activeInterimVoiceMessage.toolSteps ?? m.toolSteps,
+                    artifacts: activeInterimVoiceMessage.artifacts ?? m.artifacts,
+                };
+            }
+            return m;
+        });
+
         if (activeInterimVoiceMessage && !finalMessages.some(m => m.id === activeInterimVoiceMessage.id)) {
             finalMessages.push({
                 id: activeInterimVoiceMessage.id,
@@ -79,6 +93,9 @@ export function useChatVoiceIntegration({
                 content: activeInterimVoiceMessage.text,
                 isStreaming: true,
                 isAgent: activeInterimVoiceMessage.role === 'assistant' ? agentMode : undefined,
+                sql: activeInterimVoiceMessage.sql,
+                toolSteps: activeInterimVoiceMessage.toolSteps,
+                artifacts: activeInterimVoiceMessage.artifacts,
             });
         }
         return finalMessages;
