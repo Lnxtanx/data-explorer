@@ -1,4 +1,4 @@
-import { AlertTriangle, Info, CheckCircle2, XCircle, X, Sparkles, Megaphone, MessageSquare, ArrowRight } from 'lucide-react';
+import { AlertTriangle, Info, CheckCircle2, XCircle, X, ArrowRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { apiRequest } from '@/lib/api/client';
 import { logger } from '@/lib/logger';
@@ -6,95 +6,11 @@ import { useEffect, useState } from 'react';
 
 export interface SystemNotification {
     id: string;
-    type: string;
+    type: 'info' | 'warning' | 'error' | 'success' | string;
     message: string;
-    link_url?: string;
-    link_text?: string;
+    link_url?: string | null;
+    link_text?: string | null;
 }
-
-export type NotificationCategory = 'testing' | 'news' | 'feedback' | 'warning' | 'error' | 'success' | 'info';
-
-interface CategoryConfig {
-    badge: string;
-    icon: React.ReactNode;
-    bannerStyle: string;
-    badgeStyle: string;
-    buttonStyle: string;
-}
-
-export function resolveNotificationCategory(type?: string, message?: string): NotificationCategory {
-    const t = (type || '').toLowerCase().trim();
-    const m = (message || '').toLowerCase();
-
-    // 1. Explicit type check
-    if (t === 'testing' || t === 'beta' || t === 'test') return 'testing';
-    if (t === 'news' || t === 'announcement' || t === 'update' || t === 'release') return 'news';
-    if (t === 'feedback' || t === 'survey') return 'feedback';
-    if (t === 'warning' || t === 'maintenance') return 'warning';
-    if (t === 'error' || t === 'critical' || t === 'outage') return 'error';
-    if (t === 'success') return 'success';
-
-    // 2. Intelligent heuristics for 'info' or custom message strings
-    if (m.includes('test') || m.includes('beta') || m.includes('preview')) return 'testing';
-    if (m.includes('feedback') || m.includes('survey') || m.includes('thoughts')) return 'feedback';
-    if (m.includes('new ') || m.includes('launch') || m.includes('announc') || m.includes('release')) return 'news';
-    if (m.includes('maintenance') || m.includes('downtime') || m.includes('incident') || m.includes('investigat')) return 'warning';
-    if (m.includes('outage') || m.includes('degraded')) return 'error';
-
-    return 'info';
-}
-
-const CATEGORY_CONFIGS: Record<NotificationCategory, CategoryConfig> = {
-    testing: {
-        badge: 'Testing Phase',
-        icon: <Sparkles className="w-3.5 h-3.5 text-amber-200 shrink-0 animate-pulse" />,
-        bannerStyle: 'bg-gradient-to-r from-orange-600 via-amber-500 to-orange-600 text-white shadow-xs border-b border-orange-700/30',
-        badgeStyle: 'bg-black/25 text-white border-white/20',
-        buttonStyle: 'bg-white text-orange-600 hover:bg-white/90',
-    },
-    news: {
-        badge: 'New Update',
-        icon: <Megaphone className="w-3.5 h-3.5 text-purple-200 shrink-0" />,
-        bannerStyle: 'bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-700 text-white shadow-xs border-b border-indigo-800/30',
-        badgeStyle: 'bg-black/25 text-white border-white/20',
-        buttonStyle: 'bg-white text-indigo-700 hover:bg-white/90',
-    },
-    feedback: {
-        badge: 'Feedback',
-        icon: <MessageSquare className="w-3.5 h-3.5 text-teal-200 shrink-0" />,
-        bannerStyle: 'bg-gradient-to-r from-teal-600 via-emerald-600 to-teal-700 text-white shadow-xs border-b border-teal-800/30',
-        badgeStyle: 'bg-black/25 text-white border-white/20',
-        buttonStyle: 'bg-white text-teal-700 hover:bg-white/90',
-    },
-    warning: {
-        badge: 'Notice',
-        icon: <AlertTriangle className="w-3.5 h-3.5 text-amber-200 shrink-0" />,
-        bannerStyle: 'bg-gradient-to-r from-amber-600 via-orange-600 to-amber-700 text-white shadow-xs border-b border-amber-800/30',
-        badgeStyle: 'bg-black/25 text-white border-white/20',
-        buttonStyle: 'bg-white text-amber-800 hover:bg-white/90',
-    },
-    error: {
-        badge: 'System Alert',
-        icon: <XCircle className="w-3.5 h-3.5 text-rose-200 shrink-0" />,
-        bannerStyle: 'bg-gradient-to-r from-rose-600 via-red-600 to-rose-700 text-white shadow-xs border-b border-rose-800/30',
-        badgeStyle: 'bg-black/25 text-white border-white/20',
-        buttonStyle: 'bg-white text-rose-700 hover:bg-white/90',
-    },
-    success: {
-        badge: 'All Systems Operational',
-        icon: <CheckCircle2 className="w-3.5 h-3.5 text-emerald-200 shrink-0" />,
-        bannerStyle: 'bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 text-white shadow-xs border-b border-emerald-800/30',
-        badgeStyle: 'bg-black/25 text-white border-white/20',
-        buttonStyle: 'bg-white text-emerald-700 hover:bg-white/90',
-    },
-    info: {
-        badge: 'Announcement',
-        icon: <Info className="w-3.5 h-3.5 text-blue-200 shrink-0" />,
-        bannerStyle: 'bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 text-white shadow-xs border-b border-blue-800/30',
-        badgeStyle: 'bg-black/25 text-white border-white/20',
-        buttonStyle: 'bg-white text-blue-700 hover:bg-white/90',
-    },
-};
 
 export function NotificationBanner() {
     const [notification, setNotification] = useState<SystemNotification | null>(null);
@@ -106,7 +22,6 @@ export function NotificationBanner() {
             try {
                 const data = await apiRequest<{ notification?: SystemNotification }>('/api/notifications');
                 if (data.notification) {
-                    // Check if user already dismissed this specific notification
                     const dismissedIds = JSON.parse(localStorage.getItem('dismissed_notifications') || '[]');
                     if (!dismissedIds.includes(data.notification.id)) {
                         setNotification(data.notification);
@@ -119,7 +34,7 @@ export function NotificationBanner() {
 
         fetchNotification();
 
-        // Poll every 5 minutes for updated system notifications
+        // Check for updated notifications periodically (every 5 min)
         const interval = setInterval(fetchNotification, 5 * 60 * 1000);
         return () => {
             clearInterval(interval);
@@ -129,10 +44,8 @@ export function NotificationBanner() {
     const handleDismiss = () => {
         if (!notification) return;
 
-        // Save to local storage so it doesn't reappear
         const dismissedIds = JSON.parse(localStorage.getItem('dismissed_notifications') || '[]');
         localStorage.setItem('dismissed_notifications', JSON.stringify([...dismissedIds, notification.id]));
-
         setIsDismissed(true);
     };
 
@@ -140,30 +53,44 @@ export function NotificationBanner() {
         return null;
     }
 
-    const category = resolveNotificationCategory(notification.type, notification.message);
-    const config = CATEGORY_CONFIGS[category] || CATEGORY_CONFIGS.info;
+    const t = (notification.type || '').toLowerCase();
+    const m = (notification.message || '').toLowerCase();
+
+    // Solid, bold color themes strictly mapped to notification type and content
+    const isWarningOrTesting = t === 'warning' || m.includes('test') || m.includes('beta') || m.includes('preview');
+    const isError = t === 'error' || t === 'critical';
+    const isSuccess = t === 'success';
+
+    let bannerBg = 'bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-600 text-white';
+    let icon = <Info className="w-4 h-4 shrink-0 text-white/90" />;
+    let linkButtonClass = 'bg-white text-blue-700 hover:bg-white/90';
+
+    if (isWarningOrTesting) {
+        bannerBg = 'bg-gradient-to-r from-orange-600 via-amber-600 to-orange-600 text-white';
+        icon = <AlertTriangle className="w-4 h-4 shrink-0 text-white/90" />;
+        linkButtonClass = 'bg-white text-orange-600 hover:bg-white/90';
+    } else if (isError) {
+        bannerBg = 'bg-gradient-to-r from-rose-600 via-red-600 to-rose-600 text-white';
+        icon = <XCircle className="w-4 h-4 shrink-0 text-white/90" />;
+        linkButtonClass = 'bg-white text-rose-700 hover:bg-white/90';
+    } else if (isSuccess) {
+        bannerBg = 'bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-600 text-white';
+        icon = <CheckCircle2 className="w-4 h-4 shrink-0 text-white/90" />;
+        linkButtonClass = 'bg-white text-emerald-700 hover:bg-white/90';
+    }
 
     return (
         <aside
             role="banner"
             aria-label="System notification"
             className={cn(
-                "w-full px-4 py-1.5 flex items-center justify-between text-xs z-50 animate-in slide-in-from-top-2 duration-300 relative shrink-0 select-none",
-                config.bannerStyle
+                "w-full px-4 py-2 flex items-center justify-center text-xs z-50 shrink-0 select-none shadow-xs border-b border-black/10 relative",
+                bannerBg
             )}
         >
-            <div className="flex-1 flex items-center justify-center gap-2.5 min-w-0 pr-8">
-                <div className="flex items-center gap-1.5 shrink-0">
-                    {config.icon}
-                    <span className={cn(
-                        "px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider backdrop-blur-xs border shadow-xs",
-                        config.badgeStyle
-                    )}>
-                        {config.badge}
-                    </span>
-                </div>
-
-                <span className="font-medium text-[13px] text-white/95 truncate">
+            <div className="flex items-center justify-center gap-2 max-w-4xl text-center px-6">
+                {icon}
+                <span className="font-medium text-[13px] text-white tracking-normal">
                     {notification.message}
                 </span>
 
@@ -173,8 +100,8 @@ export function NotificationBanner() {
                         target="_blank"
                         rel="noopener noreferrer"
                         className={cn(
-                            "inline-flex items-center gap-1 font-semibold text-[11px] px-2.5 py-0.5 rounded-full transition-all duration-150 shrink-0",
-                            config.buttonStyle
+                            "inline-flex items-center gap-1 font-semibold text-xs px-2.5 py-0.5 rounded-full transition-all duration-150 shadow-xs shrink-0 ml-1.5",
+                            linkButtonClass
                         )}
                     >
                         <span>{notification.link_text || 'Learn more'}</span>
