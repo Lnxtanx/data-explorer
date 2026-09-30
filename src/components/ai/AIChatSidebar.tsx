@@ -45,6 +45,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { useQueryClient } from '@tanstack/react-query';
 import { cn, stripTemporalTag } from '@/lib/utils';
+import { logger } from '@/lib/logger';
 import { toast } from 'sonner';
 import { useAIChatList, useDeleteAIChat, useUpdateAIChat, aiQueryKeys } from './hooks/useAIChats';
 import { useProjects, useDeleteProject, useCreateProject } from './hooks/useProjects';
@@ -105,7 +106,7 @@ async function downloadChatAsMarkdown(chatId: string, chatTitle: string) {
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
     } catch (err) {
-        console.error('Failed to export chat:', err);
+        logger.error('Failed to export chat:', err);
     }
 }
 

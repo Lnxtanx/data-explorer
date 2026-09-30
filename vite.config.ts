@@ -9,6 +9,9 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   
   return {
+    esbuild: {
+      drop: mode === 'production' ? ['console', 'debugger'] : [],
+    },
     plugins: [
       react(),
       VitePWA({

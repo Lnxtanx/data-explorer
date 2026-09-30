@@ -15,6 +15,7 @@ import { transcriptToMessages } from './transcriptMapper';
 import { dashboardKeys, type DashboardRunState } from '../api/dashboard';
 import { uploadFilesForAI } from '../../ai/api/index';
 import { toast } from 'sonner';
+import { logger } from '@/lib/logger';
 
 interface UseSidePanelChatOptions {
   connectionId?: string | null;
@@ -296,7 +297,7 @@ export function useSidePanelChat({
           setLocalMessages(localMessagesRef.current);
         }
       } catch (err) {
-        console.error('[ResonaAISidePanel] Failed to upload files:', err);
+        logger.error('[ResonaAISidePanel] Failed to upload files:', err);
         toast.error('File upload failed. Proceeding without file context.');
       } finally {
         setIsUploading(false);
@@ -594,7 +595,7 @@ export function useSidePanelChat({
       }
     } catch (err: any) {
       isResumingRef.current = false;
-      console.error('[ResonaAISidePanel] Dashboard continue failed:', err);
+      logger.error('[ResonaAISidePanel] Dashboard continue failed:', err);
       const updated = [...localMessagesRef.current];
       const last = updated[updated.length - 1];
       if (last && last.id === assistantMsgId) {

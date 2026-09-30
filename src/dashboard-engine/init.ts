@@ -11,6 +11,7 @@
 import type { PanelRuntimeConfig, SectionRuntime } from './contract';
 import { panelConfigs, renderPanel } from './render';
 import { REFRESH_SVG } from './format';
+import { logger } from '@/lib/logger';
 
 export function resolveInitialConfig(panelKey: string, domConfig?: PanelRuntimeConfig): PanelRuntimeConfig {
   const fresh = window.__SW_PANELS__?.[panelKey];
@@ -419,7 +420,7 @@ window.addEventListener('DOMContentLoaded', () => {
         renderPanel('#' + el.id, domConfig);
       }
     } catch (e) {
-      console.warn('[swChart] Failed to parse config for', el.id, e);
+      logger.warn('[swChart] Failed to parse config for', el.id, e);
     }
   });
 

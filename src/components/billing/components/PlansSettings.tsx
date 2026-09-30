@@ -46,6 +46,7 @@ import {
 } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
+import { logger } from '@/lib/logger';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { useUserProfile } from '../../auth/hooks/useUserProfile';
 import { useCheckout } from '../hooks/useCheckout';
@@ -218,7 +219,7 @@ export function PlansSettings({ user, onOpenCollaboration }: PlansSettingsProps)
             win.document.write(html);
             win.document.close();
         } catch (err) {
-            console.error('[Billing] failed to load invoice:', err);
+            logger.error('[Billing] failed to load invoice:', err);
             toast.error('Failed to load invoice');
         } finally {
             setInvoiceLoadingId(null);

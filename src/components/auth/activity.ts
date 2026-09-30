@@ -13,7 +13,7 @@
 //    can be de-duplicated / counted per device.
 // =============================================================================
 
-import { API_BASE_URL, apiRequestRaw } from '@/lib/api/client';
+import { API_BASE_URL, apiRequestFetch } from '@/lib/api/client';
 
 const HEARTBEAT_INTERVAL_MS = 45_000;
 const DEVICE_KEY            = 'sw_device_id';
@@ -44,11 +44,9 @@ function getDeviceId(): string {
 // ─── transport ────────────────────────────────────────────────────────────────
 function postActivity(path: string, body: Record<string, unknown>): void {
   try {
-    // Phase 3: routed through the shared client so base URL, credentials and
-    // headers live in one place. `keepalive` is preserved so the request
-    // survives page unload, and the promise is deliberately not awaited —
-    // telemetry must never block or surface an error.
-    const res = apiRequestRaw(path, {
+    // Routed through apiRequestFetch (non-throwing) so telemetry remains
+    // fire-and-forget, never logs errors to console, and never dispatches 401 events.
+    const res = apiRequestFetch(path, {
       method: 'POST',
       keepalive: true,
       body: JSON.stringify(body),

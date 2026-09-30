@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { useMemo, useRef, useState, useEffect, useCallback } from 'react';
 import { cn } from '@/lib/utils';
+import { logger } from '@/lib/logger';
 import { formatTimeAgo } from '@/shared/lib/format';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -399,7 +400,7 @@ export function ExportButton({
                 currentRecent = saveRecentGoogleSheet(extraItem);
                 setRecentSheets(currentRecent);
               } catch (extraErr) {
-                console.error(`Failed to export ${extraTable} to Google Sheets:`, extraErr);
+                logger.error(`Failed to export ${extraTable} to Google Sheets:`, extraErr);
               }
             }
           }
@@ -691,7 +692,7 @@ export function ExportButton({
           triggerDownload(result.blob, result.filename);
           exportedCount += 1;
         } catch (tableErr) {
-          console.error(`Failed to export table ${targetTable}:`, tableErr);
+          logger.error(`Failed to export table ${targetTable}:`, tableErr);
         }
 
         // Brief delay between downloads so the browser handles each file reliably

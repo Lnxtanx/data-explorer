@@ -22,6 +22,7 @@ import {
     X,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { logger } from '@/lib/logger';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import {
@@ -268,7 +269,7 @@ export function MemorySettings() {
                 applyDocument(next);
             })
             .catch((err: unknown) => {
-                console.error('[MemorySettings] Failed to fetch document:', err);
+                logger.error('[MemorySettings] Failed to fetch document:', err);
                 if (!cancelled && !cached) toast.error('Could not load memory document');
             })
             .finally(() => {
@@ -316,7 +317,7 @@ export function MemorySettings() {
                 toast.error('Failed to save memory updates');
             }
         } catch (err: any) {
-            console.error('[MemorySettings] Save error:', err);
+            logger.error('[MemorySettings] Save error:', err);
             toast.error('Failed to save memory changes');
         } finally {
             setIsSaving(false);
@@ -361,7 +362,7 @@ export function MemorySettings() {
                 toast.error('Failed to recompile memory');
             }
         } catch (err: any) {
-            console.error('[MemorySettings] Recompile error:', err);
+            logger.error('[MemorySettings] Recompile error:', err);
             toast.error('Failed to recompile memory');
         } finally {
             setIsRecompiling(false);

@@ -12,6 +12,8 @@
 // kept (not closed) so the user-gesture resume state survives.
 // =============================================================================
 
+import { logger } from '@/lib/logger';
+
 const OUTPUT_SAMPLE_RATE = 24000;
 const JITTER_LEAD_SECONDS = 0.03;
 
@@ -67,7 +69,7 @@ export class VoiceAudioPlayer {
     public enqueueChunk(base64Pcm24k: string): void {
         if (!base64Pcm24k) return;
         if (this.ctx.state !== 'running') {
-            this.ctx.resume().catch((err) => console.warn('[VoicePlayer] auto-resume:', err));
+            this.ctx.resume().catch((err) => logger.warn('[VoicePlayer] auto-resume:', err));
         }
 
         const bytes = decodeBase64(base64Pcm24k);
@@ -139,7 +141,7 @@ function decodeBase64(base64: string): Uint8Array {
         }
         return bytes;
     } catch (err) {
-        console.error('[VoiceAudioPlayer] decodeBase64 error:', err);
+        logger.error('[VoiceAudioPlayer] decodeBase64 error:', err);
         return new Uint8Array(0);
     }
 }

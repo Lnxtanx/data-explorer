@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { cn } from '@/lib/utils';
+import { logger } from '@/lib/logger';
 import { API_BASE_URL } from '@/lib/api/client';
 import type { AgentArtifact } from '../../hooks/useAIAgent';
 
@@ -160,7 +161,7 @@ export function FilePreviewView({ artifact, onClose }: FilePreviewViewProps) {
                         setLoading(false);
                         return;
                     } catch (csvErr) {
-                        console.warn('[FilePreviewView] Failed to parse localContent as spreadsheet:', csvErr);
+                        logger.warn('[FilePreviewView] Failed to parse localContent as spreadsheet:', csvErr);
                     }
                 } else if (isText) {
                     setTextRaw(localContent);
@@ -289,7 +290,7 @@ export function FilePreviewView({ artifact, onClose }: FilePreviewViewProps) {
             setSheets(parsedSheets);
             setActiveSheetIdx(0);
         } catch (err: any) {
-            console.error('[FilePreviewView] load error:', err);
+            logger.error('[FilePreviewView] load error:', err);
             setError(err?.message || 'Failed to load file preview. The file may be private or the link expired.');
         } finally {
             setLoading(false);

@@ -4,6 +4,7 @@
 // =============================================================================
 
 import { apiRequest, apiRequestRaw } from '@/lib/api/client';
+import { logger } from '@/lib/logger';
 import type { AgentMode } from '@/lib/modes';
 import { SseChunkAssembler } from '@/lib/api/sseChunks';
 import type { InsightEvidence, PanelData } from '@/dashboard-engine/contract';
@@ -413,7 +414,7 @@ export async function generateDashboard(
         if (eventType === 'error' || e.message?.includes('Generation failed')) {
           throw e;
         }
-        console.warn('[Dashboard SSE] Failed to parse message data:', dataStr);
+        logger.warn('[Dashboard SSE] Failed to parse message data:', dataStr);
       }
     }
   };
