@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { Plus, Send, Database, LayoutDashboard, FolderOpen, AtSign, X, FileText, Square, Loader2, AlertTriangle } from 'lucide-react';
+import { Plus, Send, Database, LayoutDashboard, FolderOpen, AtSign, X, Square, Loader2, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
@@ -12,6 +12,7 @@ import type { AgentWarning, ContextMeta } from '../types';
 
 import { TablePreview } from '../messages/TablePreview';
 import { ContextWindowBar } from './ContextWindowBar';
+import AttachmentChip from './AttachmentChip';
 
 // ─── Mention Overlay ──────────────────────────────────────────────────────────
 
@@ -178,6 +179,7 @@ export interface ChatInputProps {
     localMessageCount?: number;
     tokenCount?: number | null;
     isEmptyState?: boolean;
+    isDockedInOverlay?: boolean;
     isVoiceActive?: boolean;
     isVoiceConnecting?: boolean;
     isVoiceTalking?: boolean;
@@ -195,6 +197,7 @@ export function ChatInput({
     agentWarnings, onDismissWarning,
     contextMeta, localMessageCount, tokenCount,
     isEmptyState = false,
+    isDockedInOverlay = false,
     isVoiceActive = false,
     isVoiceConnecting = false,
     isVoiceTalking = false,
@@ -352,20 +355,7 @@ export function ChatInput({
                     {attachedFiles.length > 0 && (
                         <div className="flex flex-wrap gap-2 px-3.5 pt-3 pb-1">
                             {attachedFiles.map((file, i) => (
-                                <div key={i} className="flex items-center gap-2 bg-muted/50 border border-border/50 rounded-lg pl-2 pr-1 py-1 text-xs">
-                                    <FileText className="w-3.5 h-3.5 text-muted-foreground" />
-                                    <span className="truncate max-w-[120px] font-medium">{file.name}</span>
-                                    <ActionTooltip label="Remove file" side="top">
-                                        <button
-                                            type="button"
-                                            className="h-4 w-4 flex items-center justify-center rounded-full hover:bg-muted text-muted-foreground cursor-pointer"
-                                            onClick={() => onRemoveFile(i)}
-                                            aria-label={`Remove ${file.name}`}
-                                        >
-                                            <X className="w-2.5 h-2.5" />
-                                        </button>
-                                    </ActionTooltip>
-                                </div>
+                                <AttachmentChip key={i} file={file} onRemove={() => onRemoveFile(i)} />
                             ))}
                         </div>
                     )}
@@ -548,11 +538,11 @@ export function ChatInput({
     // ─────────────────────────────────────────────────────────────────────────────
     return (
         <div className={cn(
-            isVoiceActive
+            isDockedInOverlay
                 ? 'w-full relative mt-1'
                 : 'absolute bottom-0 left-0 right-0 bg-gradient-to-t from-background via-background/98 to-transparent pt-3 pb-3 px-4 z-20'
         )}>
-            <div className={cn(isVoiceActive ? 'w-full relative' : 'max-w-3xl mx-auto relative')}>
+            <div className={cn(isDockedInOverlay ? 'w-full relative' : 'max-w-3xl mx-auto relative')}>
                 {banners}
 
                 {/* Active Chat Input Card */}
@@ -561,20 +551,13 @@ export function ChatInput({
                     {attachedFiles.length > 0 && (
                         <div className="flex flex-wrap gap-1.5 px-3.5 pt-2.5 pb-0.5">
                             {attachedFiles.map((file, i) => (
-                                <div key={i} className="flex items-center gap-1.5 bg-muted/60 border border-border/60 rounded-lg pl-2 pr-1 py-0.5 text-xs shadow-sm">
-                                    <FileText className="w-3 h-3 text-muted-foreground" />
-                                    <span className="truncate max-w-[120px] font-medium text-[11px]">{file.name}</span>
-                                    <ActionTooltip label="Remove file" side="top">
-                                        <button
-                                            type="button"
-                                            className="h-3.5 w-3.5 flex items-center justify-center rounded-full hover:bg-muted text-muted-foreground cursor-pointer"
-                                            onClick={() => onRemoveFile(i)}
-                                            aria-label={`Remove ${file.name}`}
-                                        >
-                                            <X className="w-2.5 h-2.5" />
-                                        </button>
-                                    </ActionTooltip>
-                                </div>
+                                <AttachmentChip
+                                    key={i}
+                                    file={file}
+                                    size="sm"
+                                    onRemove={() => onRemoveFile(i)}
+                                    removeClassName="shadow-none"
+                                />
                             ))}
                         </div>
                     )}

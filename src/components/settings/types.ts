@@ -7,6 +7,7 @@ export type SettingsSection =
     | 'profile'
     | 'usage'
     | 'plans'
+    | 'memory'
     | 'appearance'
     | 'shortcuts'
     | 'collaboration'

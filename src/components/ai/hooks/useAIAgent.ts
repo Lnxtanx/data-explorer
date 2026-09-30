@@ -407,7 +407,7 @@ export function useAIAgent(): UseAIAgentResult {
                         phase: 'idle',
                         phaseDetail: '',
                         tokenCount: (evt.usage?.outputTokens ?? evt.usage?.output_tokens) ?? prev.tokenCount,
-                        creditsUsed: evt.usage?.creditsUsed ?? prev.creditsUsed,
+                        creditsUsed: (evt.usage?.creditsUsed ?? evt.usage?.credits_used) ?? prev.creditsUsed,
                         iterations: evt.iterations ?? prev.iterations,
                         chatId: evt.chat_id ?? prev.chatId,
                         model: evt.usage?.synthesisModel ?? prev.model ?? null,
@@ -422,7 +422,7 @@ export function useAIAgent(): UseAIAgentResult {
                     phase:       'done',
                     phaseDetail: '',
                     tokenCount:  (evt.usage?.outputTokens ?? evt.usage?.output_tokens) ?? prev.tokenCount,
-                    creditsUsed: evt.usage?.creditsUsed ?? prev.creditsUsed,
+                    creditsUsed: (evt.usage?.creditsUsed ?? evt.usage?.credits_used) ?? prev.creditsUsed,
                     iterations:  evt.iterations ?? prev.iterations,
                     chatId:      evt.chat_id ?? prev.chatId,
                     model:       evt.usage?.synthesisModel ?? prev.model ?? null,
@@ -443,6 +443,12 @@ export function useAIAgent(): UseAIAgentResult {
                     } : prev.granularUsage,
                 }));
                 pausedRef.current = false;
+                // Clear the paused-run mirror too. A nested clarification leaves
+                // pausedRunId set; once this leg completes normally that id is
+                // finished, and leaving it would make the NEXT message try to
+                // resume a completed run (409) instead of starting a new one.
+                setPausedRunId(null);
+                pauseEventIndexRef.current = 0;
                 clearPending();
                 return true; // stop stream
             }
@@ -627,13 +633,29 @@ export function useAIAgent(): UseAIAgentResult {
     // the stale done — is skipped entirely). The backend continues the SAME
     // conversation with the answer appended.
     const resume = useCallback(async (answer: string): Promise<boolean> => {
-        // Resolve the paused run from live refs/state, falling back to the
-        // session-persisted record (survives a reset/remount between the pause
-        // display and the user's answer). Returns false when there is nothing
-        // to resume so callers can fall through to a fresh run.
-        const runId = runIdRef.current ?? state.runId ?? pausedRunId ?? readPending()?.runId ?? null;
+        // Only a run that actually PAUSED can be resumed.
+        //
+        // `runIdRef.current` / `state.runId` are populated for EVERY run, so
+        // keying the lookup off them made every follow-up message fire a doomed
+        // resume against the previous, already-completed run — the backend
+        // correctly answered 409 RUN_ALREADY_COMPLETED, the client swallowed
+        // nothing, and only then fell through to starting a fresh run. One
+        // wasted request and a spurious error per message.
+        //
+        // A run is resumable when any of these says it is paused:
+        //   1. pausedRunId          — live pause, mirrored into state
+        //   2. pausedRef            — live pause, survives a reset() (no remount)
+        //   3. a session-persisted  — survives a remount between the pause and
+        //      pause record           the answer (stampPendingPause writes it,
+        //                               and a normal completion clearPending()s it)
+        const pending = readPending();
+        const runId =
+            pausedRunId
+            ?? (pausedRef.current ? (runIdRef.current ?? state.runId ?? pending?.runId ?? null) : null)
+            ?? (pending?.eventIndex !== undefined ? pending.runId : null);
+
         if (!runId) return false;
-        const since = pauseEventIndexRef.current || readPending()?.eventIndex || 0;
+        const since = pauseEventIndexRef.current || pending?.eventIndex || 0;
 
         abortRef.current?.abort();
         const controller = new AbortController();

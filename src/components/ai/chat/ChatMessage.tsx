@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
-import { Check, Copy, AtSign, FileText, Download, Database, ChevronDown, ChevronUp, Eye } from 'lucide-react';
+import { Check, Copy, AtSign, Download, Database, ChevronDown, ChevronUp, Eye, Loader2 } from 'lucide-react';
+import AttachmentThumb from './AttachmentThumb';
+import ImageLightbox from './ImageLightbox';
+import { imagePreviewUrl, isImageName } from './utils/fileValidation';
 import { cn, stripTemporalTag } from '@/lib/utils';
 import { MarkdownText } from '../messages/MarkdownText';
 import { AgentStatusBar } from '../messages/AgentStatusBar';
@@ -55,6 +58,7 @@ export const ChatMessage = React.memo(function ChatMessage({
 }: ChatMessageProps) {
     const isUser = msg.role === 'user';
     const [isUserExpanded, setIsUserExpanded] = useState(false);
+    const [preview, setPreview] = useState<{ src: string; name: string; downloadUrl?: string } | null>(null);
     const rawContent = msg.content || '';
     const displayContent = isUser ? stripTemporalTag(rawContent) : rawContent;
     const userLineCount = isUser ? displayContent.split('\n').length : 0;
@@ -129,12 +133,24 @@ export const ChatMessage = React.memo(function ChatMessage({
                                             key={i}
                                             onClick={(e) => {
                                                 e.stopPropagation();
-                                                onExpand?.(att);
+                                                // Images open a real lightbox; everything
+                                                // else keeps the generic artifact panel.
+                                                const name = att.filename || att.fileName;
+                                                const src = isImageName(name) ? imagePreviewUrl(att) : null;
+                                                if (src) {
+                                                    setPreview({ src, name, downloadUrl: att.download_url || att.downloadUrl });
+                                                } else {
+                                                    onExpand?.(att);
+                                                }
                                             }}
                                             className="flex items-center gap-2 bg-background/80 hover:bg-background border border-border/60 hover:border-primary/50 rounded-lg px-2.5 py-1.5 text-xs shadow-sm cursor-pointer transition-all group"
-                                            title="Click to preview file"
+                                            title="Click to preview"
                                         >
-                                            <FileText className="w-3.5 h-3.5 text-primary group-hover:scale-110 transition-transform" />
+                                            <AttachmentThumb
+                                                name={att.filename || att.fileName}
+                                                artifact={att}
+                                                className="w-6 h-6"
+                                            />
                                             <div className="flex flex-col text-left">
                                                 <span className="font-medium text-foreground truncate max-w-[140px] group-hover:text-primary transition-colors">
                                                     {att.filename || att.fileName || 'Attachment'}
@@ -178,6 +194,8 @@ export const ChatMessage = React.memo(function ChatMessage({
                                             key={i}
                                             onClick={(e) => {
                                                 e.stopPropagation();
+                                                // Nothing to preview until the upload lands.
+                                                if (msg.attachmentsUploading) return;
                                                 const syntheticAtt = {
                                                     type: 'attachment' as const,
                                                     fileName: f,
@@ -186,12 +204,25 @@ export const ChatMessage = React.memo(function ChatMessage({
                                                 };
                                                 onExpand?.(syntheticAtt as any);
                                             }}
-                                            className="flex items-center gap-1.5 bg-background/50 hover:bg-background/80 border border-border/50 hover:border-primary/40 rounded-lg px-2.5 py-1 text-xs cursor-pointer transition-colors"
-                                            title="Click to preview file"
+                                            className={cn(
+                                                "flex items-center gap-1.5 bg-background/50 hover:bg-background/80 border border-border/50 rounded-lg px-2.5 py-1 text-xs transition-colors",
+                                                msg.attachmentsUploading ? "opacity-70 cursor-default" : "hover:border-primary/40 cursor-pointer"
+                                            )}
+                                            title={msg.attachmentsUploading ? 'Uploading…' : 'Click to preview file'}
                                         >
-                                            <FileText className="w-3 h-3 text-muted-foreground" />
+                                            {msg.attachmentsUploading ? (
+                                                <Loader2 className="w-3 h-3 animate-spin text-muted-foreground shrink-0" />
+                                            ) : (
+                                                <AttachmentThumb
+                                                    name={f}
+                                                    className="w-3 h-3"
+                                                    iconClassName="w-3 h-3 text-muted-foreground"
+                                                />
+                                            )}
                                             <span>{f}</span>
-                                            <Eye className="w-2.5 h-2.5 text-muted-foreground/60 ml-0.5" />
+                                            {!msg.attachmentsUploading && (
+                                                <Eye className="w-2.5 h-2.5 text-muted-foreground/60 ml-0.5" />
+                                            )}
                                         </div>
                                     ))}
                                 </div>
@@ -341,6 +372,15 @@ export const ChatMessage = React.memo(function ChatMessage({
                     </div>
                 )}
             </div>
+
+            {preview && (
+                <ImageLightbox
+                    src={preview.src}
+                    filename={preview.name}
+                    downloadUrl={preview.downloadUrl}
+                    onClose={() => setPreview(null)}
+                />
+            )}
         </div>
     );
 });

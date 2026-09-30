@@ -7,7 +7,8 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import {
-    Download, Share2, Check, AlertCircle, } from 'lucide-react';
+    Download, Share2, Check, AlertCircle, ExternalLink, FileText,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 // ── Authentic HTML5 Shield Icon ───────────────────────────────────────────────
@@ -134,38 +135,50 @@ export default function PublicReportViewer() {
         );
     }
 
+    const format = (meta.format || '').toLowerCase();
+    // Chrome's built-in PDF viewer is an EXTENSION-provided plugin. A sandboxed
+    // frame cannot host an extension plugin, so sandboxing a PDF iframe aborts the
+    // request (net::ERR_ABORTED) and Chrome renders "This page has been blocked by
+    // Chrome". HTML reports are genuinely untrusted model output, so those keep the
+    // sandbox — minus allow-same-origin, which would let the framed document reach
+    // back into this same-origin page and strip its own sandbox.
+    const isPdf = format === 'pdf';
+    const frameSrc = isPdf ? `${meta.rawUrl}#toolbar=0&navpanes=0&view=FitH` : meta.rawUrl;
+
     return (
-        <div className="flex flex-col h-screen w-screen bg-white text-slate-900 overflow-hidden select-none">
-            {/* Top Brand & Actions Navigation Bar — White / Clean Theme */}
-            <header className="flex items-center justify-between px-4 py-2.5 bg-white border-b border-slate-200/80 shrink-0 gap-3 shadow-sm">
+        <div className="flex flex-col min-h-screen md:h-[100dvh] bg-white text-slate-900">
+            {/* Top Brand & Actions Navigation Bar — stacks on narrow screens */}
+            <header className="flex flex-wrap items-center justify-between gap-2 px-3 sm:px-4 py-2.5 bg-white border-b border-slate-200/80 shrink-0 shadow-sm">
                 {/* Brand & Title */}
-                <div className="flex items-center gap-3 min-w-0 flex-1 overflow-hidden">
+                <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1 overflow-hidden">
                     {/* Schema Weaver Data Explorer Brand */}
                     <div className="flex items-center gap-2 shrink-0">
                         <img src="/resona.png" alt="Schema Weaver" className="w-5 h-5 object-contain shrink-0" />
                         <div className="flex items-center gap-1.5 text-xs tracking-tight">
                             <span className="font-bold text-slate-900">Schema Weaver</span>
-                            <span className="text-slate-300 font-normal">/</span>
-                            <span className="font-semibold text-slate-600 hidden sm:inline">Data Explorer</span>
+                            <span className="hidden sm:inline text-slate-300 font-normal">/</span>
+                            <span className="hidden sm:inline font-semibold text-slate-600">Data Explorer</span>
                         </div>
                     </div>
 
-                    <div className="h-4 w-px bg-slate-200 shrink-0 mx-0.5" />
+                    <div className="hidden sm:block h-4 w-px bg-slate-200 shrink-0 mx-0.5" />
 
                     {/* Report File Info */}
                     <div className="flex items-center gap-2 min-w-0 flex-1 overflow-hidden">
-                        <Html5Icon className="w-4 h-4 shrink-0" />
+                        {isPdf
+                            ? <FileText className="w-4 h-4 shrink-0 text-rose-500" />
+                            : <Html5Icon className="w-4 h-4 shrink-0" />}
                         <h1 className="text-xs sm:text-sm font-semibold text-slate-800 truncate" title={meta.title || meta.filename}>
                             {meta.title || meta.filename}
                         </h1>
-                        <span className="text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-orange-500/10 text-orange-600 border border-orange-500/20 shrink-0">
+                        <span className="hidden sm:inline text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-orange-500/10 text-orange-600 border border-orange-500/20 shrink-0">
                             Report
                         </span>
                     </div>
                 </div>
 
                 {/* Right Action Controls */}
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto justify-end">
                     {/* Copy Share Link */}
                     <button
                         type="button"
@@ -182,6 +195,21 @@ export default function PublicReportViewer() {
                         <span className="hidden sm:inline">{copied ? "Link Copied!" : "Share Link"}</span>
                     </button>
 
+                    {/* Open in a new tab — the reliable path for PDFs, where the
+                        iframe viewer can be finicky on mobile browsers. */}
+                    {isPdf && (
+                        <a
+                            href={meta.rawUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 transition-colors shadow-sm cursor-pointer"
+                            title="Open report in a new tab"
+                        >
+                            <ExternalLink className="w-3.5 h-3.5 text-slate-500" />
+                            <span className="hidden sm:inline">Open</span>
+                        </a>
+                    )}
+
                     {/* Direct Download */}
                     <a
                         href={meta.downloadUrl}
@@ -195,14 +223,25 @@ export default function PublicReportViewer() {
                 </div>
             </header>
 
-            {/* Embedded High-Fidelity Report Content */}
-            <main className="flex-1 w-full h-full bg-white overflow-hidden">
-                <iframe
-                    src={meta.rawUrl}
-                    className="w-full h-full border-0 bg-white"
-                    title={meta.title || meta.filename}
-                    sandbox="allow-scripts allow-popups allow-modals allow-same-origin"
-                />
+            {/* Embedded High-Fidelity Report Content. main is a COLUMN flex box and
+                the frame is flex-1/min-h-0: `h-full` does not resolve against a
+                flex-sized parent, which left the iframe at its default 150px on
+                narrow screens. */}
+            <main className="flex-1 min-h-[70vh] md:min-h-0 w-full bg-white overflow-hidden flex flex-col">
+                {isPdf ? (
+                    <iframe
+                        src={frameSrc}
+                        className="w-full flex-1 min-h-0 border-0 bg-white"
+                        title={meta.title || meta.filename}
+                    />
+                ) : (
+                    <iframe
+                        src={frameSrc}
+                        className="w-full flex-1 min-h-0 border-0 bg-white"
+                        title={meta.title || meta.filename}
+                        sandbox="allow-scripts allow-popups allow-modals"
+                    />
+                )}
             </main>
         </div>
     );

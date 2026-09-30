@@ -60,13 +60,21 @@ export class VoiceAudioRecorder {
         source.connect(worklet);
 
         worklet.port.onmessage = (event: MessageEvent<ArrayBuffer>) => {
-            if (this.isMuted) return;
+            // Muted audio is sent as SILENCE, not dropped. Dropping chunks
+            // punched a hole in the session timeline, so every later segment
+            // was laid down compressed against the other speaker's audio and
+            // the saved recording drifted out of sync with real time.
+            if (this.isMuted) {
+                onChunk(new ArrayBuffer(event.data.byteLength));
+                return;
+            }
             onChunk(event.data);
         };
     }
 
     /**
-     * Set microphone mute status. When muted, audio tracks are disabled and chunks are dropped.
+     * Set microphone mute status. When muted, tracks are disabled and chunks are
+     * forwarded as silence so the recording timeline stays continuous.
      */
     public setMuted(muted: boolean): void {
         this.isMuted = muted;

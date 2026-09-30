@@ -490,7 +490,15 @@ export interface DoneEvent {
         output_tokens?: number;
         outputTokens?: number;
         synthesisModel?: string;
+        synthesis_model?: string;
         creditsUsed?: number;
+        /** The Python service serialises UsageInfo with snake_case fields
+         *  (src/streaming/event_types.py) and there is no camelCase
+         *  conversion in the SSE emitter, so the wire format is
+         *  `credits_used`. Accepted under both names — same as the token
+         *  fields above. */
+        credits_used?: number;
+        input_tokens?: number;
         // Granular token tracking
         cacheCreationTokens?: number;
         cacheReadTokens?: number;

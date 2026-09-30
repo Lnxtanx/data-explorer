@@ -3,10 +3,11 @@
 // Unified Voice Session Visualizer & Control Bar Container
 // =============================================================================
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { VoiceOrbStage } from './VoiceOrbStage';
 import { VoiceControlBar } from './VoiceControlBar';
 import type { OrbState } from '../orbs/orb-state';
+import { useOptionalVoiceSessionContext } from '../hooks/VoiceSessionProvider';
 
 export interface VoiceSessionOverlayProps {
     isActive: boolean;
@@ -19,7 +20,10 @@ export interface VoiceSessionOverlayProps {
     onToggleType: () => void;
     onToggleMute: () => void;
     onEndSession: () => void;
+    onMinimize?: () => void;
     variant?: 'hero' | 'docked';
+    /** When 'minimized', the overlay renders nothing and FloatingVoiceOrb takes over. */
+    presence?: 'expanded' | 'minimized';
     children?: React.ReactNode;
     className?: string;
 }
@@ -35,15 +39,34 @@ export const VoiceSessionOverlay: React.FC<VoiceSessionOverlayProps> = ({
     onToggleType,
     onToggleMute,
     onEndSession,
+    onMinimize,
     variant = 'docked',
+    presence = 'expanded',
     children,
     className = '',
 }) => {
+    const voiceContext = useOptionalVoiceSessionContext();
+
+    useEffect(() => {
+        if (!isActive || presence === 'minimized') {
+            voiceContext?.setIsOverlayMounted(false);
+            return;
+        }
+        voiceContext?.setIsOverlayMounted(true);
+        return () => {
+            voiceContext?.setIsOverlayMounted(false);
+        };
+    }, [isActive, presence, voiceContext]);
+
     if (!isActive) return null;
+
+    // Minimised means ONE orb: the floating one. Rendering the docked orb here
+    // as well would leave two on screen, and the user only asked for the orb.
+    if (presence === 'minimized') return null;
 
     if (variant === 'hero') {
         return (
-            <div className={`flex-1 overflow-y-auto flex flex-col items-center justify-center px-4 py-8 select-none ${className}`}>
+            <div className={`flex-1 overflow-y-auto flex flex-col items-center justify-center px-4 py-8 select-none animate-in fade-in zoom-in-95 duration-300 ${className}`}>
                 <div className="w-full max-w-xl flex flex-col items-center text-center">
                     <VoiceOrbStage
                         orbState={orbState}
@@ -61,6 +84,7 @@ export const VoiceSessionOverlay: React.FC<VoiceSessionOverlayProps> = ({
                             onToggleType={onToggleType}
                             onToggleMute={onToggleMute}
                             onEndSession={onEndSession}
+                            onMinimize={onMinimize}
                         />
                         {children}
                     </div>
@@ -71,7 +95,7 @@ export const VoiceSessionOverlay: React.FC<VoiceSessionOverlayProps> = ({
 
     // Default: 'docked' bottom overlay during ongoing chat stream
     return (
-        <div className={`absolute bottom-0 left-0 right-0 z-30 p-4 pointer-events-none flex flex-col items-center ${className}`}>
+        <div className={`absolute bottom-0 left-0 right-0 z-30 p-4 pointer-events-none flex flex-col items-center animate-in fade-in slide-in-from-bottom-2 duration-300 ${className}`}>
             <VoiceOrbStage
                 orbState={orbState}
                 audioLevelRef={audioLevelRef}
@@ -89,6 +113,7 @@ export const VoiceSessionOverlay: React.FC<VoiceSessionOverlayProps> = ({
                     onToggleType={onToggleType}
                     onToggleMute={onToggleMute}
                     onEndSession={onEndSession}
+                    onMinimize={onMinimize}
                 />
                 {children}
             </div>

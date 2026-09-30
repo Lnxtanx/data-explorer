@@ -18,6 +18,7 @@ import { SettingsSidebar } from './SettingsSidebar';
 import { ProfileSettings } from './ProfileSettings';
 import { PlansSettings } from '../billing/components/PlansSettings';
 import { UsageSettings } from '../billing/components/UsageSettings';
+import { MemorySettings } from './MemorySettings';
 import { AppearanceSettings } from './AppearanceSettings';
 import { ShortcutsSettings } from './ShortcutsSettings';
 import { DocumentationSettings } from './DocumentationSettings';
@@ -51,6 +52,8 @@ export function SettingsModal({ isOpen, onClose, user, signOut, signInWithGoogle
                 return <UsageSettings />;
             case 'plans':
                 return <PlansSettings user={user} onOpenCollaboration={() => setActiveSection('collaboration')} />;
+            case 'memory':
+                return <MemorySettings />;
             case 'appearance':
                 return <AppearanceSettings />;
             case 'shortcuts':

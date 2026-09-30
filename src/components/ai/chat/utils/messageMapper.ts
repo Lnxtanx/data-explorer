@@ -168,7 +168,12 @@ export function mapDbMessageToLocal(m: AIMessage, index?: number, allMessages?: 
         sql: m.artifacts?.[0]?.sql ?? undefined,
         artifacts: artifacts.length > 0 ? artifacts : undefined,
         toolSteps,
-        tokenCount: m.token_count,
+        tokenCount: m.token_count ?? m.usage?.total_tokens ?? null,
+        // The live message gets creditsUsed from the SSE `done` frame; a
+        // rehydrated message only has what was persisted on chat_messages.usage.
+        // Both casings accepted — the Python writer uses snake_case.
+        creditsUsed: m.usage?.credits_used ?? m.usage?.creditsUsed ?? null,
+        model: m.model_used ?? m.usage?.model ?? null,
         userId: m.user_id ?? null,
         isMine: m.isMine ?? true,
         authorName: m.authorName ?? null,

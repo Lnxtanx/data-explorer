@@ -11,6 +11,35 @@ import { sanitizeToolInput, sanitizeToolSummary } from '../../ai/tools/toolSanit
 import { stripTemporalTag } from '@/lib/utils';
 
 /**
+ * The backend appends the attachments to the user turn for the MODEL, so a
+ * transcript can contain raw prompt scaffolding:
+ *
+ *   can you see this job
+ *
+ *   ### Attached Files:
+ *   <uploaded_file name="shot.png" type="image/png">...</uploaded_file>
+ *
+ * That is not something a user typed. Rendering it verbatim both leaks prompt
+ * scaffolding into the chat and breaks the duplicate-turn check below, because
+ * the augmented text never equals the clean local copy.
+ *
+ * Returns the display text plus the attachment names it contained.
+ */
+export function splitAttachedFiles(raw: string): { text: string; fileNames: string[] } {
+  const marker = '\n\n### Attached Files:\n';
+  const idx = raw.indexOf(marker);
+  if (idx < 0) return { text: raw, fileNames: [] };
+  const text = raw.slice(0, idx);
+  const block = raw.slice(idx + marker.length);
+  const fileNames: string[] = [];
+  const re = /<uploaded_file[^>]*\bname="([^"]+)"/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(block)) !== null) fileNames.push(m[1]);
+  return { text, fileNames };
+}
+
+
+/**
  * Map a durable run's transcript (user/assistant/tool messages) into side-panel
  * bubbles. Assistant content is surfaced; tool/system scaffolding, internal ids
  * and SQL are stripped so history reads like a conversation, not a wire dump.
@@ -26,11 +55,14 @@ export function transcriptToMessages(runState: DashboardRunState, _isResuming: b
   for (const m of rawTranscript) {
     if (m.role === 'system') continue;
     if (m.role === 'user') {
-      const content = stripTemporalTag((m.content || '').trim());
+      // Compare on the DISPLAY text: a transcript turn carries the model's
+      // <uploaded_file> block while the optimistic local turn does not, so a
+      // raw string compare never matches and the message renders twice.
+      const content = splitAttachedFiles(stripTemporalTag((m.content || '').trim())).text;
       if (!content) continue;
       const lastMsg = transcript[transcript.length - 1];
       if (lastMsg && lastMsg.role === 'user') {
-        const prevContent = stripTemporalTag((lastMsg.content || '').trim());
+        const prevContent = splitAttachedFiles(stripTemporalTag((lastMsg.content || '').trim())).text;
         if (prevContent === content) {
           continue; // drop immediate duplicate user turn
         }
@@ -39,20 +71,34 @@ export function transcriptToMessages(runState: DashboardRunState, _isResuming: b
     transcript.push(m);
   }
 
+
   let currentAssistantMsg: SidePanelMessage | null = null;
   const toolStepMap = new Map<string, AgentToolStep>();
   const seenStepKeys = new Set<string>();
 
   for (const m of transcript) {
     if (m.role === 'user') {
-      const content = stripTemporalTag((m.content || '').trim());
+      const split = splitAttachedFiles(stripTemporalTag((m.content || '').trim()));
+      const content = split.text;
       const timestamp = (m as any).timestamp || (m as any).created_at || runState.created_at;
       if (content) {
         currentAssistantMsg = null;
         const files = Array.isArray((m as any).files)
           ? (m as any).files
           : (typeof (m as any).files === 'string' ? [(m as any).files] : undefined);
-        msgs.push({ id: (m as any).id || `u-${msgs.length}-${(m as any).timestamp || (m as any).created_at || msgs.length}`, role: 'user', content, timestamp, files });
+        // Prefer ids when the turn carries them; otherwise fall back to the
+        // names recovered from the <uploaded_file> block so the chip still shows.
+        const attachments = (m as any).attachments?.length
+          ? (m as any).attachments
+          : (split.fileNames.length ? split.fileNames.map((name) => ({ name })) : undefined);
+        msgs.push({
+          id: (m as any).id || `u-${msgs.length}-${(m as any).timestamp || (m as any).created_at || msgs.length}`,
+          role: 'user',
+          content,
+          timestamp,
+          files,
+          attachments,
+        });
       }
     } else if (m.role === 'assistant') {
       const content = (m.content || '').trim();
@@ -181,12 +227,16 @@ export function transcriptToMessages(runState: DashboardRunState, _isResuming: b
   if (!hasUserMsg && (runState.message || (runState as any).request_payload?.message)) {
     const userPrompt = stripTemporalTag(runState.message || (runState as any).request_payload?.message);
     if (userPrompt) {
-      msgs.unshift({
-        id: `u-initial-${runState.id || 'fallback'}`,
-        role: 'user',
-        content: userPrompt,
-        timestamp: runState.created_at,
-      });
+      const split = splitAttachedFiles(userPrompt);
+      if (split.text) {
+        msgs.unshift({
+          id: `u-initial-${runState.id || 'fallback'}`,
+          role: 'user',
+          content: split.text,
+          timestamp: runState.created_at,
+          attachments: split.fileNames.length ? split.fileNames.map((name) => ({ name })) : undefined,
+        });
+      }
     }
   }
 

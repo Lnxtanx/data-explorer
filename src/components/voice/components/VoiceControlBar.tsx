@@ -10,7 +10,7 @@
 // =============================================================================
 
 import React from 'react';
-import { Mic, MicOff, X, Keyboard, Loader2 } from 'lucide-react';
+import { Mic, MicOff, X, Keyboard, Loader2, Minimize2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ActionTooltip } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
@@ -25,6 +25,7 @@ interface VoiceControlBarProps {
     onToggleType: () => void;
     onToggleMute: () => void;
     onEndSession: () => void;
+    onMinimize?: () => void;
     className?: string;
 }
 
@@ -37,6 +38,7 @@ export const VoiceControlBar: React.FC<VoiceControlBarProps> = ({
     onToggleType,
     onToggleMute,
     onEndSession,
+    onMinimize,
     className,
 }) => {
     // Dynamic indicator dot and equalizer color reflecting active state
@@ -100,22 +102,28 @@ export const VoiceControlBar: React.FC<VoiceControlBarProps> = ({
                 </Button>
             </div>
 
-            {/* Middle: Pure visual state — ambient glowing dot and fluid micro-waveform */}
-            <div className="flex items-center gap-3">
-                <span className={cn('w-2 h-2 rounded-full transition-colors duration-300', indicator.dot)} />
+            {/* Middle: Visual state & status indicator */}
+            <div className="flex items-center gap-2.5">
+                <span className={cn('w-2 h-2 rounded-full transition-colors duration-300 shrink-0', indicator.dot)} />
+
+                {isConnecting && (
+                    <span className="text-xs font-medium text-amber-600 dark:text-amber-400 tracking-wide animate-pulse select-none">
+                        Connecting...
+                    </span>
+                )}
 
                 {/* Animated soundbar equalizer */}
                 <div className="flex items-center gap-0.5 h-4">
-                    <span className={cn('w-0.5 h-2 rounded-full transition-all duration-300', indicator.bar, !isMuted && 'animate-[soundbar_0.8s_ease-in-out_infinite]')} />
-                    <span className={cn('w-0.5 h-3.5 rounded-full transition-all duration-300', indicator.bar, !isMuted && 'animate-[soundbar_0.6s_ease-in-out_infinite_0.1s]')} />
-                    <span className={cn('w-0.5 h-1.5 rounded-full transition-all duration-300', indicator.bar, !isMuted && 'animate-[soundbar_0.9s_ease-in-out_infinite_0.2s]')} />
-                    <span className={cn('w-0.5 h-3 rounded-full transition-all duration-300', indicator.bar, !isMuted && 'animate-[soundbar_0.7s_ease-in-out_infinite_0.15s]')} />
-                    <span className={cn('w-0.5 h-2 rounded-full transition-all duration-300', indicator.bar, !isMuted && 'animate-[soundbar_0.85s_ease-in-out_infinite_0.25s]')} />
+                    <span className={cn('w-0.5 h-2 rounded-full transition-all duration-300', indicator.bar, !isMuted && !isConnecting && 'animate-[soundbar_0.8s_ease-in-out_infinite]')} />
+                    <span className={cn('w-0.5 h-3.5 rounded-full transition-all duration-300', indicator.bar, !isMuted && !isConnecting && 'animate-[soundbar_0.6s_ease-in-out_infinite_0.1s]')} />
+                    <span className={cn('w-0.5 h-1.5 rounded-full transition-all duration-300', indicator.bar, !isMuted && !isConnecting && 'animate-[soundbar_0.9s_ease-in-out_infinite_0.2s]')} />
+                    <span className={cn('w-0.5 h-3 rounded-full transition-all duration-300', indicator.bar, !isMuted && !isConnecting && 'animate-[soundbar_0.7s_ease-in-out_infinite_0.15s]')} />
+                    <span className={cn('w-0.5 h-2 rounded-full transition-all duration-300', indicator.bar, !isMuted && !isConnecting && 'animate-[soundbar_0.85s_ease-in-out_infinite_0.25s]')} />
                 </div>
             </div>
 
-            {/* Right: Mute toggle & End session button */}
-            <div className="flex items-center gap-2">
+            {/* Right: Mute toggle, Minimize & End session button */}
+            <div className="flex items-center gap-1.5 sm:gap-2">
                 <ActionTooltip label={isMuted ? 'Unmute microphone' : 'Mute microphone'} side="top">
                     <Button
                         type="button"
@@ -124,7 +132,7 @@ export const VoiceControlBar: React.FC<VoiceControlBarProps> = ({
                         onClick={onToggleMute}
                         disabled={isConnecting}
                         className={cn(
-                            'w-9 h-9 rounded-xl transition-all',
+                            'w-9 h-9 rounded-xl transition-all cursor-pointer',
                             isMuted
                                 ? 'bg-rose-500/10 text-rose-500 hover:bg-rose-500/20 dark:hover:bg-rose-500/30'
                                 : 'text-muted-foreground hover:text-foreground hover:bg-muted/80'
@@ -134,13 +142,28 @@ export const VoiceControlBar: React.FC<VoiceControlBarProps> = ({
                     </Button>
                 </ActionTooltip>
 
-                <ActionTooltip label="End Resona Voice" side="top">
+                {onMinimize && (
+                    <ActionTooltip label="Minimize voice" side="top">
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={onMinimize}
+                            disabled={isConnecting}
+                            className="w-9 h-9 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-all cursor-pointer"
+                        >
+                            <Minimize2 className="w-4 h-4" />
+                        </Button>
+                    </ActionTooltip>
+                )}
+
+                <ActionTooltip label={isConnecting ? "Cancel connection" : "End Resona Voice"} side="top">
                     <Button
                         type="button"
                         variant="default"
                         size="icon"
                         onClick={onEndSession}
-                        className="w-9 h-9 rounded-xl bg-foreground text-background hover:bg-foreground/90 transition-all shadow-sm"
+                        className="w-9 h-9 rounded-xl bg-foreground text-background hover:bg-foreground/90 transition-all shadow-sm cursor-pointer"
                     >
                         {isConnecting ? (
                             <Loader2 className="w-4 h-4 animate-spin" />

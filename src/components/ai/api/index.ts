@@ -67,6 +67,16 @@ export interface AIMessage {
     artifacts: SqlArtifact[];
     created_at: string;
     token_count: number | null;
+    /** Per-message usage snapshot persisted by the run writer. Holds the credit
+     *  and token totals for the turn so the "N credits used" footer survives a
+     *  reload. snake_case as written by backend-ai. */
+    usage?: {
+        credits_used?: number | null;
+        creditsUsed?: number | null;
+        total_tokens?: number | null;
+        model?: string | null;
+    } | null;
+    model_used?: string | null;
     /** Author of this message (team-shared chats attribute per member). */
     user_id?: string | null;
     /** False when a teammate wrote this message in a shared thread. */

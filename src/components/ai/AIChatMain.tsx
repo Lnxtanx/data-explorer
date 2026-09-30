@@ -168,9 +168,10 @@ export function AIChatMain({
         onResetStreamAndAgent: resetBoth,
     });
 
-    // Voice Session Integration (Gemini Live)
+    // Voice Session Integration (Gemini Live). The socket lives in
+    // VoiceSessionProvider above the view switch; this only binds it to the
+    // chat being viewed and commits finished turns to the transcript.
     const voice = useChatVoiceIntegration({
-        connectionId,
         chatId,
         userName: greeting.firstName,
         agentMode,
@@ -192,7 +193,18 @@ export function AIChatMain({
     // Streaming state & quota detection
     const isStreaming = agentMode ? agentStatus === 'running' : streamStatus === 'streaming';
     const awaitingClarification = agentMode && agentStatus === 'awaiting_clarification';
-    const hasPausedRun = agentMode && (awaitingClarification || Boolean(agentRunId || pausedRunId));
+    // A run is "paused" ONLY when it stopped to ask a clarification.
+    //
+    // `agentRunId` is the durable run id and is set for EVERY run that has ever
+    // started, so including it here made hasPausedRun permanently true after the
+    // first message. The send orchestrator gates on this flag, so every
+    // subsequent message fired a doomed resume against the already-completed
+    // previous run — the backend answered 409 RUN_ALREADY_COMPLETED, and only
+    // then did the client fall through to starting a fresh run.
+    //
+    // `pausedRunId` is the honest signal: set only on a clarification pause and
+    // cleared when that leg completes.
+    const hasPausedRun = agentMode && (awaitingClarification || Boolean(pausedRunId));
     const activeError = agentMode ? agentError : streamError;
 
     const proactiveQuotaError = getProactiveQuotaError(usageStatus);
@@ -248,14 +260,29 @@ export function AIChatMain({
     handleSendRef.current = handleSend;
 
     // Finalize non-agent stream messages
+    //
+    // Same idempotence requirement as the agent path below: useAIStream exposes
+    // no run id, so guard on the status TRANSITION — finalize once per entry
+    // into a terminal status, and re-arm when the stream goes back to running.
+    // Without this, a late `streamedText`/`sqlArtifacts` change after 'done'
+    // appended another copy of the same reply and re-fired the invalidations.
+    const finalizedStreamRef = useRef(false);
+
     useEffect(() => {
-        if (!agentMode && (streamStatus === 'done' || streamStatus === 'aborted' || streamStatus === 'error')) {
+        const terminal = streamStatus === 'done' || streamStatus === 'aborted' || streamStatus === 'error';
+        if (!terminal) {
+            // Re-arm for the next run.
+            finalizedStreamRef.current = false;
+            return;
+        }
+        if (!agentMode && !finalizedStreamRef.current) {
+            finalizedStreamRef.current = true;
             setLocalMessages(prev => {
                 const nonStreaming = prev.filter(m => !m.isStreaming);
                 if (streamedText) {
                     return [
                         ...nonStreaming,
-                        { id: `assistant-${Date.now()}`, role: 'assistant', content: streamedText, sql: sqlArtifacts[0]?.sql },
+                        { id: `assistant-stream-${streamedChatId ?? 'run'}`, role: 'assistant', content: streamedText, sql: sqlArtifacts[0]?.sql },
                     ];
                 }
                 return nonStreaming;
@@ -265,11 +292,32 @@ export function AIChatMain({
                 queryClient.invalidateQueries({ queryKey: projectQueryKeys.all });
             }
         }
-    }, [streamStatus, agentMode, streamedText, sqlArtifacts, queryClient, setLocalMessages]);
+    }, [streamStatus, agentMode, streamedText, sqlArtifacts, streamedChatId, queryClient, setLocalMessages]);
 
     // Finalize agent stream messages
+    //
+    // IDEMPOTENCE IS LOAD-BEARING HERE. This effect must run exactly once per
+    // run, even though its dependency list has a dozen entries that keep moving
+    // AFTER status flips to 'done' — most notably `creditsUsed`, which arrives
+    // on the quota_update event that follows `done`.
+    //
+    // Previously it appended a fresh `assistant-${Date.now()}` on every
+    // invocation, so each late event produced another copy of the same reply
+    // (~500-600 of them), and because it also called invalidateQueries() each
+    // time, the refetches fed the effect again: a self-amplifying loop that
+    // also hammered the API into 429s. On reload the server-supplied history
+    // replaced the local list, which is why a refresh "fixed" it.
+    //
+    // `finalizedRunRef` is the single guard: one finalize per runId, and a
+    // deterministic message id so React keys stay stable.
+    const finalizedRunRef = useRef<string | null | undefined>(undefined);
+
     useEffect(() => {
         if (agentMode && (agentStatus === 'done' || agentStatus === 'aborted' || agentStatus === 'error' || agentStatus === 'awaiting_clarification')) {
+            // Already finalized this run — late events must not re-append.
+            if (finalizedRunRef.current === agentRunId) return;
+            finalizedRunRef.current = agentRunId;
+
             const hasOutput = Boolean(
                 agentText.trim() ||
                 artifacts.length > 0 ||
@@ -307,7 +355,10 @@ export function AIChatMain({
                     return [
                         ...nonStreaming,
                         {
-                            id: `assistant-${Date.now()}`,
+                            // Stable per run — not Date.now(). Two finalizes for
+                            // the same run would otherwise produce two distinct
+                            // keys and React would drop/duplicate children.
+                            id: `assistant-${agentRunId ?? 'run'}`,
                             role: 'assistant',
                             content: stripXmlTags(agentText),
                             planSteps: sanitizedPlanSteps,
@@ -332,7 +383,7 @@ export function AIChatMain({
                 queryClient.invalidateQueries({ queryKey: projectQueryKeys.all });
             }
         }
-    }, [agentStatus, agentMode, agentText, artifacts, toolSteps, planSteps, tokenCount, creditsUsed, model, connectionId, datasetCache, queryClient, setLocalMessages]);
+    }, [agentStatus, agentMode, agentRunId, agentText, artifacts, toolSteps, planSteps, tokenCount, creditsUsed, model, connectionId, datasetCache, queryClient, setLocalMessages]);
 
     // Track active created chatId
     const activeChatId = agentMode ? agentChatId : streamedChatId;
@@ -501,9 +552,10 @@ export function AIChatMain({
                         <ChatLoadingSkeleton />
                     </div>
                 </div>
-            ) : voice.isVoiceActive && finalDisplayMessages.length === 0 ? (
+            ) : voice.isVoiceActive && voice.presence !== 'minimized' && finalDisplayMessages.length === 0 ? (
                 <VoiceSessionOverlay
                     variant="hero"
+                    presence={voice.presence}
                     isActive={voice.isVoiceActive}
                     orbState={voice.voiceOrbState}
                     audioLevelRef={voice.voiceAudioLevelRef}
@@ -514,10 +566,11 @@ export function AIChatMain({
                     onToggleType={() => voice.setIsTypeOpen(prev => !prev)}
                     onToggleMute={voice.toggleVoiceMute}
                     onEndSession={voice.endVoiceSession}
+                    onMinimize={() => voice.setPresence('minimized')}
                 >
                     {voice.isTypeOpen && (
                         <div className="mt-3">
-                            <ChatInput {...chatInputProps} isEmptyState={false} />
+                            <ChatInput {...chatInputProps} isEmptyState={false} isDockedInOverlay />
                         </div>
                     )}
                 </VoiceSessionOverlay>
@@ -541,7 +594,7 @@ export function AIChatMain({
                     >
                         <div className={cn(
                             'max-w-3xl mx-auto w-full px-4 pt-8 flex flex-col gap-6',
-                            voice.isVoiceActive
+                            voice.isVoiceActive && voice.presence !== 'minimized'
                                 ? (voice.isTypeOpen ? 'pb-80' : 'pb-64')
                                 : 'pb-48 sm:pb-52'
                         )}>
@@ -599,9 +652,10 @@ export function AIChatMain({
                         </div>
                     </div>
 
-                    {voice.isVoiceActive ? (
+                    {voice.isVoiceActive && voice.presence !== 'minimized' ? (
                         <VoiceSessionOverlay
                             variant="docked"
+                            presence={voice.presence}
                             isActive={voice.isVoiceActive}
                             orbState={voice.voiceOrbState}
                             audioLevelRef={voice.voiceAudioLevelRef}
@@ -612,9 +666,10 @@ export function AIChatMain({
                             onToggleType={() => voice.setIsTypeOpen(prev => !prev)}
                             onToggleMute={voice.toggleVoiceMute}
                             onEndSession={voice.endVoiceSession}
+                            onMinimize={() => voice.setPresence('minimized')}
                         >
                             {voice.isTypeOpen && (
-                                <ChatInput {...chatInputProps} isEmptyState={false} />
+                                <ChatInput {...chatInputProps} isEmptyState={false} isDockedInOverlay />
                             )}
                         </VoiceSessionOverlay>
                     ) : (

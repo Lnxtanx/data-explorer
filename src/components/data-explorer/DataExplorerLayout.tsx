@@ -5,7 +5,7 @@
 
 import { useState, useCallback, useEffect, useRef, lazy, Suspense } from 'react';
 import { createPortal } from 'react-dom';
-import { PanelLeftClose, PanelLeft, Database, BarChart3 } from 'lucide-react';
+import { PanelLeftClose, PanelLeft, BarChart3 } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTheme } from 'next-themes';
 import { Button } from '@/components/ui/button';
@@ -488,7 +488,7 @@ export function DataExplorerLayout({
               {mode === 'dashboard' ? (
                 <BarChart3 className="w-4 h-4 text-primary" />
               ) : (
-                <Database className="w-4 h-4 text-primary" />
+                <img src="/resona.png" alt="Schema Weaver" className="w-5 h-5 object-contain shrink-0" />
               )}
               <h1 className="text-sm font-semibold">
                 {mode === 'dashboard' ? 'Dashboard' : 'Data Explorer'}

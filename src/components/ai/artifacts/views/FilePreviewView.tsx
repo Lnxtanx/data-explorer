@@ -88,16 +88,30 @@ export function FilePreviewView({ artifact, onClose }: FilePreviewViewProps) {
 
     // ── Re-sign or resolve download/content URL ─────────────────────────────────
     const fetchValidUrl = useCallback(async (): Promise<string> => {
+        const fileId = artifact.fileId || (artifact as any).file_id
+            || (artifact.type === 'attachment' && artifact.id ? artifact.id : null);
+
+        // Images must render as <img>, which needs REAL image bytes. The
+        // text/JSON endpoints return the extracted content (for an image that
+        // is the vision description), so pointing an <img> at them yields a
+        // broken-image icon. /raw streams the original binary from S3.
+        if (isImage) {
+            if (artifact.key) {
+                return `/ai-api/ai/exports/content?key=${encodeURIComponent(artifact.key)}`;
+            }
+            if (fileId) {
+                return `/ai-api/ai/files/${fileId}/raw`;
+            }
+        }
+
         // If we have an S3 key, use our same-origin content streaming endpoint to completely avoid S3 CORS
         if (artifact.key) {
             return `/ai-api/ai/exports/content?key=${encodeURIComponent(artifact.key)}`;
         }
-        // If we have a file_id, prefer our same-origin content endpoint to avoid cross-origin S3 CORS issues
-        const fileId = artifact.fileId || (artifact as any).file_id || (artifact.type === 'attachment' && artifact.id ? artifact.id : null);
         if (fileId && (!artifact.downloadUrl || !artifact.downloadUrl.startsWith('/'))) {
             return `/api/ai/files/${fileId}/content`;
         }
-        let url = artifact.downloadUrl || (artifact as any).url;
+        const url = artifact.downloadUrl || (artifact as any).url;
         if (!url && fileId) {
             return `/api/ai/files/${fileId}/content`;
         }
@@ -105,7 +119,7 @@ export function FilePreviewView({ artifact, onClose }: FilePreviewViewProps) {
             throw new Error('File download URL is not available.');
         }
         return url;
-    }, [artifact]);
+    }, [artifact, isImage]);
 
     // ── Load & parse file ────────────────────────────────────────────────────────
     const loadFile = useCallback(async () => {
@@ -653,7 +667,7 @@ export function FilePreviewView({ artifact, onClose }: FilePreviewViewProps) {
                             {copiedShare ? (
                                 <Check className="w-3.5 h-3.5 text-emerald-500" />
                             ) : sharing ? (
-                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />
                             ) : (
                                 <Share2 className="w-3.5 h-3.5" />
                             )}
@@ -688,11 +702,21 @@ export function FilePreviewView({ artifact, onClose }: FilePreviewViewProps) {
                     </div>
                 </div>
                 <div className="flex-1 w-full h-full overflow-hidden bg-muted/10 p-2">
-                    <iframe src={pdfUrl} className="w-full h-full border-0 rounded-lg" title={fileName} />
+                    {/* #toolbar=0 / #navpanes=0 ask Chrome's built-in PDF viewer to
+                        drop its own chrome (the page counter, zoom, rotate, draw and
+                        download strip). It is a fragment on the native plugin, so no
+                        CSS from us can do this. New-tab and Download still get the
+                        full viewer chrome. */}
+                    <iframe
+                        src={`${pdfUrl}#toolbar=0&navpanes=0&view=FitH`}
+                        className="w-full h-full border-0 rounded-lg"
+                        title={fileName}
+                    />
                 </div>
             </div>
         );
     }
+
 
     // ── Image preview ────────────────────────────────────────────────────────────
     if (imageUrl) {

@@ -4,9 +4,10 @@
 // =============================================================================
 
 import React, { useRef, useEffect } from 'react';
-import { ArrowUp, Square, Plus, X, FileText, Loader2 } from 'lucide-react';
+import { ArrowUp, Square, Plus, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ModeSelector, type AgentMode } from '../../ai/models/ModeSelector';
+import AttachmentChip from '../../ai/chat/AttachmentChip';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
@@ -169,30 +170,16 @@ export function ResonaAIInput({
 
       {/* Clean Input Box Card */}
       <div className="relative rounded-xl border border-border/80 bg-card p-2.5 shadow-sm focus-within:border-primary/50 focus-within:ring-1 focus-within:ring-primary/20 transition-all select-text">
-        {/* Attached Files Chips */}
+        {/* Attached Files Chips — images get a real thumbnail, same as Data Explorer */}
         {attachedFiles.length > 0 && (
           <div className="flex flex-wrap gap-1.5 px-1 pb-2">
             {attachedFiles.map((file, i) => (
-              <div
+              <AttachmentChip
                 key={`${file.name}-${i}`}
-                className="flex items-center gap-1.5 bg-muted/70 border border-border/70 rounded-lg pl-2 pr-1 py-1 text-xs"
-              >
-                <FileText className="w-3.5 h-3.5 text-primary shrink-0" />
-                <span className="truncate max-w-[130px] font-medium text-foreground">{file.name}</span>
-                <span className="text-[10px] text-muted-foreground font-mono shrink-0">
-                  ({file.size < 1024 * 1024 ? `${(file.size / 1024).toFixed(0)} KB` : `${(file.size / (1024 * 1024)).toFixed(1)} MB`})
-                </span>
-                {onRemoveFile && (
-                  <button
-                    type="button"
-                    className="h-4 w-4 flex items-center justify-center rounded-full hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
-                    onClick={() => onRemoveFile(i)}
-                    aria-label={`Remove ${file.name}`}
-                  >
-                    <X className="w-2.5 h-2.5" />
-                  </button>
-                )}
-              </div>
+                file={file}
+                size="sm"
+                onRemove={onRemoveFile ? () => onRemoveFile(i) : () => { }}
+              />
             ))}
           </div>
         )}

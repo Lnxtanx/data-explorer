@@ -26,6 +26,8 @@ import {
   InvitationInfo 
 } from '@/components/collaboration/api/collaboration';
 import { NotificationBanner } from '@/components/notifications/NotificationBanner';
+import { VoiceSessionProvider } from '@/components/voice/hooks/VoiceSessionProvider';
+import { FloatingVoiceOrb } from '@/components/voice/components/FloatingVoiceOrb';
 import { logger } from '@/lib/logger';
 import { storePendingInvite, getPendingInvite, clearPendingInvite } from '@/components/auth/inviteToken';
 
@@ -359,7 +361,13 @@ export default function DataExplorerPage() {
   }
 
   return (
-    <>
+    // VoiceSessionProvider sits ABOVE the view switch on purpose. AIChatMain
+    // unmounts when the view leaves 'ai', and useVoiceSession closes the
+    // socket on unmount — so before this provider, switching to Data Explorer
+    // or the Dashboard killed a live voice call. Owning the session here lets
+    // the orb follow the user across tabs.
+    <VoiceSessionProvider connectionId={connectionId ?? undefined}>
+      <>
       <div className="h-screen flex flex-col bg-background overflow-hidden">
         <NotificationBanner />
         <div className="flex-1 flex min-h-0 overflow-hidden">
@@ -488,7 +496,7 @@ export default function DataExplorerPage() {
       )}
 
       {showConnectorDialog && (
-        <Suspense fallback={<ModalLoadingFallback />}>
+        <Suspense fallback={null}>
           <ConnectorDialog
             open={showConnectorDialog}
             onClose={() => setShowConnectorDialog(false)}
@@ -497,6 +505,14 @@ export default function DataExplorerPage() {
           />
         </Suspense>
       )}
-    </>
+
+      {/* Always-on voice presence. Portals to document.body, so it floats above
+          every view and is draggable anywhere on the page. */}
+      <FloatingVoiceOrb
+        isOutsideChat={mode !== 'ai'}
+        onExpand={() => setMode('ai')}
+      />
+      </>
+    </VoiceSessionProvider>
   );
 }

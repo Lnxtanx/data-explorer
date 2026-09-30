@@ -10,6 +10,7 @@ import React, { useState } from 'react';
 import { cn } from '@/lib/utils';
 import { IridescentFlow, PulseOrb } from '../orbs';
 import type { OrbState } from '../orbs/orb-state';
+import { paletteFor } from '../orbs/orb-state';
 import { useWebGLSupport } from '../orbs/use-webgl-support';
 
 interface VoiceOrbStageProps {
@@ -44,19 +45,16 @@ export const VoiceOrbStage: React.FC<VoiceOrbStageProps> = ({
                 className
             )}
         >
-            {/* Ambient Background Glow matching the active state */}
+            {/* Ambient glow, tinted from the SAME palette as the orb. It used to
+                be hard-coded per state (emerald/amber/sky) while the orb stayed
+                purple, so the halo contradicted the orb instead of supporting
+                it. Deriving both from `paletteFor` keeps them in agreement. */}
             <div
                 className={cn(
                     'absolute rounded-full blur-3xl pointer-events-none transition-all duration-700 -z-10',
                     isCompact ? 'w-24 h-24' : isDocked ? 'w-36 h-36' : 'w-56 h-56',
-                    orbState === 'speaking'
-                        ? 'bg-sky-500/20 dark:bg-sky-400/25'
-                        : orbState === 'listening'
-                        ? 'bg-emerald-500/20 dark:bg-emerald-400/20'
-                        : orbState === 'thinking'
-                        ? 'bg-amber-500/20 dark:bg-amber-400/25'
-                        : 'bg-primary/15 dark:bg-primary/20'
                 )}
+                style={{ background: paletteFor(orbState).glow }}
             />
 
             {/* Centered Audio-Reactive Orb Container */}

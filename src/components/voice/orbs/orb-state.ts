@@ -47,6 +47,37 @@ export const ORB_STATES = [
 export const ERROR_COLOR_FROM = '#fb7185';
 export const ERROR_COLOR_TO = '#f43f5e';
 
+// --- State palette -----------------------------------------------------------
+//
+// The orb was hard-coded purple→cyan for every state, so it never actually
+// signalled anything: state was communicated only by a blurry halo behind a
+// permanently lavender ball, and the halo's colour (emerald/amber/sky) fought
+// the orb. These pairs make the orb ITSELF the state signal, and the halo is
+// derived from the same map so the two always agree.
+//
+// Kept as two stops rather than a single colour so the shader still has a
+// gradient to work with, but the stops are close enough in hue that the body
+// reads as one solid mass instead of a purple-to-cyan wash.
+export interface OrbPalette {
+  from: string;
+  to: string;
+  /** Halo/glow tint behind the orb. */
+  glow: string;
+}
+
+export const STATE_PALETTE: Record<OrbState, OrbPalette> = {
+  idle: { from: '#6366f1', to: '#818cf8', glow: 'rgba(99,102,241,0.18)' },
+  connecting: { from: '#8b5cf6', to: '#a78bfa', glow: 'rgba(139,92,246,0.20)' },
+  listening: { from: '#10b981', to: '#34d399', glow: 'rgba(16,185,129,0.20)' },
+  thinking: { from: '#f59e0b', to: '#fbbf24', glow: 'rgba(245,158,11,0.20)' },
+  speaking: { from: '#0ea5e9', to: '#38bdf8', glow: 'rgba(14,165,233,0.20)' },
+  // Reuse the shader's existing error constants — one source of truth.
+  error: { from: ERROR_COLOR_FROM, to: ERROR_COLOR_TO, glow: 'rgba(244,63,94,0.22)' },
+  disabled: { from: '#94a3b8', to: '#cbd5e1', glow: 'rgba(148,163,184,0.14)' },
+};
+
+export const paletteFor = (state: OrbState): OrbPalette => STATE_PALETTE[state] ?? STATE_PALETTE.idle;
+
 export const hexToRgb = (hex: string): [number, number, number] => {
   const clean = hex.replace('#', '');
   const full =

@@ -1,6 +1,6 @@
 import { useCallback, useRef } from 'react';
 import type { CSSProperties } from 'react';
-import { orbVars, type OrbProps } from './orb-state';
+import { orbVars, paletteFor, type OrbProps } from './orb-state';
 import { useOrbLevel } from './use-orb-level';
 import { cn } from '@/lib/utils';
 
@@ -160,13 +160,18 @@ export const PulseOrb = ({
   state = 'idle',
   size = 160,
   speed = 1,
-  colorFrom = '#818cf8',
-  colorTo = '#22d3ee',
+  // Same state palette as the WebGL orb, so the no-WebGL fallback is not a
+  // different colour. Callers can still override.
+  colorFrom,
+  colorTo,
   levelRef,
   label = 'Assistant pulse orb',
   className,
   ref,
 }: OrbProps) => {
+  const palette = paletteFor(state);
+  const fromColor = colorFrom ?? palette.from;
+  const toColor = colorTo ?? palette.to;
   const internalRef = useRef<HTMLDivElement | null>(null);
   useOrbLevel(internalRef, state, levelRef);
   const setRef = useCallback(
@@ -187,7 +192,7 @@ export const PulseOrb = ({
       data-pulse-orb=""
       className={cn('relative isolate grid place-items-center', className)}
       style={{
-        ...orbVars({ size, speed, colorFrom, colorTo }),
+        ...orbVars({ size, speed, colorFrom: fromColor, colorTo: toColor }),
         width: size,
         height: size,
       }}

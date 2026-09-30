@@ -7,6 +7,8 @@ export type LocalMessage = {
     sql?: string;
     isStreaming?: boolean;
     files?: string[];
+    /** True while the attachments for this message are still uploading. */
+    attachmentsUploading?: boolean;
     mentionedTable?: string;
     planSteps?: PlanStep[];
     toolSteps?: AgentToolStep[];

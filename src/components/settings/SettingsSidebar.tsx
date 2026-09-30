@@ -6,7 +6,7 @@
  */
 
 import type { ElementType } from 'react';
-import { User, CreditCard, Palette, BookOpen, Users, BarChart3, MessageSquare } from 'lucide-react';
+import { User, CreditCard, Palette, BookOpen, Users, BarChart3, MessageSquare, NotebookPen } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { SettingsSection } from './types';
 
@@ -18,6 +18,7 @@ interface SettingsSidebarProps {
 
 const SECTIONS: { id: SettingsSection; label: string; icon: ElementType }[] = [
     { id: 'profile', label: 'Profile', icon: User },
+    { id: 'memory', label: 'AI Memory', icon: NotebookPen },
     { id: 'usage', label: 'AI Usage', icon: BarChart3 },
     { id: 'plans', label: 'Plans & Billing', icon: CreditCard },
     { id: 'collaboration', label: 'Collaboration', icon: Users },

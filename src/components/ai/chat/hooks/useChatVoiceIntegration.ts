@@ -1,14 +1,22 @@
 // =============================================================================
 // src/components/ai/chat/hooks/useChatVoiceIntegration.ts
-// Encapsulates Gemini Live voice session, sync, toggling, and interim bubble merging
+// Chat-side glue for the Gemini Live voice session.
+//
+// The SOCKET itself is owned by VoiceSessionProvider (mounted above the view
+// switch). This hook used to call useVoiceSession directly, which meant a
+// second socket whenever the provider was present — and, more importantly,
+// meant the call died with AIChatMain on every tab change. It now reads the
+// shared session and only owns what is chat-specific: binding the live call to
+// the chat being viewed, and committing finished voice turns into the
+// transcript.
 // =============================================================================
 
-import { useState, useEffect, useCallback } from 'react';
-import { useVoiceSession, useVoiceChatSync } from '@/components/voice';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { useVoiceChatSync } from '@/components/voice';
+import { useOptionalVoiceSessionContext } from '@/components/voice/hooks/VoiceSessionProvider';
 import type { LocalMessage } from '../types';
 
 interface UseChatVoiceIntegrationOptions {
-    connectionId?: string;
     chatId?: string | null;
     userName?: string;
     agentMode: boolean;
@@ -18,7 +26,6 @@ interface UseChatVoiceIntegrationOptions {
 }
 
 export function useChatVoiceIntegration({
-    connectionId,
     chatId,
     userName,
     agentMode,
@@ -27,28 +34,39 @@ export function useChatVoiceIntegration({
     justCreatedChatRef,
 }: UseChatVoiceIntegrationOptions) {
     const [isTypeOpen, setIsTypeOpen] = useState(false);
-    const [voiceSessionId, setVoiceSessionId] = useState<string>(() => (
-        chatId || (typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${Date.now()}`)
-    ));
+    const shared = useOptionalVoiceSessionContext();
+    const dummyAudioLevelRef = useRef<number>(0);
 
+    // Destructure the setters: they are stable useState identities. Depending on
+    // the whole context object instead would re-run these effects on every
+    // context change, and the greeting depends on userName reaching the socket.
+    const setSessionChatId = shared?.setSessionChatId;
+    const setSessionUserName = shared?.setSessionUserName;
+
+    // Bind the live call to the chat the user is looking at. A chat switch while
+    // a call is live re-points the session rather than tearing it down.
     useEffect(() => {
-        if (chatId) setVoiceSessionId(chatId);
-    }, [chatId]);
+        if (chatId && setSessionChatId) setSessionChatId(chatId);
+    }, [chatId, setSessionChatId]);
 
-    const {
-        isConnecting: isVoiceConnecting,
-        isConnected: isVoiceConnected,
-        isTalking: isVoiceTalking,
-        isMuted: isVoiceMuted,
-        toggleMute: toggleVoiceMute,
-        orbState: voiceOrbState,
-        audioLevelRef: voiceAudioLevelRef,
-        messages: voiceMessages,
-        startSession: startVoiceSession,
-        endSession: endVoiceSession,
-    } = useVoiceSession(connectionId || '', voiceSessionId, userName);
+    // The gateway greets by name ("Hey Vivek!"). If this lands late the greeting
+    // degrades to "Hey there", so set it as soon as the chat view mounts.
+    useEffect(() => {
+        if (userName && setSessionUserName) setSessionUserName(userName);
+    }, [userName, setSessionUserName]);
 
-    const isVoiceActive = isVoiceConnected || isVoiceConnecting;
+    const isVoiceActive = shared?.isActive ?? false;
+    const isVoiceConnecting = shared?.isConnecting ?? false;
+    const isVoiceConnected = shared?.isConnected ?? false;
+    const isVoiceTalking = shared?.isTalking ?? false;
+    const isVoiceMuted = shared?.isMuted ?? false;
+    const toggleVoiceMute = shared?.toggleMute ?? (() => {});
+    const voiceOrbState = shared?.orbState ?? 'idle';
+    const voiceAudioLevelRef = shared?.audioLevelRef ?? dummyAudioLevelRef;
+    const voiceMessages = shared?.messages ?? [];
+    const startVoiceSession = shared?.startSession ?? (async () => {});
+    const endVoiceSession = shared?.endSession ?? (() => {});
+    const voiceSessionId = shared?.sessionChatId ?? null;
 
     const handleToggleVoice = useCallback(async () => {
         if (isVoiceActive) {
@@ -117,5 +135,7 @@ export function useChatVoiceIntegration({
         isTypeOpen,
         setIsTypeOpen,
         getFinalDisplayMessages,
+        presence: shared?.presence ?? 'expanded',
+        setPresence: shared?.setPresence ?? (() => {}),
     };
 }

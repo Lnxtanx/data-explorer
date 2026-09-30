@@ -4,11 +4,22 @@
 // =============================================================================
 
 import { ChevronDown, ChevronUp, X, FileText } from 'lucide-react';
+import { imagePreviewUrl, isImageName } from '../../ai/chat/utils/fileValidation';
+import ImageLightbox from '../../ai/chat/ImageLightbox';
 import { MarkdownText } from '../../ai/messages/MarkdownText';
 import { LiveToolSteps } from '../../ai/tools/LiveToolSteps';
 import type { AgentToolStep } from '../../ai/hooks/useAIAgent';
 import { cn, stripTemporalTag } from '@/lib/utils';
 import { useEffect, useRef, useState } from 'react';
+
+/** A file the user attached. `fileId` is what lets an image render a real
+ *  thumbnail and open a lightbox — a bare filename cannot. */
+export interface SidePanelAttachment {
+  name: string;
+  fileId?: string;
+  sizeBytes?: number;
+  downloadUrl?: string;
+}
 
 export interface SidePanelMessage {
   id: string;
@@ -20,6 +31,7 @@ export interface SidePanelMessage {
   thinking?: string;
   warnings?: string[];
   files?: string[];
+  attachments?: SidePanelAttachment[];
   timestamp?: string | number;
 }
 
@@ -59,6 +71,7 @@ export function ResonaAIMessageItem({
   const wasStreamingThinkingRef = useRef(message.isStreaming);
   const thinkingScrollRef = useRef<HTMLDivElement>(null);
   const [dismissedWarnings, setDismissedWarnings] = useState<Set<string>>(new Set());
+  const [preview, setPreview] = useState<{ src: string; name: string; downloadUrl?: string } | null>(null);
   const visibleWarnings = (message.warnings || []).filter((w) => !dismissedWarnings.has(w));
   const timeStr = formatMessageTime(message.timestamp);
 
@@ -105,21 +118,47 @@ export function ResonaAIMessageItem({
             </div>
           ) : null}
 
-          {/* Attached files badge list */}
-          {message.files && message.files.length > 0 && (
-            <div className={cn("flex flex-wrap gap-1.5", displayContent && "mt-2 pt-1.5 border-t border-border/40")}>
-              {message.files.map((fileName, idx) => (
-                <div
-                  key={idx}
-                  className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-background/80 border border-border/60 text-xs font-medium text-foreground/90 max-w-[200px]"
-                  title={fileName}
-                >
-                  <FileText className="w-3 h-3 text-primary shrink-0" />
-                  <span className="truncate">{fileName}</span>
-                </div>
-              ))}
-            </div>
-          )}
+          {/* Attached files — images get a real thumbnail and open a lightbox */}
+          {(() => {
+            // `attachments` carries real ids; legacy `files` is names only, so
+            // normalise both to one shape before deciding what can be rendered.
+            const atts: SidePanelAttachment[] = message.attachments?.length
+              ? message.attachments
+              : (message.files ?? []).map((name) => ({ name }));
+            if (!atts.length) return null;
+            return (
+              <div className={cn("flex flex-wrap gap-1.5", displayContent && "mt-2 pt-1.5 border-t border-border/40")}>
+                {atts.map((att, idx) => {
+                  const isImg = isImageName(att.name);
+                  const src = isImg ? imagePreviewUrl(att) : null;
+                  return (
+                    <div
+                      key={`${att.name}-${idx}`}
+                      onClick={() => { if (src) setPreview({ src, name: att.name, downloadUrl: att.downloadUrl }); }}
+                      className={cn(
+                        "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-background/80 border border-border/60 text-xs font-medium text-foreground/90 max-w-[200px]",
+                        src && "cursor-pointer hover:border-primary/60 hover:bg-background transition-colors"
+                      )}
+                      title={src ? `Preview ${att.name}` : att.name}
+                    >
+                      {src ? (
+                        <img
+                          src={src}
+                          alt={att.name}
+                          loading="lazy"
+                          onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                          className="w-6 h-5 rounded-[2px] object-cover bg-background shrink-0"
+                        />
+                      ) : (
+                        <FileText className="w-3 h-3 text-primary shrink-0" />
+                      )}
+                      <span className="truncate">{att.name}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
 
           {/* Fade gradient when collapsed */}
           {!isExpanded && isLong && (
@@ -263,6 +302,15 @@ export function ResonaAIMessageItem({
           </div>
         )}
       </div>
+
+      {preview && (
+        <ImageLightbox
+          src={preview.src}
+          filename={preview.name}
+          downloadUrl={preview.downloadUrl}
+          onClose={() => setPreview(null)}
+        />
+      )}
     </div>
   );
 }

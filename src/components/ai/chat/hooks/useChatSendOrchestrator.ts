@@ -228,7 +228,17 @@ export function useChatSendOrchestrator({
 
         setLocalMessages(prev => [
             ...prev,
-            { id: userMessageId, role: 'user', content: messageText, files: filesToUpload.length > 0 ? ['uploading…'] : [], mentionedTable: effectiveTables[0] },
+            {
+                id: userMessageId,
+                role: 'user',
+                content: messageText,
+                // Show the REAL filenames while they upload. This used to be the
+                // literal string 'uploading…', which the message renderer had to
+                // display as if it were a file name.
+                files: filesToUpload.map((f) => f.name),
+                attachmentsUploading: filesToUpload.length > 0,
+                mentionedTable: effectiveTables[0],
+            },
             { id: 'streaming', role: 'assistant', content: '', isStreaming: true, isAgent: agentMode },
         ]);
 
@@ -274,6 +284,7 @@ export function useChatSendOrchestrator({
                             ...m,
                             files: uploadedFileNames.length > 0 ? uploadedFileNames : undefined,
                             artifacts: userAttachmentArtifacts.length > 0 ? userAttachmentArtifacts : undefined,
+                            attachmentsUploading: false,
                           }
                         : m
                 ));

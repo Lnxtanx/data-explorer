@@ -7,6 +7,7 @@ import {
   ERROR_COLOR_TO,
   hexToRgb,
   orbVars,
+  paletteFor,
   stateEnergy,
   type OrbProps,
   type OrbState,
@@ -16,6 +17,16 @@ import { useOrbLevel } from './use-orb-level';
 import { useWebGLSupport } from './use-webgl-support';
 
 type Vec3 = [number, number, number];
+
+/** Blend two hex colours; t=0 keeps `a`, t=1 gives `b`. */
+const mixHex = (a: string, b: string, t: number): string => {
+  if (t <= 0) return a;
+  if (t >= 1) return b;
+  const [ar, ag, ab] = hexToRgb(a);
+  const [br, bg, bb] = hexToRgb(b);
+  const to2 = (x: number) => Math.round(x).toString(16).padStart(2, '0');
+  return `#${to2(ar + (br - ar) * t)}${to2(ag + (bg - ag) * t)}${to2(ab + (bb - ab) * t)}`;
+};
 
 const FLOW_RATE: Record<OrbState, number> = {
   idle: 0.22,
@@ -115,30 +126,40 @@ void main() {
 
   float fres = pow(smoothstep(0.3, 0.9, r), 2.0);
 
-  float th = n * 1.7 + fres * 1.15 + uFlow * 0.1;
-  vec3 film = 0.5 + 0.5 * cos(6.28318 * (th + vec3(0.0, 0.33, 0.67)));
+  // Iridescence is a RIM effect. The old code computed a full rainbow film
+  // term across the whole surface and mixed it in up to 1.0 at the edges,
+  // which washed the orb out to lavender with cyan fringes. Keeping the hue
+  // sweep tight and weighting it by fresnel confines the shimmer to the
+  // silhouette so the body stays one solid mass of colour.
+  float th = n * 0.55 + fres * 0.9;
+  vec3 film = 0.5 + 0.5 * cos(6.28318 * (th + vec3(0.0, 0.12, 0.24)));
 
-  vec3 base = mix(uColorFrom, uColorTo, smoothstep(0.15, 0.85, n));
-  float irid = clamp(0.4 + 0.35 * uSpeak + 0.18 * uListen + 0.3 * uLevel, 0.0, 1.0);
+  vec3 base = mix(uColorFrom, uColorTo, smoothstep(0.05, 0.95, n));
+  float irid = clamp(0.3 + 0.3 * uSpeak + 0.15 * uListen + 0.25 * uLevel, 0.0, 1.0);
   irid *= 1.0 - 0.75 * uError;
   irid *= 1.0 - 0.7 * uDisabled;
 
-  vec3 col = base * (0.62 + 0.85 * n);
-  col += mix(uColorFrom, uColorTo, 0.5) * (1.0 - smoothstep(0.05, 0.75, r)) * 0.3;
-  col += film * irid * (0.35 + 0.65 * fres);
+  // Body first, and bright: this is what makes it read as a solid orb.
+  vec3 col = base * (0.82 + 0.45 * n);
+  // A soft core lift, not a second colour wash.
+  col += base * (1.0 - smoothstep(0.0, 0.55, r)) * 0.22;
+  // Sheen confined to the rim.
+  col += film * irid * fres * 0.28;
 
   float ang = atan(p.y, p.x);
   float sweep = pow(0.5 + 0.5 * cos(ang - uTime * 2.4), 10.0);
-  col += mix(uColorTo, vec3(1.0), 0.55) * sweep * smoothstep(0.35, 0.85, r) * uConnect * 1.1;
+  col += mix(uColorTo, vec3(1.0), 0.55) * sweep * smoothstep(0.35, 0.85, r) * uConnect * 0.8;
 
-  col *= 1.0 + uListen * 0.22 * max(ripple, 0.0) * (0.4 + 0.6 * uLevel);
+  col *= 1.0 + uListen * 0.18 * max(ripple, 0.0) * (0.4 + 0.6 * uLevel);
   col *= 1.0 + uThink * (0.12 * sin(uTime * 4.2) + 0.1 * inter);
 
-  vec3 rim = mix(uColorTo, vec3(1.0), 0.45);
-  col += rim * pow(smoothstep(0.55, 0.9, r), 3.0) * (0.4 + 0.55 * uLevel);
-  col += vec3(0.98, 0.28, 0.35) * fres * uError * 0.35;
+  // Rim light: a single edge highlight rather than a broad additive glow, so it
+  // defines the silhouette instead of bleaching it.
+  vec3 rim = mix(uColorTo, vec3(1.0), 0.30);
+  col += rim * pow(smoothstep(0.72, 0.97, r), 3.0) * (0.30 + 0.4 * uLevel);
+  col += vec3(0.98, 0.28, 0.35) * fres * uError * 0.3;
 
-  col *= 0.9 + 0.45 * uLevel + 0.25 * uSpeak * uLevel;
+  col *= 0.94 + 0.28 * uLevel + 0.18 * uSpeak * uLevel;
 
   float lum = dot(col, vec3(0.299, 0.587, 0.114));
   col = mix(col, vec3(lum), uDisabled * 0.85);
@@ -171,8 +192,8 @@ export const IridescentFlow = ({
   state = 'idle',
   size = 168,
   speed = 1,
-  colorFrom = '#c084fc',
-  colorTo = '#67e8f9',
+  colorFrom,
+  colorTo,
   levelRef,
   label = 'Iridescent Flow orb',
   className,
@@ -182,7 +203,13 @@ export const IridescentFlow = ({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const stateRef = useRef(state);
   const speedRef = useRef(speed);
-  const colorRef = useRef({ from: colorFrom, to: colorTo });
+  // Colour now follows the state palette unless the caller overrides it, so the
+  // orb itself is the state signal. Previously this was a fixed purple→cyan for
+  // every state, which is why it never looked like it was reacting to anything.
+  const palette = paletteFor(state);
+  const targetFrom = colorFrom ?? palette.from;
+  const targetTo = colorTo ?? palette.to;
+  const colorRef = useRef({ from: targetFrom, to: targetTo });
   const redrawRef = useRef<(() => void) | null>(null);
   const [lost, setLost] = useState(false);
   const support = useWebGLSupport();
@@ -200,7 +227,11 @@ export const IridescentFlow = ({
   useEffect(() => {
     stateRef.current = state;
     speedRef.current = speed;
-    colorRef.current = { from: colorFrom, to: colorTo };
+    // Lerp toward the new colours instead of snapping, so a state change reads
+    // as the orb shifting rather than a hard cut.
+    const cur = colorRef.current;
+    cur.from = mixHex(cur.from, targetFrom, 0.08);
+    cur.to = mixHex(cur.to, targetTo, 0.08);
     redrawRef.current?.();
   });
 
@@ -440,7 +471,7 @@ export const IridescentFlow = ({
             transition: 'opacity 0.3s ease',
           }}
         >
-          <div style={{ ...fallbackLayer(colorFrom, colorTo), opacity: isError ? 0 : 1 }} />
+          <div style={{ ...fallbackLayer(targetFrom, targetTo), opacity: isError ? 0 : 1 }} />
           <div style={{ ...fallbackLayer(ERROR_COLOR_FROM, ERROR_COLOR_TO), opacity: isError ? 1 : 0 }} />
         </div>
       )}

@@ -280,6 +280,20 @@ export function useSidePanelChat({
         const uploadRes = await uploadFilesForAI(filesToUpload, { sessionId: sessionIdToSend });
         if (uploadRes.ok && uploadRes.files) {
           fileIds = uploadRes.files.map((f) => f.file_id);
+          // The user message was already rendered with bare filenames (the
+          // upload happens after the optimistic insert). Backfill the real
+          // attachment metadata so image chips can show a thumbnail and open a
+          // lightbox — a filename alone cannot resolve any bytes.
+          const enriched = uploadRes.files.map((f, i) => ({
+            name: f.filename || filesToUpload[i]?.name || 'attachment',
+            fileId: f.file_id,
+            sizeBytes: f.size_bytes,
+            downloadUrl: f.download_url,
+          }));
+          localMessagesRef.current = localMessagesRef.current.map((m) =>
+            m.id === userMsgId ? { ...m, attachments: enriched } : m
+          );
+          setLocalMessages(localMessagesRef.current);
         }
       } catch (err) {
         console.error('[ResonaAISidePanel] Failed to upload files:', err);
@@ -288,6 +302,7 @@ export function useSidePanelChat({
         setIsUploading(false);
       }
     }
+
 
     try {
       const promptToSend = msg || (filesToUpload.length > 0 ? `I've attached ${filesToUpload.length === 1 ? filesToUpload[0].name : `${filesToUpload.length} files`}. Please analyze the attached file content and incorporate it into the dashboard.` : '');
