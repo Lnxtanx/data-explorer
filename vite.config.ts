@@ -71,7 +71,7 @@ export default defineConfig(({ mode }) => {
           ws: true, // voice session WS (/api/voice/session) + agent data channel
         },
         "/ai-api": {
-          target: "http://localhost:8001",
+          target: env.VITE_AI_PROXY_TARGET || "http://localhost:8001",
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/ai-api/, ""),
         },

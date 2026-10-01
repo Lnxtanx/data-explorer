@@ -3,7 +3,7 @@
 // Centralized API configuration and utilities
 // =============================================================================
 
-// API Base URL - uses environment variable or defaults to localhost
+// API Base URL - uses environment variable or defaults to empty (uses Vite proxy / relative path)
 export const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
 // =============================================================================
