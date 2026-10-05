@@ -19,7 +19,7 @@ interface ConnectorWizardProps {
 type Step = 'install' | 'credentials' | 'result';
 
 const CLI_COMMANDS = [
-    { step: '1', cmd: 'npm i -g @vivekmind/pg-connector', comment: '# Install CLI globally' },
+    { step: '1', cmd: 'npm i -g @schema-weaver/pg-connector', comment: '# Install CLI globally' },
     { step: '2', cmd: 'pg-connector init', comment: '# Generate secret connector key' },
     { step: '3', cmd: 'pg-connector db add', comment: '# Attach your PostgreSQL database' },
     { step: '4', cmd: 'pg-connector start', comment: '# Launch background daemon' },

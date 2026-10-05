@@ -148,13 +148,13 @@ export function EmptyState({ hasConnection, onOpenConnectWizard }: EmptyStatePro
                 {/* Quick Terminal Copy Pill */}
                 <button
                   type="button"
-                  onClick={() => handleCopy('npm i -g @vivekmind/pg-connector && pg-connector start')}
+                  onClick={() => handleCopy('npm i -g @schema-weaver/pg-connector && pg-connector start')}
                   className="inline-flex items-center justify-between sm:justify-start gap-2 h-9 px-3.5 rounded-xl border border-border/70 bg-muted/40 hover:bg-muted/70 text-xs font-mono text-muted-foreground hover:text-foreground transition-all duration-150 group cursor-pointer"
                   title="Click to copy setup command"
                 >
                   <div className="flex items-center gap-1.5 min-w-0">
                     <Terminal className="w-3.5 h-3.5 text-primary shrink-0" />
-                    <span className="truncate text-[11px]">npm i -g @vivekmind/pg-connector</span>
+                    <span className="truncate text-[11px]">npm i -g @schema-weaver/pg-connector</span>
                   </div>
                   {copied ? (
                     <Check className="w-3.5 h-3.5 text-emerald-500 shrink-0 ml-1.5" />
