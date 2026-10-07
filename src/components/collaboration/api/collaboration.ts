@@ -244,7 +244,7 @@ export async function getInvitationInfo(token: string, type: 'team' | 'project' 
     return get<InvitationInfo>(endpoint);
 }
 
-// ─── Team Agent Shares (SW-Agent sharing) ──────────────────────────────────
+// ─── Team Connector Shares (Connector sharing) ─────────────────────────────
 
 export interface TeamAgentShare {
     id: string;
@@ -261,13 +261,13 @@ export interface TeamAgentShare {
     owner_user_id?: string;
 }
 
-/** List SW-Agents currently shared with a team (any member). */
+/** List connectors currently shared with a team (any member). */
 export async function listTeamAgentShares(teamId: string): Promise<{ success: boolean; agents: TeamAgentShare[] }> {
     return get<{ success: boolean; agents: TeamAgentShare[] }>(`/api/teams/${teamId}/shares/agents`);
 }
 
 /**
- * Share one of my SW-Agents (and ALL of its databases) with the team.
+ * Share one of my connectors (and ALL of its databases) with the team.
  * Owner/admin + paid plan required.
  */
 export async function shareAgentWithTeam(

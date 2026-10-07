@@ -324,7 +324,9 @@ export function UsageSettings() {
                 </div>
                 <div className="flex items-center justify-between text-2xs text-muted-foreground">
                     <span className="tabular-nums">{fmtNum(monthRemaining)} credits remaining</span>
-                    <span>{fmtNum(dayUsed)} used today</span>
+                    <span>
+                        {usage?.monthly_reset_at ? `Resets in ${timeUntil(new Date(usage.monthly_reset_at))}` : `${fmtNum(dayUsed)} used today`}
+                    </span>
                 </div>
             </div>
 

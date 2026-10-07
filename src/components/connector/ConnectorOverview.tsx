@@ -41,7 +41,7 @@ export function ConnectorOverview({ onNavigate }: ConnectorOverviewProps) {
                 <div>
                     <h3 className="text-xl font-semibold tracking-tight">Connector Overview</h3>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                        System telemetry, active host proxies, and recent database queries.
+                        System telemetry, active connectors, and recent database queries.
                     </p>
                 </div>
                 <Button
@@ -135,12 +135,12 @@ export function ConnectorOverview({ onNavigate }: ConnectorOverviewProps) {
                 </div>
             </div>
 
-            {/* Registered Host Proxies Card */}
+            {/* Registered Connectors Card */}
             <Card className="border rounded-xl shadow-none shrink-0 overflow-hidden">
                 <CardHeader className="py-2.5 px-4 border-b bg-muted/10 shrink-0 flex flex-row items-center justify-between">
                     <div className="flex items-center gap-2 text-xs font-semibold text-foreground">
                         <PostgresIcon className="w-3.5 h-3.5" />
-                        <span>Registered Host Proxies</span>
+                        <span>Registered Connectors</span>
                     </div>
                     <Button
                         variant="ghost"
@@ -180,7 +180,7 @@ export function ConnectorOverview({ onNavigate }: ConnectorOverviewProps) {
                                         </div>
                                         <div className="min-w-0 flex-1">
                                             <p className="font-semibold text-foreground truncate">
-                                                {connector.machine_label || 'Local Agent Proxy'}
+                                                {connector.machine_label || 'Local Connector'}
                                             </p>
                                             <p className="text-[10px] text-muted-foreground font-mono truncate">
                                                 {connector.agent_id}
@@ -228,9 +228,9 @@ export function ConnectorOverview({ onNavigate }: ConnectorOverviewProps) {
                     ) : (
                         <div className="p-8 text-center space-y-2">
                             <PostgresIcon className="w-8 h-8 mx-auto opacity-50" />
-                            <p className="text-xs font-semibold text-foreground">No proxy connectors connected</p>
+                            <p className="text-xs font-semibold text-foreground">No connectors connected</p>
                             <p className="text-[11px] text-muted-foreground max-w-sm mx-auto">
-                                Run <code className="px-1 py-0.5 rounded bg-muted font-mono text-[10px]">sw-agent start</code> on your local PostgreSQL machine to begin.
+                                Run <code className="px-1 py-0.5 rounded bg-muted font-mono text-[10px]">pg-connector start</code> on your local PostgreSQL machine to begin.
                             </p>
                             <Button
                                 size="sm"

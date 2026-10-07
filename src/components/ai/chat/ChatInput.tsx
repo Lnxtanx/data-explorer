@@ -521,7 +521,7 @@ export function ChatInput({
                 <p className="text-center text-[11px] text-muted-foreground/75 mt-3 select-none">
                     Resona AI is AI and can make mistakes. Please double-check cited sources.{" "}
                     <a
-                        href="https://docs.schemaweaver.vivekmind.com"
+                        href="https://docs.schemaweaver.dev"
                         target="_blank"
                         rel="noopener noreferrer"
                         className="underline underline-offset-2 hover:text-foreground transition-colors font-medium ml-0.5"
@@ -723,7 +723,7 @@ export function ChatInput({
                     <p className="text-[11px] text-muted-foreground/70 leading-tight">
                         Resona AI can make mistakes. Check sources.{" "}
                         <a
-                            href="https://docs.schemaweaver.vivekmind.com"
+                            href="https://docs.schemaweaver.dev"
                             target="_blank"
                             rel="noopener noreferrer"
                             className="underline underline-offset-2 hover:text-foreground transition-colors font-medium ml-0.5"

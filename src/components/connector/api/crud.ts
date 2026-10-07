@@ -14,7 +14,7 @@ import type {
 } from './types';
 
 /**
- * List all registered database proxy connectors for the current user
+ * List all registered database connectors for the current user
  */
 export async function listConnectors(): Promise<{ success: boolean; agents: DatabaseConnector[] }> {
     return get<{ success: boolean; agents: DatabaseConnector[] }>('/api/agent/status');
@@ -36,7 +36,7 @@ export async function verifyConnectorCredentials(
 }
 
 /**
- * Revoke a database proxy connector's credentials (soft revoke)
+ * Revoke a database connector's credentials (soft revoke)
  */
 export async function revokeConnector(connectorId: string): Promise<{ success: boolean; message: string }> {
     return post<{ success: boolean; message: string }>(`/api/agent/revoke/${connectorId}`, {});
@@ -50,14 +50,14 @@ export async function removeConnector(connectorId: string): Promise<{ success: b
 }
 
 /**
- * Discover databases exposed by a connected proxy agent
+ * Discover databases exposed by a connected connector
  */
 export async function getConnectorDatabases(connectorId: string): Promise<{ success: boolean; databases: DiscoveredDatabase[] }> {
     return get<{ success: boolean; databases: DiscoveredDatabase[] }>(`/api/agent/${connectorId}/databases`);
 }
 
 /**
- * Fetch execution logs recorded by database proxy connectors
+ * Fetch execution logs recorded by database connectors
  */
 export async function getExecutionLogs(connectionId?: string | null): Promise<ExecutionEvent[]> {
     try {
@@ -72,7 +72,7 @@ export async function getExecutionLogs(connectionId?: string | null): Promise<Ex
 }
 
 /**
- * Fetch health events and latency metrics for proxy connectors
+ * Fetch health events and latency metrics for connectors
  */
 export async function getHealthEvents(connectorId?: string | null, timeRange: string = '24h'): Promise<HealthMetricsResult> {
     try {

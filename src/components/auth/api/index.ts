@@ -64,6 +64,7 @@ export interface AIQuotaStatus {
     allowed_modes?: string[];
     monthly_pct: number;
     weekly_reset_at: string;
+    monthly_reset_at?: string;
 }
 
 export interface AIModelInfo {

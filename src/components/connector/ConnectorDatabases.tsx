@@ -49,7 +49,7 @@ export function ConnectorDatabases({ onSelectConnection }: ConnectorDatabasesPro
                 <div>
                     <h3 className="text-xl font-semibold tracking-tight text-foreground">Databases</h3>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                        All PostgreSQL databases discovered across your active proxy connectors.
+                        All PostgreSQL databases discovered across your active connectors.
                     </p>
                 </div>
                 <Button
@@ -184,7 +184,7 @@ export function ConnectorDatabases({ onSelectConnection }: ConnectorDatabasesPro
                             <PostgresIcon className="w-8 h-8 mx-auto opacity-50" />
                             <p className="text-xs font-semibold text-foreground">No databases discovered</p>
                             <p className="text-[11px] text-muted-foreground max-w-sm mx-auto">
-                                Start your PostgreSQL proxy on your host machine with <code className="px-1 py-0.5 bg-muted rounded font-mono text-[10px]">sw-agent start</code> to discover databases.
+                                Start your PostgreSQL connector on your host machine with <code className="px-1 py-0.5 bg-muted rounded font-mono text-[10px]">pg-connector start</code> to discover databases.
                             </p>
                         </div>
                     )}

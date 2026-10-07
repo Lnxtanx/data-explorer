@@ -8,7 +8,7 @@ import {
     Share2, Check, ChevronDown
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { API_BASE_URL } from '@/lib/api/client';
+import { API_BASE_URL, resolveAiApiUrl } from '@/lib/api';
 import type { AgentArtifact } from '../../hooks/useAIAgent';
 
 function humanSize(bytes?: number): string {
@@ -151,7 +151,7 @@ export function FileView({ artifact, onView, isOpen = false }: FileViewProps) {
                     filename: fileName,
                     title: active.title || fileName,
                 });
-                const res = await fetch(`/ai-api/ai/exports/share?${query.toString()}`);
+                const res = await fetch(resolveAiApiUrl(`/ai-api/ai/exports/share?${query.toString()}`));
                 if (res.ok) {
                     const data = await res.json();
                     if (data.shareId) {

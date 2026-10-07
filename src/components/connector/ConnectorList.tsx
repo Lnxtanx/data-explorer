@@ -51,7 +51,7 @@ export function ConnectorList({ onSelectConnection }: ConnectorListProps) {
                 </div>
                 <p className="text-sm font-semibold text-foreground">No PostgreSQL connectors registered</p>
                 <p className="text-xs text-muted-foreground">
-                    Install the proxy connector CLI on your host, run <code className="px-1 py-0.5 bg-muted rounded text-[11px]">init</code>, then paste the connection key here.
+                    Install the connector CLI on your host, run <code className="px-1 py-0.5 bg-muted rounded text-[11px]">init</code>, then paste the connection key here.
                 </p>
             </div>
         );
@@ -63,7 +63,7 @@ export function ConnectorList({ onSelectConnection }: ConnectorListProps) {
                 <div>
                     <h3 className="text-xl font-semibold tracking-tight text-foreground">Registered Connectors</h3>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                        Active PostgreSQL proxy connector instances and discovered databases.
+                        Active PostgreSQL connector instances and discovered databases.
                     </p>
                 </div>
                 <Button

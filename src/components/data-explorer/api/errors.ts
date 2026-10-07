@@ -10,26 +10,26 @@ interface ExplorerErrorEntry {
 }
 
 export const EXPLORER_ERROR_CATALOG: Record<string, ExplorerErrorEntry> = {
-  // ── SW Agent reachability ──────────────────────────────────────────────
+  // ── Connector reachability ──────────────────────────────────────────────
   agent_offline: {
-    title: 'SW Agent is offline',
-    message: 'The SW Agent for this connection is not running.',
-    hint: 'Open a terminal on the machine you registered and run: sw-agent start',
+    title: 'Connector is offline',
+    message: 'The PostgreSQL connector for this connection is not running.',
+    hint: 'Open a terminal on your host machine and run: pg-connector start',
   },
   agent_wake_failed: {
-    title: 'SW Agent is not responding',
-    message: 'The SW Agent did not respond in time.',
-    hint: 'Make sure the SW Agent is running (sw-agent start) and connected to the relay.',
+    title: 'Connector is not responding',
+    message: 'The PostgreSQL connector did not respond in time.',
+    hint: 'Make sure the connector is running (pg-connector start) and connected to the relay.',
   },
   agent_timeout: {
-    title: 'SW Agent timed out',
-    message: 'The SW Agent took too long to respond.',
-    hint: 'Check the SW Agent status and relay connection, then retry.',
+    title: 'Connector timed out',
+    message: 'The PostgreSQL connector took too long to respond.',
+    hint: 'Check the connector status and relay connection, then retry.',
   },
   channel_closed: {
     title: 'Connection dropped',
-    message: 'The connection to the SW Agent closed unexpectedly.',
-    hint: 'Retry now — the agent reconnects automatically.',
+    message: 'The connection to the connector closed unexpectedly.',
+    hint: 'Retry now — the connector reconnects automatically.',
   },
   rate_limited: {
     title: 'Too many requests',
@@ -37,26 +37,26 @@ export const EXPLORER_ERROR_CATALOG: Record<string, ExplorerErrorEntry> = {
     hint: 'Wait a few seconds and try again.',
   },
   concurrent_request_rejected: {
-    title: 'Agent is busy',
-    message: 'The SW Agent is still working on another request.',
+    title: 'Connector is busy',
+    message: 'The connector is still working on another request.',
     hint: 'Wait a moment and retry.',
   },
 
   // ── Database connectivity ──────────────────────────────────────────────
   db_unavailable: {
     title: 'Database unreachable',
-    message: 'Your database could not be reached from the SW Agent machine.',
+    message: 'Your database could not be reached from the connector machine.',
     hint: 'Check that the database host is running and reachable (network/firewall).',
   },
   db_auth_failed: {
     title: 'Database login failed',
-    message: 'Your database rejected the SW Agent credentials.',
-    hint: 'Verify the database password in the SW Agent config (sw-agent > db edit).',
+    message: 'Your database rejected the connector credentials.',
+    hint: 'Verify database credentials with pg-connector db test or pg-connector status.',
   },
   db_not_found: {
     title: 'Database not configured',
-    message: 'This database is not registered with your SW Agent.',
-    hint: 'Register it with: sw-agent > db add',
+    message: 'This database is not registered with your connector.',
+    hint: 'Register it with: pg-connector db add',
   },
   db_pool_exhausted: {
     title: 'Connection pool full',
@@ -66,22 +66,22 @@ export const EXPLORER_ERROR_CATALOG: Record<string, ExplorerErrorEntry> = {
   db_ssl_error: {
     title: 'Database SSL failure',
     message: 'The secure connection to the database failed.',
-    hint: 'Check the ssl_mode / ssl_root_cert settings on the SW Agent database config.',
+    hint: 'Check the ssl_mode / ssl_root_cert settings on the connector database config.',
   },
   env_var_missing: {
-    title: 'Agent config incomplete',
-    message: 'The SW Agent is missing a password environment variable for this database.',
-    hint: 'See sw-agent > db ls for the variable name, set it, then restart the agent.',
+    title: 'Connector config incomplete',
+    message: 'The connector is missing a password environment variable for this database.',
+    hint: 'See pg-connector db list for the variable name, set it, then restart the connector.',
   },
   config_invalid: {
-    title: 'SW Agent config invalid',
-    message: 'The SW Agent configuration file is invalid.',
-    hint: 'Run: sw-agent doctor',
+    title: 'Connector config invalid',
+    message: 'The connector configuration file is invalid.',
+    hint: 'Run: pg-connector debug',
   },
   config_not_found: {
-    title: 'SW Agent not configured',
-    message: 'The SW Agent has no configuration yet.',
-    hint: 'Run: sw-agent init',
+    title: 'Connector not configured',
+    message: 'The connector has no configuration yet.',
+    hint: 'Run: pg-connector init',
   },
 
   // ── Query execution ────────────────────────────────────────────────────
@@ -110,9 +110,9 @@ export const EXPLORER_ERROR_CATALOG: Record<string, ExplorerErrorEntry> = {
     hint: 'The error usually comes from a column, type, or value in the query.',
   },
   internal_error: {
-    title: 'SW Agent error',
-    message: 'The SW Agent hit an internal error.',
-    hint: 'Run: sw-agent doctor',
+    title: 'Connector error',
+    message: 'The connector hit an internal error.',
+    hint: 'Run: pg-connector debug',
   },
 
   // ── Permissions ────────────────────────────────────────────────────────

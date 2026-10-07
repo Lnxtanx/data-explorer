@@ -116,7 +116,7 @@ export function ConnectorWizard({ onClose }: ConnectorWizardProps) {
             setStep('result');
 
             if (res.is_online) {
-                toast.success('PostgreSQL proxy connected!');
+                toast.success('PostgreSQL connector connected!');
             }
         } catch (err: any) {
             toast.error(err?.message || 'Failed to verify connector');
@@ -151,7 +151,7 @@ export function ConnectorWizard({ onClose }: ConnectorWizardProps) {
                             </a>
                         </div>
                         <p className="text-xs text-muted-foreground">
-                            Connect your local or VPC database via outbound proxy daemon without exposing credentials to the cloud.
+                            Connect your local or VPC database via outbound connector without exposing credentials to the cloud.
                         </p>
                     </div>
                 </div>

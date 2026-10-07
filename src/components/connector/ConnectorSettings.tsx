@@ -53,7 +53,7 @@ export function ConnectorSettings() {
                 <PostgresIcon className="w-10 h-10 mx-auto opacity-50" />
                 <p className="text-sm font-semibold text-foreground">No PostgreSQL connectors registered</p>
                 <p className="text-xs text-muted-foreground">
-                    Add a connector to manage its credentials and proxy settings here.
+                    Add a connector to manage its credentials and settings here.
                 </p>
             </div>
         );
@@ -63,9 +63,9 @@ export function ConnectorSettings() {
         <div className="p-6 space-y-6">
             <div className="flex items-center justify-between pb-2 border-b">
                 <div>
-                    <h3 className="text-xl font-semibold tracking-tight">Proxy Settings</h3>
+                    <h3 className="text-xl font-semibold tracking-tight">Connector Settings</h3>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                        Manage security credentials and connection status for proxy daemons.
+                        Manage security credentials and connection status for connector daemons.
                     </p>
                 </div>
                 <Button variant="outline" size="sm" onClick={handleManualRefresh} disabled={isFetching} className="h-8 text-xs rounded-xl font-medium">

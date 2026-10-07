@@ -494,7 +494,6 @@ export function MemorySettings() {
                         {scope === 'database' ? 'MEMORY.md' : 'USER_PROFILE.md'}
                     </span>
                     {` · ~${tokenEstimate.toLocaleString()} tokens`}
-                    {doc ? ` · v${doc.version}` : ''}
                     {isDirty ? ' · unsaved' : ' · click to edit'}
                 </p>
 

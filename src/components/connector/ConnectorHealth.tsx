@@ -54,7 +54,7 @@ export function ConnectorHealth() {
                 <div>
                     <h3 className="text-xl font-semibold tracking-tight">Health Monitor</h3>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                        Monitor latency metrics, proxy connectivity, and query response health.
+                        Monitor latency metrics, connector connectivity, and query response health.
                     </p>
                 </div>
                 <Button

@@ -13,6 +13,7 @@
 
 export {
     API_BASE_URL,
+    resolveAiApiUrl,
     ApiError,
     apiRequest,
     get,

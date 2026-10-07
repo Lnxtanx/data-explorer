@@ -49,6 +49,8 @@ export function isImageName(name: string | undefined | null): boolean {
  * Order matters: the local object URL first (instant, no network), then the
  * download_url (fresh presigned S3), then the same-origin binary route.
  */
+import { resolveAiApiUrl } from '@/lib/api';
+
 export function imagePreviewUrl(att: {
     file_id?: string; fileId?: string; id?: string;
     download_url?: string; downloadUrl?: string;
@@ -56,8 +58,8 @@ export function imagePreviewUrl(att: {
     key?: string;
 }): string | null {
     const fileId = att.file_id || att.fileId || att.id;
-    if (att.key) return `/ai-api/ai/exports/content?key=${encodeURIComponent(att.key)}`;
-    if (fileId) return `/ai-api/ai/files/${fileId}/raw`;
+    if (att.key) return resolveAiApiUrl(`/ai-api/ai/exports/content?key=${encodeURIComponent(att.key)}`);
+    if (fileId) return resolveAiApiUrl(`/ai-api/ai/files/${fileId}/raw`);
     const url = att.download_url || att.downloadUrl;
     if (url) return url;
     return null;

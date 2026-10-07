@@ -1,6 +1,6 @@
 // =============================================================================
 // PostgreSQL Connector React Query Hooks
-// Centralized state management for database proxy connectors
+// Centralized state management for database connectors
 // =============================================================================
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -31,7 +31,7 @@ export const connectorKeys = {
 // ─── Queries ─────────────────────────────────────────────────────────────────
 
 /**
- * List all registered PostgreSQL database proxy connectors.
+ * List all registered PostgreSQL database connectors.
  * Polls every 10s to keep online status updated.
  */
 export function useConnectors() {
@@ -49,7 +49,7 @@ export function useConnectors() {
 }
 
 /**
- * Get database list from a live proxy connector.
+ * Get database list from a live connector.
  */
 export function useConnectorDatabases(connectorId: string | null) {
     return useQuery({
@@ -64,7 +64,7 @@ export function useConnectorDatabases(connectorId: string | null) {
 }
 
 /**
- * Fetch proxy execution logs with live polling.
+ * Fetch connector execution logs with live polling.
  */
 export function useExecutionLogs(connectionId?: string | null) {
     return useQuery({

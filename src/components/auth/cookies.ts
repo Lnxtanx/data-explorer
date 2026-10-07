@@ -124,11 +124,24 @@ export interface SessionData {
 const SESSION_DURATION_DAYS = 7;
 const SESSION_REFRESH_THRESHOLD = 24 * 60 * 60 * 1000; // 1 day in ms
 
+function getDomainOption(): string | undefined {
+  if (typeof window === 'undefined') return undefined;
+  const host = window.location.hostname;
+  if (host === 'schemaweaver.dev' || host.endsWith('.schemaweaver.dev')) {
+    return '.schemaweaver.dev';
+  }
+  if (host === 'vivekmind.com' || host.endsWith('.vivekmind.com')) {
+    return '.vivekmind.com';
+  }
+  return undefined;
+}
+
 /**
  * Set session cookie with minimal data (userId + expiresAt only)
  */
 export function setSessionCookie(data: { userId: string; expiresAt?: number } & Record<string, unknown>): void {
   const expiresAt = data.expiresAt || Date.now() + SESSION_DURATION_DAYS * 24 * 60 * 60 * 1000;
+  const domain = getDomainOption();
   
   // Only store userId and expiresAt — no PII (email, name, avatar)
   setCookie(COOKIE_KEYS.SESSION_TOKEN, { 
@@ -138,6 +151,7 @@ export function setSessionCookie(data: { userId: string; expiresAt?: number } & 
     expires: new Date(expiresAt),
     sameSite: 'lax',
     secure: window.location.protocol === 'https:',
+    ...(domain ? { domain } : {}),
   });
 }
 
@@ -185,5 +199,9 @@ export function refreshSessionCookie(): void {
  * Delete session cookie (logout)
  */
 export function deleteSessionCookie(): void {
+  const domain = getDomainOption();
   deleteCookie(COOKIE_KEYS.SESSION_TOKEN);
+  if (domain) {
+    deleteCookie(COOKIE_KEYS.SESSION_TOKEN, { domain });
+  }
 }

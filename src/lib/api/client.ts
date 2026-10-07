@@ -3,8 +3,48 @@
 // Centralized API configuration and utilities
 // =============================================================================
 
-// API Base URL - uses environment variable or defaults to empty (uses Vite proxy / relative path)
-export const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+function resolveApiBaseUrl(): string {
+    const envUrl = import.meta.env.VITE_API_URL;
+    if (envUrl && typeof envUrl === 'string' && envUrl.trim() !== '') {
+        return envUrl.trim().replace(/\/$/, '');
+    }
+    // In production browser environments, automatically route to the production API backend
+    // if running on schemaweaver.dev or any subdomain (e.g. data-explorer.schemaweaver.dev)
+    if (typeof window !== 'undefined') {
+        const hostname = window.location.hostname;
+        if (hostname === 'schemaweaver.dev' || hostname.endsWith('.schemaweaver.dev')) {
+            return 'https://api.schemaweaver.dev';
+        }
+        if (hostname === 'vivekmind.com' || hostname.endsWith('.vivekmind.com')) {
+            return 'https://api-node.schemaweaver.vivekmind.com';
+        }
+    }
+    // Local development fallback (uses Vite proxy)
+    return '';
+}
+
+export const API_BASE_URL = resolveApiBaseUrl();
+
+/**
+ * Resolves AI endpoints (/ai-api/ai/...) to the appropriate backend URL.
+ * In dev, leaves /ai-api as-is so Vite proxy forwards to local Python backend.
+ * In production, maps /ai-api/ai/... -> `${API_BASE_URL}/api/ai/...`
+ */
+export function resolveAiApiUrl(path: string): string {
+    if (import.meta.env.DEV) {
+        return path;
+    }
+    if (path.startsWith('/ai-api/ai/')) {
+        return `${API_BASE_URL}/api/ai/${path.slice('/ai-api/ai/'.length)}`;
+    }
+    if (path.startsWith('/ai-api/')) {
+        return `${API_BASE_URL}/api/${path.slice('/ai-api/'.length)}`;
+    }
+    if (path.startsWith('/')) {
+        return `${API_BASE_URL}${path}`;
+    }
+    return `${API_BASE_URL}/${path}`;
+}
 
 // =============================================================================
 // CSRF Token Helper

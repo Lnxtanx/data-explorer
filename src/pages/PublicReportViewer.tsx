@@ -10,6 +10,7 @@ import {
     Download, Share2, Check, AlertCircle, ExternalLink, FileText,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { resolveAiApiUrl } from '@/lib/api';
 
 // ── Authentic HTML5 Shield Icon ───────────────────────────────────────────────
 function Html5Icon({ className }: { className?: string }) {
@@ -66,7 +67,7 @@ export default function PublicReportViewer() {
                 // has no concept of. Phase 3 audited all 12 hand-rolled fetch
                 // sites and converted 10; this one and the two third-party
                 // calls are the intentional remainder.
-                const res = await fetch(`/ai-api/ai/exports/shared/${shareId}`);
+                const res = await fetch(resolveAiApiUrl(`/ai-api/ai/exports/shared/${shareId}`));
                 if (!res.ok) {
                     if (res.status === 404) {
                         throw new Error("This shared report does not exist or has expired.");
@@ -75,7 +76,11 @@ export default function PublicReportViewer() {
                 }
                 const data = await res.json();
                 if (!isCancelled) {
-                    setMeta(data);
+                    setMeta({
+                        ...data,
+                        rawUrl: resolveAiApiUrl(data.rawUrl),
+                        downloadUrl: resolveAiApiUrl(data.downloadUrl),
+                    });
                     if (data.title || data.filename) {
                         document.title = `${data.title || data.filename} · Schema Weaver Data Explorer`;
                     }

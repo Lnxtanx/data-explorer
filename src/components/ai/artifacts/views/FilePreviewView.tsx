@@ -13,7 +13,7 @@ import {
 import * as XLSX from 'xlsx';
 import { cn } from '@/lib/utils';
 import { logger } from '@/lib/logger';
-import { API_BASE_URL } from '@/lib/api/client';
+import { API_BASE_URL, resolveAiApiUrl } from '@/lib/api';
 import type { AgentArtifact } from '../../hooks/useAIAgent';
 
 function humanSize(bytes?: number): string {
@@ -98,19 +98,19 @@ export function FilePreviewView({ artifact, onClose }: FilePreviewViewProps) {
         // broken-image icon. /raw streams the original binary from S3.
         if (isImage) {
             if (artifact.key) {
-                return `/ai-api/ai/exports/content?key=${encodeURIComponent(artifact.key)}`;
+                return resolveAiApiUrl(`/ai-api/ai/exports/content?key=${encodeURIComponent(artifact.key)}`);
             }
             if (fileId) {
-                return `/ai-api/ai/files/${fileId}/raw`;
+                return resolveAiApiUrl(`/ai-api/ai/files/${fileId}/raw`);
             }
         }
 
         // If we have an S3 key, use our same-origin content streaming endpoint to completely avoid S3 CORS
         if (artifact.key) {
-            return `/ai-api/ai/exports/content?key=${encodeURIComponent(artifact.key)}`;
+            return resolveAiApiUrl(`/ai-api/ai/exports/content?key=${encodeURIComponent(artifact.key)}`);
         }
         if (fileId && (!artifact.downloadUrl || !artifact.downloadUrl.startsWith('/'))) {
-            return `/api/ai/files/${fileId}/content`;
+            return `${API_BASE_URL}/api/ai/files/${fileId}/content`;
         }
         const url = artifact.downloadUrl || (artifact as any).url;
         if (!url && fileId) {
@@ -407,7 +407,7 @@ export function FilePreviewView({ artifact, onClose }: FilePreviewViewProps) {
                     filename: fileName,
                     title: artifact.title || fileName,
                 });
-                const res = await fetch(`/ai-api/ai/exports/share?${query.toString()}`);
+                const res = await fetch(resolveAiApiUrl(`/ai-api/ai/exports/share?${query.toString()}`));
                 if (res.ok) {
                     const data = await res.json();
                     if (data.shareId) {

@@ -22,7 +22,7 @@ export type DatabaseEngine =
 
 /**
  * Resolves the database engine type from connection metadata.
- * Defaults to 'postgres' since current proxy connector relays PostgreSQL.
+ * Defaults to 'postgres' since current connector relays PostgreSQL.
  */
 export function resolveDatabaseEngine(connection?: Partial<Connection> | null): DatabaseEngine {
   if (!connection) return 'postgres';

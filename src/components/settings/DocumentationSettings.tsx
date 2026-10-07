@@ -11,13 +11,13 @@ const RESOURCES = [
         label: 'General Documentation',
         description: 'Learn how to use the full Schema Weaver platform',
         icon: Globe,
-        href: 'https://docs.schemaweaver.vivekmind.com',
+        href: 'https://docs.schemaweaver.dev',
     },
     {
         label: 'Data Explorer Guide',
         description: 'Specific guides for table browsing, analysis, and reports',
         icon: FileBarChart,
-        href: 'https://docs.schemaweaver.vivekmind.com/data-explorer',
+        href: 'https://docs.schemaweaver.dev/data-explorer',
     },
 ];
 
@@ -88,15 +88,15 @@ export function DocumentationSettings() {
                     <div className="space-y-4">
                         <h5 className="text-2xs font-bold uppercase tracking-widest text-muted-foreground/60">Products</h5>
                         <ul className="space-y-2.5">
-                            <li><a href="https://sql-editor.schemaweaver.vivekmind.com" className="text-sm text-muted-foreground hover:text-foreground transition-colors">SQL Editor</a></li>
-                            <li><a href="https://data-explorer.schemaweaver.vivekmind.com" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Data Explorer</a></li>
+                            <li><a href="https://sql-editor.schemaweaver.dev" className="text-sm text-muted-foreground hover:text-foreground transition-colors">SQL Editor</a></li>
+                            <li><a href="https://data-explorer.schemaweaver.dev" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Data Explorer</a></li>
                         </ul>
                     </div>
                     <div className="space-y-4">
                         <h5 className="text-2xs font-bold uppercase tracking-widest text-muted-foreground/60">Resources</h5>
                         <ul className="space-y-2.5">
-                            <li><a href="https://docs.schemaweaver.vivekmind.com" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Documentation</a></li>
-                            <li><a href="https://schemaweaver.vivekmind.com" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Schema Weaver</a></li>
+                            <li><a href="https://docs.schemaweaver.dev" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Documentation</a></li>
+                            <li><a href="https://schemaweaver.dev" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Schema Weaver</a></li>
                         </ul>
                     </div>
                     <div className="space-y-4">

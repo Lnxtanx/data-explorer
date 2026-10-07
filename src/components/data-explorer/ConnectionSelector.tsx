@@ -144,7 +144,7 @@ export function ConnectionSelector({
               <div>
                 <p className="text-xs text-muted-foreground font-medium">No active databases</p>
                 <p className="text-[10px] text-muted-foreground/70 mt-0.5 leading-relaxed">
-                  Start your connector agent in terminal (<code className="font-mono text-[10px] bg-muted px-1 py-0.5 rounded">sw-agent start</code>)
+                  Start your connector agent in terminal (<code className="font-mono text-[10px] bg-muted px-1 py-0.5 rounded">pg-connector start</code>)
                 </p>
               </div>
               <Button

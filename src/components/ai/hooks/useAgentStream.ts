@@ -129,7 +129,7 @@ async function _createDurableRun(
         response = await apiRequestFetch('/api/ai/runs', {
             method: 'POST',
             signal,
-            // Support both snake_case (FastAPI AgentRequest) and camelCase (Node durable runs proxy)
+            // Support both snake_case (FastAPI AgentRequest) and camelCase (Node durable runs relay)
             body: JSON.stringify({
                 message:          request.message,
                 connection_id:    request.connectionId ?? null,

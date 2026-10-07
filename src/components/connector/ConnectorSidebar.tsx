@@ -50,7 +50,7 @@ export function ConnectorSidebar({ activeSection, onSelect }: ConnectorSidebarPr
             <div className="p-3 border-t border-border flex items-center justify-center gap-1.5">
                 <PostgresIcon className="w-3 h-3 opacity-70" />
                 <p className="text-[10px] text-muted-foreground text-center">
-                    PostgreSQL Proxy v1.0
+                    PostgreSQL Connector v1.0
                 </p>
             </div>
         </div>

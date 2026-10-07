@@ -1,9 +1,9 @@
 // =============================================================================
 // PostgreSQL Connector API Types
-// Core type definitions for PostgreSQL database proxy connectors and status
+// Core type definitions for PostgreSQL database connectors and status
 // =============================================================================
 
-/** A registered PostgreSQL database proxy connector instance */
+/** A registered PostgreSQL database connector instance */
 export interface DatabaseConnector {
     id: string;                   // Registration UUID
     agent_id: string;             // Connector ID, e.g. "agt_laptop_abc123"
@@ -25,7 +25,7 @@ export interface DatabaseConnector {
     shared_by_email?: string | null;
 }
 
-/** A PostgreSQL database discovered on a remote proxy connector */
+/** A PostgreSQL database discovered on a remote connector */
 export interface DiscoveredDatabase {
     db_alias: string;             // Alias, e.g. "default", "production"
     database: string;             // Database name, e.g. "mydb"
@@ -61,7 +61,7 @@ export interface ExecutionEvent {
     created_at: string;
 }
 
-/** Health event metric for proxy connection latency */
+/** Health event metric for connector connection latency */
 export interface HealthEvent {
     id: string;
     connector_id?: string;
