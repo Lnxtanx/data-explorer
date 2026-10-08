@@ -496,6 +496,7 @@ export function ExportButton({
         }
         exportToGoogleDrive(existingToken, pendingTab);
       } else {
+        toast.info('Please select your Google account in the popup to authorize export…');
         requestDriveToken();
       }
       return;
