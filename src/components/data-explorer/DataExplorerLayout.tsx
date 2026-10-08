@@ -218,9 +218,13 @@ export function DataExplorerLayout({
   const [pendingInquiry, setPendingInquiry] = useState<{ id: string; message: string } | null>(null);
 
   const handleGenerateDashboard = useCallback(async (opts?: any) => {
+    if (selectedConnection && !selectedConnection.is_online) {
+      toast.error('Cannot generate dashboard: Database connector is offline. Start the connector daemon to continue.');
+      return;
+    }
     onOpenAiPanel?.();
     return rawStartGeneration(opts);
-  }, [onOpenAiPanel, rawStartGeneration]);
+  }, [onOpenAiPanel, rawStartGeneration, selectedConnection]);
 
   const handleInsightWhy = useCallback((panelKey: string, evidence?: InsightEvidence, title?: string) => {
     if (isDashboardGenerating) {
@@ -704,6 +708,7 @@ export function DataExplorerLayout({
                   onSectionVisible={(secId) => setActiveSectionId(secId)}
                   iframeRef={dashboardIframeRef}
                   onOpenConnectWizard={onOpenConnectWizard}
+                  onOpenPlans={onOpenPlans ?? onOpenSettings}
                   onInsightWhy={handleInsightWhy}
                 />
               </Suspense>
@@ -717,6 +722,7 @@ export function DataExplorerLayout({
         <ResonaAISidePanel
           isOpen={isAiPanelOpen}
           onClose={onCloseAiPanel || (() => {})}
+          onOpenPlans={onOpenPlans ?? onOpenSettings}
           connectionId={connectionId ?? undefined}
           databaseName={databaseName}
           isDashboardGenerating={isDashboardGenerating}

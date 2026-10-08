@@ -5,7 +5,7 @@
 // =============================================================================
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Loader2, Users, Eye, EyeOff } from 'lucide-react';
+import { Loader2, Users, Eye, EyeOff, WifiOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -24,6 +24,7 @@ import { DashboardEmptyState } from './DashboardEmptyState';
 import { GenerationProgress, useDeletePanel, useReorderPanels, useResizePanel, useSetPanelVisibility } from './hooks/useDashboard';
 import { useConnections } from '@/components/connector/api/useConnections';
 import { useGreeting } from '../auth/hooks/useGreeting';
+import { useAIUsage, getProactiveQuotaError } from '../ai/hooks/useAIUsage';
 
 interface DashboardViewProps {
   connectionId: string | null;
@@ -38,6 +39,7 @@ interface DashboardViewProps {
   onSectionVisible?: (sectionId: string) => void;
   iframeRef?: React.RefObject<HTMLIFrameElement>;
   onOpenConnectWizard?: () => void;
+  onOpenPlans?: () => void;
   onInsightWhy?: (panelKey: string, evidence?: InsightEvidence, title?: string) => void;
 }
 
@@ -54,6 +56,7 @@ export function DashboardView({
   onSectionVisible,
   iframeRef: externalIframeRef,
   onOpenConnectWizard,
+  onOpenPlans,
   onInsightWhy,
 }: DashboardViewProps) {
   const internalIframeRef = useRef<HTMLIFrameElement>(null);
@@ -70,6 +73,9 @@ export function DashboardView({
   );
 
   const selectedConnection = connections?.find((c) => c.id === connectionId);
+  const isConnectorOnline = selectedConnection ? Boolean(selectedConnection.is_online) : true;
+  const { data: usageStatus } = useAIUsage();
+  const proactiveQuotaError = getProactiveQuotaError(usageStatus);
   const displayName = firstName || 'there';
   const isTeamMember = selectedConnection?.access_type === 'team';
 
@@ -284,6 +290,9 @@ export function DashboardView({
         displayName={displayName}
         databaseName={selectedConnection?.name}
         hasConnection={hasConnection}
+        isOnline={isConnectorOnline}
+        quotaError={proactiveQuotaError}
+        onOpenPlans={onOpenPlans}
         onGenerate={onGenerate}
         onOpenConnectWizard={onOpenConnectWizard}
         isGenerating={isGenerating}
@@ -295,6 +304,15 @@ export function DashboardView({
   // 5. Ready state: Render sandboxed iframe
   return (
     <div className="flex flex-1 flex-col w-full h-full overflow-hidden bg-background">
+      {!isConnectorOnline && (
+        <div className="flex items-center gap-2 px-3 py-1.5 border-b border-amber-500/30 bg-amber-500/10 text-xs text-amber-800 dark:text-amber-300">
+          <WifiOff className="w-3.5 h-3.5 shrink-0 text-amber-500" />
+          <span>
+            Database connector is offline. Queries and metrics cannot be refreshed until the connector daemon reconnects.
+          </span>
+        </div>
+      )}
+
       {dashboard.isShared && (
         <div className="flex items-center gap-1.5 px-3 py-1.5 border-b border-border bg-muted/40 text-[11px] text-muted-foreground">
           <Users className="w-3 h-3 shrink-0" />

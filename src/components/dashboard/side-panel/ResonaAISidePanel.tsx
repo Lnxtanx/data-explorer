@@ -14,6 +14,8 @@ import { useSidePanelResize } from './useSidePanelResize';
 import { useSidePanelSessions } from './useSidePanelSessions';
 import { useSidePanelChat } from './useSidePanelChat';
 import { useParentGenerationSync } from './useParentGenerationSync';
+import { useAIUsage, getProactiveQuotaError, getQuotaWarning } from '../../ai/hooks/useAIUsage';
+import { useConnections } from '@/components/connector/api/useConnections';
 import { cn } from '@/lib/utils';
 import { useEffect, useRef, useState } from 'react';
 
@@ -21,6 +23,7 @@ export interface ResonaAISidePanelProps {
   isOpen: boolean;
   onClose: () => void;
   onExpandFullScreen?: () => void;
+  onOpenPlans?: () => void;
   connectionId?: string;
   databaseName?: string;
   // Parent-driven generation state (from DataExplorerLayout's useGenerateDashboard)
@@ -35,6 +38,7 @@ export function ResonaAISidePanel({
   isOpen,
   onClose,
   onExpandFullScreen,
+  onOpenPlans,
   connectionId,
   databaseName,
   isDashboardGenerating = false,
@@ -44,6 +48,17 @@ export function ResonaAISidePanel({
   onClearPendingInquiry,
 }: ResonaAISidePanelProps) {
   const [inputText, setInputText] = useState('');
+
+  // Quota & credits status (matching AIChatMain)
+  const { data: usageStatus } = useAIUsage();
+  const proactiveQuotaError = getProactiveQuotaError(usageStatus);
+  const quotaWarning = getQuotaWarning(usageStatus);
+  const quotaError = proactiveQuotaError;
+
+  // Active connector connection online status
+  const { data: connections } = useConnections();
+  const activeConn = connections?.find((c) => c.id === connectionId);
+  const isConnectorOnline = activeConn ? Boolean(activeConn.is_online) : true;
 
   // 1. Shared conversation messages state
   const [localMessages, setLocalMessages] = useState<SidePanelMessage[]>([]);
@@ -68,6 +83,8 @@ export function ResonaAISidePanel({
   const chat = useSidePanelChat({
     connectionId,
     databaseName,
+    isConnectorOnline,
+    quotaError,
     selectedRunId: sessionsManager.selectedRunId,
     setSelectedRunId: sessionsManager.setSelectedRunId,
     currentSessionId: sessionsManager.currentSessionId,
@@ -138,6 +155,8 @@ export function ResonaAISidePanel({
         {/* Main Side Panel Aside */}
         <aside className="flex flex-col h-full flex-1 bg-card border-l border-border overflow-hidden">
           <ResonaAIHeader
+            databaseName={databaseName}
+            isConnectorOnline={isConnectorOnline}
             onClose={onClose}
             onNewChat={() => {
               chat.cancelDashboard();
@@ -166,6 +185,10 @@ export function ResonaAISidePanel({
             isStreaming={isWorking}
             onAbort={chat.cancelDashboard}
             databaseName={databaseName}
+            isConnectorOnline={isConnectorOnline}
+            quotaError={quotaError}
+            quotaWarning={quotaWarning}
+            onOpenPlans={onOpenPlans}
             placeholder="Ask Resona Dashboard AI about metrics or charts…"
             mode={chat.agentMode}
             thinking={chat.thinking}

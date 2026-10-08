@@ -123,7 +123,7 @@ export function ConnectorDialog({ open, onClose, initialTab = 'overview', onSele
                         onSelect={(section) => setActiveTab(section as Tab)}
                     />
 
-                    <div className="flex-1 min-w-0 overflow-y-auto flex flex-col">
+                    <div className="flex-1 min-w-0 overflow-y-auto flex flex-col h-full">
                         {renderContent()}
                     </div>
                 </div>

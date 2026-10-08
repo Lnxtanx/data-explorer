@@ -275,14 +275,14 @@ export function ConnectorHealth() {
                         {events.length} {events.length === 1 ? 'event' : 'events'}
                     </span>
                 </CardHeader>
-                <CardContent className="p-0">
+                <CardContent className="p-0 flex-1 min-h-0 flex flex-col">
                     {eventsLoading ? (
                         <div className="py-12 flex items-center justify-center text-xs text-muted-foreground gap-2">
                             <Loader2 className="w-4 h-4 animate-spin text-primary" />
                             Loading health events...
                         </div>
                     ) : events.length > 0 ? (
-                        <ScrollArea className="h-[320px]">
+                        <ScrollArea className="flex-1 h-full min-h-[300px] max-h-[520px]">
                             <div className="divide-y pr-1">
                                 {events.map((event: HealthEvent) => {
                                     const isHealthy = event.status === 'healthy' || event.status === 'online' || event.status === 'success';

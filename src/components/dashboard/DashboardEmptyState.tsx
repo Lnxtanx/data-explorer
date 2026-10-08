@@ -3,7 +3,7 @@
 // Minimalist, single-line points with elevated typography and zero fluff.
 // =============================================================================
 
-import { ArrowRight, Loader2, Users } from 'lucide-react';
+import { ArrowRight, Loader2, Users, WifiOff, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 interface DashboardEmptyStateProps {
@@ -12,6 +12,9 @@ interface DashboardEmptyStateProps {
   onGenerate?: () => void;
   isGenerating?: boolean;
   hasConnection?: boolean;
+  isOnline?: boolean;
+  quotaError?: string | null;
+  onOpenPlans?: () => void;
   onOpenConnectWizard?: () => void;
   /** 'owner' = this user owns the connection; 'team' = shared with them via a team. */
   accessType?: 'owner' | 'team';
@@ -46,6 +49,9 @@ export function DashboardEmptyState({
   onGenerate,
   isGenerating = false,
   hasConnection = true,
+  isOnline = true,
+  quotaError = null,
+  onOpenPlans,
   onOpenConnectWizard,
   accessType = 'owner',
 }: DashboardEmptyStateProps) {
@@ -56,6 +62,14 @@ export function DashboardEmptyState({
 
   const handleAction = () => {
     if (!hasConnection) {
+      if (onOpenConnectWizard) onOpenConnectWizard();
+      return;
+    }
+    if (quotaError && onOpenPlans) {
+      onOpenPlans();
+      return;
+    }
+    if (!isOnline) {
       if (onOpenConnectWizard) onOpenConnectWizard();
       return;
     }
@@ -108,6 +122,33 @@ export function DashboardEmptyState({
           </div>
         )}
 
+        {/* Warning Banners for offline connector or credit limit */}
+        {hasConnection && !isOnline && (
+          <div className="mt-6 ml-4 pl-9">
+            <div className="flex items-start gap-3 p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-300 text-xs leading-relaxed max-w-xl">
+              <WifiOff className="w-4 h-4 mt-0.5 shrink-0 text-amber-500" />
+              <div>
+                <p className="font-semibold text-foreground mb-0.5">Database connector is offline</p>
+                <p className="text-muted-foreground">
+                  The connector for <strong>{dbLabel}</strong> is not running. Start your local connector daemon to generate dashboards or run queries.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {hasConnection && isOnline && quotaError && (
+          <div className="mt-6 ml-4 pl-9">
+            <div className="flex items-start gap-3 p-3.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 text-amber-800 dark:text-amber-200 text-xs leading-relaxed max-w-xl">
+              <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-amber-500" />
+              <div>
+                <p className="font-semibold mb-0.5">AI Credit Limit Reached</p>
+                <p>{quotaError}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Direct Action Button placed comfortably above the fold */}
         <div className="mt-8 ml-4 pl-9">
           {isTeamMember ? (
@@ -128,6 +169,17 @@ export function DashboardEmptyState({
               ) : !hasConnection ? (
                 <>
                   <span>Connect Database to Generate</span>
+                  <ArrowRight className="w-4 h-4" />
+                </>
+              ) : !isOnline ? (
+                <>
+                  <WifiOff className="w-4 h-4 text-amber-500" />
+                  <span>Connector Offline · Start Daemon</span>
+                </>
+              ) : quotaError ? (
+                <>
+                  <AlertTriangle className="w-4 h-4 text-amber-500" />
+                  <span>Upgrade Plan to Generate</span>
                   <ArrowRight className="w-4 h-4" />
                 </>
               ) : (

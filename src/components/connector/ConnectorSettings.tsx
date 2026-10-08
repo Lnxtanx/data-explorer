@@ -60,7 +60,7 @@ export function ConnectorSettings() {
     }
 
     return (
-        <div className="p-6 space-y-6">
+        <div className="p-6 space-y-6 flex flex-col h-full overflow-y-auto">
             <div className="flex items-center justify-between pb-2 border-b">
                 <div>
                     <h3 className="text-xl font-semibold tracking-tight">Connector Settings</h3>

@@ -47,6 +47,7 @@ export function resolveAiApiUrl(path: string): string {
 }
 
 // =============================================================================
+// =============================================================================
 // CSRF Token Helper
 // Reads the _csrf cookie set by the backend's double-submit pattern.
 // In cross-subdomain deployments, we also store the token in memory
@@ -54,14 +55,21 @@ export function resolveAiApiUrl(path: string): string {
 // =============================================================================
 
 let _csrfTokenInMemory: string | null = null;
+let _csrfInitPromise: Promise<string | null> | null = null;
+
+const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 export function getCsrfToken(): string | null {
     // Read from cookie first if present to match the Cookie header the browser sends
-    const match = document.cookie.match(/(?:^|;\s*)_csrf=([^;]*)/);
-    if (match) {
-        const token = decodeURIComponent(match[1]);
-        _csrfTokenInMemory = token;
-        return token;
+    if (typeof document !== 'undefined') {
+        const match = document.cookie.match(/(?:^|;\s*)_csrf=([^;]*)/);
+        if (match) {
+            const token = decodeURIComponent(match[1]);
+            if (token) {
+                _csrfTokenInMemory = token;
+                return token;
+            }
+        }
     }
     // Fallback: in-memory token (always works cross-subdomain)
     return _csrfTokenInMemory;
@@ -73,25 +81,70 @@ export function getCsrfToken(): string | null {
  */
 export function clearCsrfToken(): void {
     _csrfTokenInMemory = null;
+    _csrfInitPromise = null;
 }
 
 /**
- * Fetch a CSRF token from the backend on app startup.
- * Stores the token in memory so it works reliably across subdomains.
- * Should be called once on app mount.
+ * Fetch a CSRF token from the backend on app startup or on demand.
+ * Coalesces concurrent calls into a single in-flight Promise.
  */
-export async function initCsrfToken(): Promise<void> {
-    if (getCsrfToken()) return; // Already have a token
-    try {
-        const res = await fetch(`${API_BASE_URL}/api/csrf-token`, { credentials: 'include' });
-        if (res.ok) {
-            const data = await res.json();
-            if (data.csrfToken) {
-                _csrfTokenInMemory = data.csrfToken;
+export async function initCsrfToken(force = false): Promise<string | null> {
+    const existing = getCsrfToken();
+    if (!force && existing) {
+        return existing;
+    }
+
+    if (_csrfInitPromise && !force) {
+        return _csrfInitPromise;
+    }
+
+    _csrfInitPromise = (async () => {
+        try {
+            const url = `${API_BASE_URL}/api/csrf-token${force ? '?rotate=true' : ''}`;
+            const res = await fetch(url, {
+                credentials: 'include',
+                cache: 'no-store',
+                headers: { 'Cache-Control': 'no-cache' }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                if (data.csrfToken) {
+                    _csrfTokenInMemory = data.csrfToken;
+                    return data.csrfToken;
+                }
             }
+        } catch (err) {
+            console.warn('[CSRF] Non-fatal init error:', err);
+        } finally {
+            _csrfInitPromise = null;
         }
+        return getCsrfToken();
+    })();
+
+    return _csrfInitPromise;
+}
+
+/**
+ * Ensure CSRF token is available before executing a mutating request.
+ */
+export async function ensureCsrfToken(): Promise<string | null> {
+    const token = getCsrfToken();
+    if (token) return token;
+    return initCsrfToken();
+}
+
+/**
+ * Inspect 403 response to detect if it was triggered by a CSRF token mismatch or expiry.
+ */
+async function isCsrfForbidden(response: Response): Promise<boolean> {
+    if (response.status !== 403) return false;
+    try {
+        const clone = response.clone();
+        const data = await clone.json();
+        const text = `${data?.error || ''} ${data?.message || ''}`.toLowerCase();
+        return text.includes('csrf');
     } catch {
-        // Non-fatal — CSRF cookie will be set on first backend response
+        return false;
     }
 }
 
@@ -128,6 +181,8 @@ function buildRequestConfig(options: RequestInit = {}): RequestInit {
             ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
             ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {}),
             ...options.headers,
+            // Ensure freshest X-CSRF-Token is applied if available
+            ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {}),
         },
     };
 }
@@ -158,6 +213,10 @@ export async function apiRequestFetch(
     endpoint: string,
     options: RequestInit = {}
 ): Promise<Response> {
+    const method = (options.method || 'GET').toUpperCase();
+    if (MUTATING_METHODS.has(method) && !getCsrfToken()) {
+        await ensureCsrfToken();
+    }
     return fetch(`${API_BASE_URL}${endpoint}`, buildRequestConfig(options));
 }
 
@@ -173,8 +232,20 @@ export async function apiRequestRaw(
     endpoint: string,
     options: RequestInit = {}
 ): Promise<Response> {
+    const method = (options.method || 'GET').toUpperCase();
+    if (MUTATING_METHODS.has(method) && !getCsrfToken()) {
+        await ensureCsrfToken();
+    }
+
     const url = `${API_BASE_URL}${endpoint}`;
-    const response = await fetch(url, buildRequestConfig(options));
+    let response = await fetch(url, buildRequestConfig(options));
+
+    // Self-healing CSRF: auto-refresh and retry once on 403 CSRF error
+    if (MUTATING_METHODS.has(method) && (await isCsrfForbidden(response))) {
+        console.warn('[CSRF] Token mismatch detected in apiRequestRaw. Refreshing and retrying...');
+        await initCsrfToken(true);
+        response = await fetch(url, buildRequestConfig(options));
+    }
 
     if (!response.ok) {
         announceUnauthorized(url, response.status);
@@ -223,9 +294,20 @@ export async function apiRequest<T>(
     endpoint: string,
     options: RequestInit = {}
 ): Promise<T> {
-    const url = `${API_BASE_URL}${endpoint}`;
+    const method = (options.method || 'GET').toUpperCase();
+    if (MUTATING_METHODS.has(method) && !getCsrfToken()) {
+        await ensureCsrfToken();
+    }
 
-    const response = await fetch(url, buildRequestConfig(options));
+    const url = `${API_BASE_URL}${endpoint}`;
+    let response = await fetch(url, buildRequestConfig(options));
+
+    // Self-healing CSRF: auto-refresh and retry once on 403 CSRF error
+    if (MUTATING_METHODS.has(method) && (await isCsrfForbidden(response))) {
+        console.warn('[CSRF] Token mismatch detected in apiRequest. Refreshing and retrying...');
+        await initCsrfToken(true);
+        response = await fetch(url, buildRequestConfig(options));
+    }
 
     // Handle non-JSON responses
     const contentType = response.headers.get('content-type');

@@ -3,8 +3,8 @@
 // Clean chat input with ModeSelector, send action, and multi-file attachments.
 // =============================================================================
 
-import React, { useRef, useEffect } from 'react';
-import { ArrowUp, Square, Plus, Loader2 } from 'lucide-react';
+import React, { useRef, useEffect, useState } from 'react';
+import { ArrowUp, Square, Plus, Loader2, AlertTriangle, WifiOff, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ModeSelector, type AgentMode } from '../../ai/models/ModeSelector';
 import AttachmentChip from '../../ai/chat/AttachmentChip';
@@ -67,6 +67,10 @@ interface ResonaAIInputProps {
   disabled?: boolean;
   placeholder?: string;
   databaseName?: string;
+  isConnectorOnline?: boolean;
+  quotaError?: string | null;
+  quotaWarning?: { level: 'warning' | 'critical'; message: string } | null;
+  onOpenPlans?: () => void;
   mode?: AgentMode;
   thinking?: boolean;
   onModeChange?: (mode: AgentMode) => void;
@@ -87,6 +91,10 @@ export function ResonaAIInput({
   disabled = false,
   placeholder,
   databaseName,
+  isConnectorOnline = true,
+  quotaError,
+  quotaWarning,
+  onOpenPlans,
   mode = 'flash',
   thinking = false,
   onModeChange,
@@ -100,6 +108,14 @@ export function ResonaAIInput({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const [warningDismissed, setWarningDismissed] = useState(false);
+  const warningKey = quotaWarning ? `${quotaWarning.level}-${quotaWarning.message.slice(0, 20)}` : null;
+  const [lastWarningKey, setLastWarningKey] = useState<string | null>(null);
+  if (warningKey !== lastWarningKey) {
+    setLastWarningKey(warningKey);
+    if (warningKey) setWarningDismissed(false);
+  }
+
   // Auto-resize textarea height on text change
   useEffect(() => {
     const el = textareaRef.current;
@@ -108,12 +124,13 @@ export function ResonaAIInput({
     el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
   }, [value]);
 
+  const isInputBlocked = Boolean(quotaError || !isConnectorOnline);
   const hasContent = Boolean(value.trim() || attachedFiles.length > 0);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      if (!isStreaming && !isUploading && hasContent && !disabled) {
+      if (!isStreaming && !isUploading && hasContent && !disabled && !isInputBlocked) {
         onSubmit();
       }
     }
@@ -122,12 +139,13 @@ export function ResonaAIInput({
   const handleActionClick = () => {
     if (isStreaming && onAbort) {
       onAbort();
-    } else if (hasContent && !disabled && !isUploading) {
+    } else if (hasContent && !disabled && !isInputBlocked && !isUploading) {
       onSubmit();
     }
   };
 
   const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    if (isInputBlocked) return;
     const files = e.clipboardData?.files ? Array.from(e.clipboardData.files) : [];
     if (files.length > 0 && onFilesAdd) {
       e.preventDefault();
@@ -150,14 +168,78 @@ export function ResonaAIInput({
     }
   };
 
-  const effectivePlaceholder =
-    placeholder ||
-    (databaseName
-      ? `Ask Resona Dashboard AI about ${databaseName}...`
-      : 'Ask Resona Dashboard AI about metrics or charts...');
+  const effectivePlaceholder = quotaError
+    ? 'Credit limit reached — upgrade to continue'
+    : !isConnectorOnline
+    ? 'Database offline — start connector daemon to continue'
+    : placeholder ||
+      (databaseName
+        ? `Ask Resona Dashboard AI about ${databaseName}...`
+        : 'Ask Resona Dashboard AI about metrics or charts...');
 
   return (
     <div className="p-3 bg-transparent shrink-0 relative select-none">
+      {/* 1. Quota Exhaustion Banner — amber, blocks input */}
+      {quotaError && (
+        <div className="flex items-start gap-2 mb-2 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 rounded-xl px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
+          <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5 text-amber-500" />
+          <span className="flex-1 leading-relaxed">{quotaError}</span>
+          {onOpenPlans && (
+            <button
+              onClick={onOpenPlans}
+              className="shrink-0 font-medium underline underline-offset-2 hover:text-amber-600 dark:hover:text-amber-100 transition-colors whitespace-nowrap cursor-pointer"
+            >
+              View plans
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* 2. Connector Offline Banner — rose/amber, blocks input */}
+      {!isConnectorOnline && (
+        <div className="flex items-start gap-2 mb-2 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800/60 rounded-xl px-3 py-2 text-xs text-rose-800 dark:text-rose-200">
+          <WifiOff className="w-3.5 h-3.5 shrink-0 mt-0.5 text-rose-500" />
+          <span className="flex-1 leading-relaxed">
+            Database connector is offline. Start your local connector daemon (<code>npx @schema-weaver/pg-connector start</code>) to query or generate analytics.
+          </span>
+        </div>
+      )}
+
+      {/* 3. Quota Warning Banner — dismissible */}
+      {!quotaError && isConnectorOnline && quotaWarning && !warningDismissed && (
+        <div
+          className={cn(
+            'flex items-start gap-2 mb-2 rounded-xl px-3 py-2 text-xs border',
+            quotaWarning.level === 'critical'
+              ? 'bg-orange-50 dark:bg-orange-950/30 border-orange-200 dark:border-orange-800/50 text-orange-800 dark:text-orange-200'
+              : 'bg-yellow-50 dark:bg-yellow-950/30 border-yellow-200 dark:border-yellow-800/40 text-yellow-800 dark:text-yellow-200'
+          )}
+        >
+          <AlertTriangle
+            className={cn(
+              'w-3.5 h-3.5 shrink-0 mt-0.5',
+              quotaWarning.level === 'critical' ? 'text-orange-500' : 'text-yellow-500'
+            )}
+          />
+          <span className="flex-1 leading-relaxed">{quotaWarning.message}</span>
+          {onOpenPlans && (
+            <button
+              onClick={onOpenPlans}
+              className="shrink-0 font-medium underline underline-offset-2 opacity-70 hover:opacity-100 transition-opacity whitespace-nowrap cursor-pointer"
+            >
+              Upgrade
+            </button>
+          )}
+          <button
+            onClick={() => setWarningDismissed(true)}
+            className="shrink-0 ml-0.5 opacity-40 hover:opacity-80 transition-opacity cursor-pointer"
+            aria-label="Dismiss warning"
+          >
+            <X className="w-3 h-3" />
+          </button>
+        </div>
+      )}
+
       {/* Hidden File Input */}
       <input
         type="file"
@@ -191,7 +273,7 @@ export function ResonaAIInput({
           onKeyDown={handleKeyDown}
           onPaste={handlePaste}
           placeholder={effectivePlaceholder}
-          disabled={disabled && !isStreaming}
+          disabled={(disabled || isInputBlocked) && !isStreaming}
           rows={1}
           className="w-full resize-none bg-transparent px-1.5 py-1 text-[14px] sm:text-[14.5px] leading-[22px] font-sans antialiased text-foreground placeholder:text-muted-foreground/70 outline-none max-h-32 overflow-y-auto"
         />
@@ -204,7 +286,7 @@ export function ResonaAIInput({
               <ModeSelector
                 mode={mode}
                 thinking={thinking}
-                disabled={isStreaming}
+                disabled={isStreaming || isInputBlocked}
                 onModeChange={onModeChange}
                 onThinkingChange={onThinkingChange}
               />
@@ -216,7 +298,7 @@ export function ResonaAIInput({
               variant="ghost"
               size="icon"
               onClick={() => fileInputRef.current?.click()}
-              disabled={isStreaming || isUploading}
+              disabled={isStreaming || isUploading || isInputBlocked}
               className="h-7 w-7 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
               title="Attach files (PDF, CSV, Excel, SQL, code, images, docs)"
             >
@@ -229,7 +311,7 @@ export function ResonaAIInput({
             type="button"
             size="icon"
             onClick={handleActionClick}
-            disabled={(!hasContent && !isStreaming) || (disabled && !isStreaming) || isUploading}
+            disabled={(!hasContent && !isStreaming) || ((disabled || isInputBlocked) && !isStreaming) || isUploading}
             className={cn(
               'h-7 w-7 rounded-full transition-all shrink-0 cursor-pointer',
               isStreaming

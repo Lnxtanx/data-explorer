@@ -14,6 +14,7 @@ import {
   Check,
   Search,
   Trash2,
+  WifiOff,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ActionTooltip } from '@/components/ui/tooltip';
@@ -41,6 +42,7 @@ import { useMemo, useState } from 'react';
 
 interface ResonaAIHeaderProps {
   databaseName?: string;
+  isConnectorOnline?: boolean;
   onClose: () => void;
   onExpandFullScreen?: () => void;
   onNewChat?: () => void;
@@ -60,6 +62,8 @@ const STATUS_DOT: Record<string, string> = {
 
 
 export function ResonaAIHeader({
+  databaseName,
+  isConnectorOnline = true,
   onClose,
   onExpandFullScreen,
   onNewChat,
@@ -90,6 +94,20 @@ export function ResonaAIHeader({
         <span className="text-sm font-semibold text-foreground tracking-tight shrink-0">
           {headerTitle}
         </span>
+        {databaseName && (
+          <span className="text-[11px] font-mono text-muted-foreground/70 truncate max-w-[120px] hidden sm:inline" title={databaseName}>
+            ({databaseName})
+          </span>
+        )}
+        {!isConnectorOnline && (
+          <span
+            title={`Database connector ${databaseName ? `for ${databaseName} ` : ''}is offline`}
+            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10.5px] font-medium bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 shrink-0"
+          >
+            <WifiOff className="w-2.5 h-2.5" />
+            Offline
+          </span>
+        )}
       </div>
 
       {/* Actions: New Chat, Maximize, Gemini-style ⋮ Menu, Close */}

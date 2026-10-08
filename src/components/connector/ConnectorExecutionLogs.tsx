@@ -191,14 +191,14 @@ export function ConnectorExecutionLogs({ connectionId = null }: ConnectorExecuti
                         {filteredLogs.length} {filteredLogs.length === 1 ? 'event' : 'events'}
                     </span>
                 </CardHeader>
-                <CardContent className="p-0 flex-1 min-h-0">
+                <CardContent className="p-0 flex-1 min-h-0 flex flex-col overflow-hidden">
                     {isLoading ? (
-                        <div className="h-[280px] flex flex-col items-center justify-center text-xs text-muted-foreground gap-2">
+                        <div className="flex-1 min-h-[280px] flex flex-col items-center justify-center text-xs text-muted-foreground gap-2">
                             <Loader2 className="w-5 h-5 animate-spin text-primary" />
                             Loading execution logs...
                         </div>
                     ) : filteredLogs.length > 0 ? (
-                        <ScrollArea className="h-[300px] w-full">
+                        <ScrollArea className="flex-1 h-full w-full">
                             <div className="divide-y pr-1">
                                 {filteredLogs.map(({ log, parsed, sql }) => {
                                     const date = new Date(log.created_at);
@@ -293,7 +293,7 @@ export function ConnectorExecutionLogs({ connectionId = null }: ConnectorExecuti
                             </div>
                         </ScrollArea>
                     ) : (
-                        <div className="h-[280px] flex flex-col items-center justify-center p-8 text-xs text-muted-foreground gap-1.5 text-center">
+                        <div className="flex-1 min-h-[280px] flex flex-col items-center justify-center p-8 text-xs text-muted-foreground gap-1.5 text-center">
                             <Terminal className="w-6 h-6 text-muted-foreground/40 mb-1" />
                             <span>No execution logs found matching your filter criteria.</span>
                         </div>

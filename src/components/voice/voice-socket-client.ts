@@ -2,10 +2,30 @@
 // src/components/voice/voice-socket-client.ts — Voice Session WebSocket Client
 // =============================================================================
 
+import { API_BASE_URL } from '@/lib/api/client';
 import type { ClientMessage, GeminiEvent, ServerFrame } from './types';
 
 const AUDIO_MIME = 'audio/pcm;rate=16000';
 const MAX_PREOPEN_QUEUE = 50;
+
+/**
+ * Resolve the voice-session WebSocket authority.
+ *
+ * In production the app origin and the API origin differ
+ * (data-explorer.schemaweaver.dev -> api.schemaweaver.dev), so the socket has to
+ * target the API host explicitly or it hits the static frontend host and never
+ * upgrades. When API_BASE_URL is empty (dev) we fall back to the page origin,
+ * where the Vite proxy forwards /api with `ws: true`.
+ */
+function resolveVoiceWsUrl(path: string): string {
+    if (API_BASE_URL) {
+        const base = new URL(API_BASE_URL, window.location.origin);
+        const scheme = base.protocol === 'https:' ? 'wss:' : 'ws:';
+        return `${scheme}//${base.host}${path}`;
+    }
+    const scheme = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    return `${scheme}//${window.location.host}${path}`;
+}
 
 function arrayBufferToBase64(buffer: ArrayBuffer): string {
     const bytes = new Uint8Array(buffer);
@@ -42,13 +62,11 @@ export class VoiceSocketClient {
         this.events = events;
         this.preopenQueue = [];
 
-        const wsProto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const wsHost = window.location.host;
         const query = new URLSearchParams();
         if (connectionId) query.set('connection_id', connectionId);
         if (sessionId) query.set('session_id', sessionId);
         if (userName) query.set('user_name', userName);
-        const wsUrl = `${wsProto}//${wsHost}/api/voice/session?${query.toString()}`;
+        const wsUrl = `${resolveVoiceWsUrl('/api/voice/session')}?${query.toString()}`;
 
         const socket = new WebSocket(wsUrl);
         this.ws = socket;

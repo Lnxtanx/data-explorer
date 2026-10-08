@@ -20,6 +20,8 @@ import { logger } from '@/lib/logger';
 interface UseSidePanelChatOptions {
   connectionId?: string | null;
   databaseName?: string;
+  isConnectorOnline?: boolean;
+  quotaError?: string | null;
   selectedRunId: string | null;
   setSelectedRunId: (runId: string | null) => void;
   currentSessionId: string | null;
@@ -37,6 +39,8 @@ interface UseSidePanelChatOptions {
 
 export function useSidePanelChat({
   connectionId,
+  isConnectorOnline = true,
+  quotaError = null,
   selectedRunId,
   setSelectedRunId,
   currentSessionId,
@@ -199,6 +203,14 @@ export function useSidePanelChat({
   // Continue / Mutate / Ask Handler
   const handleContinueDashboard = useCallback(async (messageText?: string, filesOverride?: File[]) => {
     if (!connectionId) return;
+    if (quotaError) {
+      toast.error(quotaError);
+      return;
+    }
+    if (isConnectorOnline === false) {
+      toast.error('Database connector is offline. Start the connector daemon to continue.');
+      return;
+    }
     const msg = (messageText ?? '').trim();
     const filesToUpload = filesOverride ?? [...attachedFiles];
     if (!msg && filesToUpload.length === 0) return;
@@ -622,6 +634,8 @@ export function useSidePanelChat({
     setSelectedRunId,
     messagesBySessionRef,
     attachedFiles,
+    isConnectorOnline,
+    quotaError,
   ]);
 
   // Handle auto-dispatch of pending inquiry (from metric card "Why did this change?" clicks)

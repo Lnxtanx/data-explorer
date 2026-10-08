@@ -75,6 +75,8 @@ function clearSwCookies(): void {
 
     // CSRF double-submit cookie (httpOnly: false, so client can delete it)
     deleteCookie('_csrf');
+    deleteCookie('_csrf', { domain: '.schemaweaver.dev' });
+    deleteCookie('_csrf', { domain: '.vivekmind.com' });
 
     // Null the in-memory CSRF token held by the API client
     clearCsrfToken();
