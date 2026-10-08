@@ -459,14 +459,14 @@ export function ExportButton({
   const requestDriveToken = useGoogleLogin({
     scope: 'https://www.googleapis.com/auth/drive.file',
     hint: user?.email || undefined,
-    prompt: '',
     onSuccess: (tokenResponse) => {
       if (tokenResponse.access_token) {
         setStoredDriveToken(tokenResponse.access_token, tokenResponse.expires_in || 3600, user?.email);
         exportToGoogleDrive(tokenResponse.access_token);
       }
     },
-    onError: () => {
+    onError: (errorResponse) => {
+      logger.error('Google authorization failed:', errorResponse);
       setIsExporting(false);
       toast.error('Google authorization was cancelled or failed.');
     },

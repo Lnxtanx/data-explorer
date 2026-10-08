@@ -207,9 +207,13 @@ export function FilePreviewView({ artifact, onClose }: FilePreviewViewProps) {
                 return;
             }
 
-            // Omit credentials on cross-origin requests (e.g. S3 presigned URLs) to prevent CORS credential errors
-            const isSameOrigin = url.startsWith('/') || (typeof window !== 'undefined' && url.startsWith(window.location.origin));
-            const res = await fetch(url, isSameOrigin ? { credentials: 'include' } : {});
+            // Include credentials for backend APIs so user session is authenticated.
+            // Omit credentials only on external pre-signed URLs (e.g. S3 direct) to prevent CORS credential errors.
+            const isBackendApi = url.startsWith('/')
+                || (API_BASE_URL ? url.startsWith(API_BASE_URL) : false)
+                || url.includes('schemaweaver.dev')
+                || (typeof window !== 'undefined' && url.startsWith(window.location.origin));
+            const res = await fetch(url, isBackendApi ? { credentials: 'include' } : {});
             if (!res.ok) {
                 throw new Error(`Failed to fetch file (${res.status} ${res.statusText})`);
             }

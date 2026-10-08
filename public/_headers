@@ -19,10 +19,11 @@
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: camera=(), microphone=(self), geolocation=()
+  Cross-Origin-Opener-Policy: same-origin-allow-popups
 
 # Content-Security-Policy for XSS protection
 /*
-  Content-Security-Policy: default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://accounts.google.com https://apis.google.com https://*.razorpay.com https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https://*.gstatic.com https://*.googleusercontent.com https://vivekmind.com; connect-src 'self' https://api.schemaweaver.dev https://ai.schemaweaver.dev wss://api.schemaweaver.dev wss://api-node.schemaweaver.vivekmind.com https://api-node.schemaweaver.vivekmind.com https://*.supabase.co wss://*.supabase.co https://accounts.google.com https://oauth2.googleapis.com https://www.googleapis.com https://*.razorpay.com https://cloudflareinsights.com; frame-src 'self' https://accounts.google.com https://*.razorpay.com; worker-src 'self' blob:; manifest-src 'self'
+  Content-Security-Policy: default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://accounts.google.com https://apis.google.com https://*.razorpay.com https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https://*.gstatic.com https://*.googleusercontent.com https://vivekmind.com; connect-src 'self' https://api.schemaweaver.dev https://ai.schemaweaver.dev wss://api.schemaweaver.dev wss://api-node.schemaweaver.vivekmind.com https://api-node.schemaweaver.vivekmind.com https://*.supabase.co wss://*.supabase.co https://accounts.google.com https://oauth2.googleapis.com https://www.googleapis.com https://*.razorpay.com https://cloudflareinsights.com; frame-src 'self' https://api.schemaweaver.dev https://ai.schemaweaver.dev https://accounts.google.com https://*.razorpay.com blob:; worker-src 'self' blob:; manifest-src 'self'
 
 # robots.txt and sitemap should have shorter cache
 /robots.txt

@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Plus, Send, Database, LayoutDashboard, FolderOpen, AtSign, X, Square, Loader2, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -214,6 +214,31 @@ export function ChatInput({
 
     const [interimSpeech, setInterimSpeech] = useState('');
 
+    // Auto-dismiss agent warnings (e.g. truncation, loop, budget) after 6 seconds
+    useEffect(() => {
+        if (!agentWarnings || agentWarnings.length === 0 || !onDismissWarning) return;
+        const now = Date.now();
+        const timers = agentWarnings.map((warning) => {
+            const age = now - (warning.at || now);
+            const delay = Math.max(500, 6000 - age);
+            return setTimeout(() => {
+                onDismissWarning(warning.id);
+            }, delay);
+        });
+        return () => {
+            timers.forEach(clearTimeout);
+        };
+    }, [agentWarnings, onDismissWarning]);
+
+    // Auto-dismiss quota warning after 8 seconds
+    useEffect(() => {
+        if (!quotaWarning || warningDismissed) return;
+        const timer = setTimeout(() => {
+            setWarningDismissed(true);
+        }, 8000);
+        return () => clearTimeout(timer);
+    }, [quotaWarning, warningDismissed]);
+
     const handlePaste = useCallback((e: React.ClipboardEvent<HTMLTextAreaElement>) => {
         // 1. If clipboard contains native files (e.g. copied images/screenshots, files from desktop)
         const files = e.clipboardData?.files ? Array.from(e.clipboardData.files) : [];
@@ -314,7 +339,7 @@ export function ChatInput({
                             <div
                                 key={warning.id}
                                 className={cn(
-                                    'flex items-start gap-2 rounded-xl px-3 py-2 text-xs border',
+                                    'flex items-start gap-2 rounded-xl px-3 py-2 text-xs border transition-all duration-200 animate-in fade-in-50 slide-in-from-bottom-1',
                                     isCritical
                                         ? 'bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800/50 text-red-800 dark:text-red-200'
                                         : isOscillation
