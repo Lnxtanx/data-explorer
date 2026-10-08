@@ -426,10 +426,14 @@ window.addEventListener('DOMContentLoaded', () => {
 
   // 2. Discover any remaining chart containers from window.__SW_PANELS__
   document.querySelectorAll<HTMLElement>('[id^="chart-"]').forEach((el) => {
-    if (el.dataset.rendered === 'true') return;
-    const panelKey = (el.id || '').replace(/^chart-/, '');
-    const panelConfig = window.__SW_PANELS__ && window.__SW_PANELS__[panelKey];
-    if (panelConfig) renderPanel('#' + el.id, panelConfig);
+    try {
+      if (el.dataset.rendered === 'true') return;
+      const panelKey = (el.id || '').replace(/^chart-/, '');
+      const panelConfig = window.__SW_PANELS__ && window.__SW_PANELS__[panelKey];
+      if (panelConfig) renderPanel('#' + el.id, panelConfig);
+    } catch (e) {
+      engineWarn('[swChart] Failed to render panel for', el.id, e);
+    }
   });
 
   // Notify parent that dashboard is loaded so it can reply with THEME_SYNC.

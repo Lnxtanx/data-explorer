@@ -56,6 +56,13 @@ function resolveSeries(data: PanelData, config: PanelRuntimeConfig): { xI: numbe
 }
 
 export function renderChart(container: HTMLElement, data: PanelData | null, config: PanelRuntimeConfig, type: string): void {
+  if (typeof Chart === 'undefined') {
+    container.innerHTML =
+      '<div class="sw-error-card"><div class="sw-error-title">Chart Rendering Unavailable</div>' +
+      '<div class="sw-error-message">The Chart.js library is not loaded. Please ensure cdn.jsdelivr.net is permitted.</div></div>';
+    return;
+  }
+
   if (!data || !data.rows || data.rows.length === 0) {
     container.innerHTML = '<div class="sw-error-card"><div class="sw-error-title">No Data</div><div class="sw-error-message">This query returned no results.</div></div>';
     return;
