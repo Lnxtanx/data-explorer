@@ -81,9 +81,43 @@ export default function PublicReportViewer() {
                         rawUrl: resolveAiApiUrl(data.rawUrl),
                         downloadUrl: resolveAiApiUrl(data.downloadUrl),
                     });
-                    if (data.title || data.filename) {
-                        document.title = `${data.title || data.filename} · Schema Weaver Data Explorer`;
-                    }
+                    const reportTitle = data.title || data.filename || 'Shared Report';
+                    const format = (data.format || 'report').toLowerCase();
+                    const formatUpper = format.toUpperCase();
+                    const badge = format === 'pdf' ? '📄' : format === 'html' ? '📊' : '📑';
+                    const fullTitle = `${badge} ${reportTitle} · ${formatUpper} Report | Schema Weaver`;
+                    const desc = format === 'pdf'
+                        ? `Executive PDF report "${reportTitle}". Read or download complete PostgreSQL schema analytics, query stats, and AI insights on Schema Weaver Data Explorer.`
+                        : format === 'html'
+                        ? `Interactive responsive report "${reportTitle}". Explore live charts, tables, query metrics, and PostgreSQL schema insights on Schema Weaver Data Explorer.`
+                        : `Shared ${formatUpper} export: "${reportTitle}". Generated with Schema Weaver Data Explorer for PostgreSQL.`;
+                    const currentUrl = window.location.href;
+
+                    document.title = fullTitle;
+
+                    // Dynamically synchronize meta tags for mobile browser share sheets and bookmarks
+                    const updateMeta = (selector: string, attr: string, value: string) => {
+                        let el = document.querySelector(selector);
+                        if (!el) {
+                            el = document.createElement('meta');
+                            const match = selector.match(/\[(.*?)="(.*?)"\]/);
+                            if (match) {
+                                el.setAttribute(match[1], match[2]);
+                                document.head.appendChild(el);
+                            }
+                        }
+                        if (el) el.setAttribute(attr, value);
+                    };
+
+                    updateMeta('meta[name="description"]', 'content', desc);
+                    updateMeta('meta[property="og:title"]', 'content', fullTitle);
+                    updateMeta('meta[property="og:description"]', 'content', desc);
+                    updateMeta('meta[property="og:url"]', 'content', currentUrl);
+                    updateMeta('meta[property="og:type"]', 'content', 'article');
+                    updateMeta('meta[name="twitter:card"]', 'content', 'summary_large_image');
+                    updateMeta('meta[name="twitter:title"]', 'content', fullTitle);
+                    updateMeta('meta[name="twitter:description"]', 'content', desc);
+                    updateMeta('meta[name="twitter:url"]', 'content', currentUrl);
                 }
             } catch (err: any) {
                 if (!isCancelled) {
@@ -100,10 +134,34 @@ export default function PublicReportViewer() {
         return () => { isCancelled = true; };
     }, [shareId]);
 
-    const handleCopyLink = () => {
-        navigator.clipboard.writeText(window.location.href);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2500);
+    const handleShare = async () => {
+        const shareUrl = window.location.href;
+        const reportTitle = meta?.title || meta?.filename || 'Schema Weaver Report';
+        const formatUpper = (meta?.format || 'report').toUpperCase();
+        const shareText = `Check out this ${formatUpper} report "${reportTitle}" on Schema Weaver Data Explorer`;
+
+        if (navigator.share) {
+            try {
+                await navigator.share({
+                    title: `${reportTitle} · ${formatUpper} Report`,
+                    text: shareText,
+                    url: shareUrl,
+                });
+                setCopied(true);
+                setTimeout(() => setCopied(false), 2500);
+                return;
+            } catch (err: any) {
+                if (err?.name === 'AbortError') return;
+            }
+        }
+
+        try {
+            await navigator.clipboard.writeText(shareUrl);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2500);
+        } catch {
+            // fallback
+        }
     };
 
     if (loading) {
@@ -182,20 +240,20 @@ export default function PublicReportViewer() {
 
                 {/* Right Action Controls */}
                 <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 justify-end">
-                    {/* Copy Share Link */}
+                    {/* Share / Copy Share Link */}
                     <button
                         type="button"
-                        onClick={handleCopyLink}
+                        onClick={handleShare}
                         className={cn(
                             "flex items-center gap-1.5 text-xs font-medium px-2 sm:px-2.5 py-1.5 rounded-lg border transition-all cursor-pointer",
                             copied
                                 ? "bg-emerald-50 text-emerald-700 border-emerald-300 font-semibold"
                                 : "bg-white hover:bg-slate-50 text-slate-700 border-slate-200 shadow-sm hover:border-slate-300"
                         )}
-                        title="Copy public share link"
+                        title="Share report or copy link"
                     >
                         {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Share2 className="w-3.5 h-3.5 text-slate-500" />}
-                        <span className="hidden sm:inline">{copied ? "Link Copied!" : "Share Link"}</span>
+                        <span className="hidden sm:inline">{copied ? "Link Copied!" : "Share Report"}</span>
                     </button>
 
                     {/* Open in a new tab / Native Viewer — reliable path on mobile phones */}

@@ -424,6 +424,20 @@ export function FilePreviewView({ artifact, onClose }: FilePreviewViewProps) {
                     const data = await res.json();
                     if (data.shareId) {
                         const fullUrl = `${window.location.origin}/share/r/${data.shareId}`;
+                        if (navigator.share) {
+                            try {
+                                await navigator.share({
+                                    title: artifact.title || fileName,
+                                    text: `Check out this report: ${artifact.title || fileName}`,
+                                    url: fullUrl,
+                                });
+                                setCopiedShare(true);
+                                setTimeout(() => setCopiedShare(false), 2500);
+                                return;
+                            } catch (err: any) {
+                                if (err?.name === 'AbortError') return;
+                            }
+                        }
                         await navigator.clipboard.writeText(fullUrl);
                         setCopiedShare(true);
                         setTimeout(() => setCopiedShare(false), 2500);
