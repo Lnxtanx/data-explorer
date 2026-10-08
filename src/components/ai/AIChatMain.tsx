@@ -690,6 +690,14 @@ export function AIChatMain({
         </main>
     );
 
+    const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
+
+    useEffect(() => {
+        const handleResize = () => setIsMobile(window.innerWidth < 768);
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
+
     const sidePanel = showWorkspace ? (
         <WorkspacePanel
             connectionId={connectionId}
@@ -706,6 +714,19 @@ export function AIChatMain({
     ) : expandedArtifact ? (
         <ArtifactPanel artifact={expandedArtifact} onClose={() => setExpandedArtifact(null)} onQuickSend={handleQuickSend} />
     ) : null;
+
+    if (isMobile) {
+        return (
+            <div className="relative h-full w-full overflow-hidden">
+                {chatPanel}
+                {sidePanel && (
+                    <div className="fixed inset-0 z-50 flex flex-col bg-background animate-in fade-in duration-150">
+                        {sidePanel}
+                    </div>
+                )}
+            </div>
+        );
+    }
 
     return (
         <ResizablePanelGroup direction="horizontal" className="h-full">

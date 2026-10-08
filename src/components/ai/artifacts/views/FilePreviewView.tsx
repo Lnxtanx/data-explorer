@@ -76,6 +76,14 @@ export function FilePreviewView({ artifact, onClose }: FilePreviewViewProps) {
     const [pageSize, setPageSize] = useState(50);
     const [selectedRow, setSelectedRow] = useState<{ index: number; data: (string | number | boolean | null)[] } | null>(null);
 
+    const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || window.innerWidth < 768));
+
+    useEffect(() => {
+        const onResize = () => setIsMobile(/iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || window.innerWidth < 768);
+        window.addEventListener('resize', onResize);
+        return () => window.removeEventListener('resize', onResize);
+    }, []);
+
     const fileName = artifact.fileName || (artifact as any).filename || artifact.title || 'export';
     const ext = (fileName.split('.').pop() || artifact.fileType || (artifact as any).format || '').toLowerCase();
 
@@ -625,10 +633,11 @@ export function FilePreviewView({ artifact, onClose }: FilePreviewViewProps) {
                 </div>
 
                 {/* Content Area — High fidelity interactive HTML report rendered directly */}
-                <div className="flex-1 w-full h-full overflow-hidden bg-white">
+                <div className="flex-1 w-full h-full overflow-auto [-webkit-overflow-scrolling:touch] bg-white relative">
                     <iframe
                         srcDoc={htmlRaw || ''}
                         className="w-full h-full border-0 bg-white"
+                        style={{ width: '100%', minWidth: '100%', maxWidth: '100%', height: '100%' }}
                         sandbox="allow-scripts allow-popups allow-modals"
                         title={fileName}
                     />
@@ -651,7 +660,7 @@ export function FilePreviewView({ artifact, onClose }: FilePreviewViewProps) {
                             PDF
                         </span>
                         {artifact.sizeBytes ? (
-                            <span className="text-[11px] text-muted-foreground/60 shrink-0 whitespace-nowrap">
+                            <span className="text-[11px] text-muted-foreground/60 shrink-0 whitespace-nowrap hidden sm:inline">
                                 {humanSize(artifact.sizeBytes)}
                             </span>
                         ) : null}
@@ -681,7 +690,7 @@ export function FilePreviewView({ artifact, onClose }: FilePreviewViewProps) {
                             type="button"
                             onClick={() => window.open(pdfUrl, '_blank')}
                             className="p-1.5 rounded-lg border border-border hover:bg-muted transition-colors cursor-pointer text-foreground/80"
-                            title="Open PDF in new tab"
+                            title="Open PDF in new tab / Native reader"
                         >
                             <ExternalLink className="w-3.5 h-3.5" />
                         </button>
@@ -706,15 +715,32 @@ export function FilePreviewView({ artifact, onClose }: FilePreviewViewProps) {
                         )}
                     </div>
                 </div>
-                <div className="flex-1 w-full h-full overflow-hidden bg-muted/10 p-2">
-                    {/* #toolbar=0 / #navpanes=0 ask Chrome's built-in PDF viewer to
-                        drop its own chrome (the page counter, zoom, rotate, draw and
-                        download strip). It is a fragment on the native plugin, so no
-                        CSS from us can do this. New-tab and Download still get the
-                        full viewer chrome. */}
+
+                {/* Mobile PDF Native Reader Notice Bar */}
+                {isMobile && (
+                    <div className="bg-slate-900 text-white px-3 sm:px-4 py-2 text-xs flex items-center justify-between gap-2 shrink-0 border-b border-slate-800">
+                        <div className="flex items-center gap-2 min-w-0">
+                            <span className="w-2 h-2 rounded-full bg-rose-400 shrink-0 animate-pulse" />
+                            <span className="truncate text-slate-200 text-[11px] sm:text-xs">
+                                Mobile device: Open in native reader for smooth pinch-zoom and all pages.
+                            </span>
+                        </div>
+                        <a
+                            href={pdfUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="shrink-0 font-semibold px-2.5 py-1 bg-white text-slate-900 rounded-md hover:bg-slate-100 transition-colors shadow-sm text-[11px]"
+                        >
+                            Open Reader
+                        </a>
+                    </div>
+                )}
+
+                <div className="flex-1 w-full h-full overflow-auto [-webkit-overflow-scrolling:touch] bg-muted/10 p-1 sm:p-2">
                     <iframe
                         src={`${pdfUrl}#toolbar=0&navpanes=0&view=FitH`}
                         className="w-full h-full border-0 rounded-lg"
+                        style={{ width: '100%', minWidth: '100%', maxWidth: '100%', height: '100%' }}
                         title={fileName}
                     />
                 </div>

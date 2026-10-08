@@ -30,10 +30,11 @@ const CSS = `
   :root { --bg: #09090b; --fg: #fafafa; --muted: #a1a1aa; --border: #27272a; --accent: #60a5fa; --green: #4ade80; --amber: #fbbf24; --red: #f87171; }
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--fg); padding: 2rem; max-width: 1000px; margin: 0 auto; line-height: 1.5; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background: var(--bg); color: var(--fg); padding: 2rem; max-width: 1000px; margin: 0 auto; line-height: 1.5; -webkit-text-size-adjust: 100%; }
 h1 { font-size: 1.25rem; font-weight: 600; margin-bottom: 0.25rem; }
 .meta { font-size: 0.75rem; color: var(--muted); margin-bottom: 1.5rem; }
-table { width: 100%; border-collapse: collapse; font-size: 0.8125rem; margin-bottom: 1rem; }
+.table-wrap { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; margin-bottom: 1rem; border: 1px solid var(--border); border-radius: 0.5rem; background: var(--bg); }
+table { width: 100%; border-collapse: collapse; font-size: 0.8125rem; margin-bottom: 0; min-width: 100%; }
 th { text-align: left; padding: 0.5rem 0.75rem; border-bottom: 2px solid var(--border); font-weight: 500; color: var(--muted); white-space: nowrap; }
 td { padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border); }
 tr:last-child td { border-bottom: none; }
@@ -50,7 +51,7 @@ tr:hover td { background: color-mix(in srgb, var(--fg) 3%, transparent); }
 .score { font-size: 2.5rem; font-weight: 700; }
 .score-bar { height: 6px; border-radius: 3px; background: var(--border); margin: 0.5rem 0; }
 .score-fill { height: 100%; border-radius: 3px; }
-.stat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 0.75rem; margin-bottom: 1rem; }
+.stat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 250px), 1fr)); gap: 0.75rem; margin-bottom: 1rem; }
 .stat-card { border: 1px solid var(--border); border-radius: 0.5rem; padding: 0.75rem; }
 .stat-name { font-weight: 500; font-size: 0.875rem; }
 .stat-type { font-size: 0.625rem; color: var(--muted); }
@@ -58,6 +59,7 @@ tr:hover td { background: color-mix(in srgb, var(--fg) 3%, transparent); }
 .stat-row span:first-child { color: var(--muted); }
 .null-bar { height: 4px; border-radius: 2px; background: var(--border); margin-top: 0.375rem; }
 .null-fill { height: 100%; border-radius: 2px; }
+.exec-metrics { display: flex; flex-wrap: wrap; gap: 1.5rem 2.5rem; margin-bottom: 1.5rem; padding: 1rem 1.25rem; border: 1px solid var(--border); border-radius: 0.5rem; background: color-mix(in srgb, var(--fg) 2%, transparent); }
 .metric-group { margin-bottom: 1rem; }
 .metric-label { font-size: 0.625rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin-bottom: 0.375rem; }
 .metric-tags { display: flex; flex-wrap: wrap; gap: 0.375rem; }
@@ -69,8 +71,17 @@ tr:hover td { background: color-mix(in srgb, var(--fg) 3%, transparent); }
 .join-row:last-child { border-bottom: none; }
 .arrow { color: var(--muted); padding: 0 0.25rem; }
 .join-col { color: var(--accent); }
-.sql-block { background: color-mix(in srgb, var(--fg) 4%, transparent); border: 1px solid var(--border); border-radius: 0.5rem; padding: 0.75rem 1rem; overflow-x: auto; white-space: pre-wrap; word-break: break-all; margin-top: 1.5rem; }
+.sql-block { background: color-mix(in srgb, var(--fg) 4%, transparent); border: 1px solid var(--border); border-radius: 0.5rem; padding: 0.75rem 1rem; overflow-x: auto; -webkit-overflow-scrolling: touch; white-space: pre-wrap; word-break: break-all; margin-top: 1.5rem; }
 footer { margin-top: 2rem; padding-top: 1rem; border-top: 1px solid var(--border); font-size: 0.6875rem; color: var(--muted); }
+@media (max-width: 640px) {
+  body { padding: 0.875rem 0.625rem; }
+  h1 { font-size: 1.125rem; }
+  .meta { margin-bottom: 1rem; font-size: 0.7rem; }
+  th, td { padding: 0.4rem 0.5rem; font-size: 0.75rem; }
+  .stat-card { padding: 0.625rem; }
+  .exec-metrics { gap: 1rem 1.5rem; padding: 0.75rem; }
+  .score { font-size: 2rem; }
+}
 `;
 
 // ─── Section builders ────────────────────────────────────────────────────────
@@ -85,7 +96,7 @@ function buildTableSection(artifact: AgentArtifact): string {
         '<tr>' + cols.map(c => `<td class="mono">${esc(row[c.name])}</td>`).join('') + '</tr>'
     ).join('\n');
 
-    return `<table><thead><tr>${thead}</tr></thead><tbody>${tbody}</tbody></table>
+    return `<div class="table-wrap"><table><thead><tr>${thead}</tr></thead><tbody>${tbody}</tbody></table></div>
 <p class="meta">${rows.length} row${rows.length !== 1 ? 's' : ''}, ${cols.length} column${cols.length !== 1 ? 's' : ''}</p>`;
 }
 
@@ -136,7 +147,7 @@ function buildAnomaliesSection(artifact: AgentArtifact): string {
     ).join('\n');
 
     return `<p class="meta">${artifact.totalAnomalies ?? anomalies.length} anomal${(artifact.totalAnomalies ?? anomalies.length) === 1 ? 'y' : 'ies'} across ${artifact.scannedColumns ?? 0} columns</p>
-<table><thead><tr><th>Column</th><th>Type</th><th>Severity</th><th class="right">Count</th><th>Detail</th></tr></thead><tbody>${rows}</tbody></table>`;
+<div class="table-wrap"><table><thead><tr><th>Column</th><th>Type</th><th>Severity</th><th class="right">Count</th><th>Detail</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
 function buildQualitySection(artifact: AgentArtifact): string {
@@ -147,10 +158,10 @@ function buildQualitySection(artifact: AgentArtifact): string {
 
     let issueRows = '';
     if (issues.length > 0) {
-        issueRows = '<table><thead><tr><th>Severity</th><th>Column</th><th>Issue</th><th class="right">Rows</th><th>Recommendation</th></tr></thead><tbody>' +
+        issueRows = '<div class="table-wrap"><table><thead><tr><th>Severity</th><th>Column</th><th>Issue</th><th class="right">Rows</th><th>Recommendation</th></tr></thead><tbody>' +
             issues.map(i =>
                 `<tr><td>${sevBadge(i.severity)}</td><td class="mono">${esc(i.column)}</td><td>${esc(i.issueType.replace(/_/g, ' '))}</td><td class="right">${i.affectedRows}</td><td>${esc(i.recommendation)}</td></tr>`
-            ).join('\n') + '</tbody></table>';
+            ).join('\n') + '</tbody></table></div>';
     }
 
     return `<div style="display:flex;align-items:baseline;gap:0.5rem;margin-bottom:0.75rem">
@@ -180,10 +191,10 @@ function buildRegressionSection(artifact: AgentArtifact): string {
     let coeffTable = '';
     if (coeffs.length > 0) {
         const keys = typeof coeffs[0] === 'object' ? Object.keys(coeffs[0]) : ['variable', 'coefficient'];
-        coeffTable = '<table><thead><tr>' + keys.map(k => `<th>${esc(k === 'pValue' ? 'p-value' : k.replace(/_/g, ' '))}</th>`).join('') +
+        coeffTable = '<div class="table-wrap"><table><thead><tr>' + keys.map(k => `<th>${esc(k === 'pValue' ? 'p-value' : k.replace(/_/g, ' '))}</th>`).join('') +
             '</tr></thead><tbody>' + coeffs.map(c =>
                 '<tr>' + keys.map(k => `<td class="mono">${esc((c as unknown as Record<string, unknown>)[k])}</td>`).join('') + '</tr>'
-            ).join('\n') + '</tbody></table>';
+            ).join('\n') + '</tbody></table></div>';
     }
 
     return `<div class="stat-grid">${metricCards}</div>${coeffTable}`;
@@ -194,10 +205,10 @@ function buildChartSection(artifact: AgentArtifact): string {
 
     const addTable = (heads: string[], data: Array<Array<unknown>>) => {
         if (data.length === 0) return;
-        rows.push('<table><thead><tr>' + heads.map(h => `<th>${esc(h)}</th>`).join('') +
+        rows.push('<div class="table-wrap"><table><thead><tr>' + heads.map(h => `<th>${esc(h)}</th>`).join('') +
             '</tr></thead><tbody>' + data.map(r =>
                 '<tr>' + r.map(c => `<td class="mono">${esc(c)}</td>`).join('') + '</tr>'
-            ).join('\n') + '</tbody></table>');
+            ).join('\n') + '</tbody></table></div>');
     };
 
     if (Array.isArray(artifact.stages) && artifact.stages.length > 0) {
@@ -295,7 +306,7 @@ function buildHtmlReport(artifact: AgentArtifact): string {
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover">
 <title>${esc(title)} — Resona AI</title>
 <style>${CSS}</style>
 </head>
@@ -348,7 +359,7 @@ function buildExecutiveHtml(artifact: AgentArtifact): string {
     const catCols = summaries.filter(s => !s.isNumeric);
 
     // Key metrics banner
-    let metrics = `<div style="display:flex;gap:2.5rem;margin-bottom:1.5rem">
+    let metrics = `<div class="exec-metrics">
   <div><span style="font-size:2rem;font-weight:700">${rows.length}</span> <span style="color:var(--muted);font-size:0.8125rem">rows</span></div>
   <div><span style="font-size:2rem;font-weight:700">${cols.length}</span> <span style="color:var(--muted);font-size:0.8125rem">columns</span></div>
   ${numCols.length > 0 ? `<div><span style="font-size:2rem;font-weight:700">${numCols.length}</span> <span style="color:var(--muted);font-size:0.8125rem">numeric</span></div>` : ''}
@@ -375,7 +386,7 @@ function buildExecutiveHtml(artifact: AgentArtifact): string {
             `<tr><td class="mono">${esc(c.name)}</td><td>${c.uniqueCount} unique</td><td class="mono">${esc(c.topValue ?? '')}</td><td class="right">${c.nullCount > 0 ? c.nullCount + ' null' : '—'}</td></tr>`
         ).join('\n');
         catSection = `<h2 style="font-size:0.6875rem;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);margin:1rem 0 0.5rem">Categorical Summary</h2>
-<table><thead><tr><th>Column</th><th>Unique Values</th><th>Top Value</th><th class="right">Nulls</th></tr></thead><tbody>${catRows}</tbody></table>`;
+<div class="table-wrap"><table><thead><tr><th>Column</th><th>Unique Values</th><th>Top Value</th><th class="right">Nulls</th></tr></thead><tbody>${catRows}</tbody></table></div>`;
     }
 
     // Data preview (first 10 rows)
@@ -387,7 +398,7 @@ function buildExecutiveHtml(artifact: AgentArtifact): string {
             '<tr>' + cols.map(c => `<td class="mono">${esc(row[c.name])}</td>`).join('') + '</tr>'
         ).join('\n');
         preview = `<h2 style="font-size:0.6875rem;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);margin:1.5rem 0 0.5rem">Data Preview</h2>
-<table><thead><tr>${thead}</tr></thead><tbody>${tbody}</tbody></table>
+<div class="table-wrap"><table><thead><tr>${thead}</tr></thead><tbody>${tbody}</tbody></table></div>
 ${rows.length > 10 ? `<p class="meta">+ ${rows.length - 10} more rows</p>` : ''}`;
     }
 
@@ -399,7 +410,7 @@ ${rows.length > 10 ? `<p class="meta">+ ${rows.length - 10} more rows</p>` : ''}
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover">
 <title>${esc(title)} — Executive Summary — Resona AI</title>
 <style>${CSS}</style>
 </head>
