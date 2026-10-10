@@ -1,11 +1,10 @@
 // =============================================================================
-// Empty State - Professional placeholder with helpful guidance & optimized looping video
+// Empty State - Professional placeholder with helpful guidance & looping video
 // =============================================================================
 
 import { useState, useRef, useEffect } from 'react';
 import { Table2, ArrowLeft, Plus, Terminal, Copy, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
 interface EmptyStateProps {
@@ -13,21 +12,9 @@ interface EmptyStateProps {
   onOpenConnectWizard?: () => void;
 }
 
-const VIDEOS = [
-  {
-    id: 'cinematic',
-    label: 'Terminal Flow',
-    src: '/pg_connector_cinematic.mp4',
-  },
-  {
-    id: 'flow',
-    label: 'Architecture Flow',
-    src: '/pg_connector_flow.mp4',
-  },
-];
+const CONNECTOR_VIDEO_SRC = '/pg_connector_flow.mp4';
 
 export function EmptyState({ hasConnection, onOpenConnectWizard }: EmptyStateProps) {
-  const [selectedVideo, setSelectedVideo] = useState(VIDEOS[0].src);
   const [copied, setCopied] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
 
@@ -52,7 +39,7 @@ export function EmptyState({ hasConnection, onOpenConnectWizard }: EmptyStatePro
       // Free GPU and video decoder memory when user navigates away or connects
       video.pause();
     };
-  }, [selectedVideo]);
+  }, []);
 
   const handleCopy = (command: string) => {
     navigator.clipboard.writeText(command);
@@ -72,61 +59,29 @@ export function EmptyState({ hasConnection, onOpenConnectWizard }: EmptyStatePro
               className="relative aspect-[16/9] w-full rounded-xl overflow-hidden bg-muted/40 border border-border/40 shadow-sm select-none"
               onContextMenu={(e) => e.preventDefault()}
             >
-              {/* Active Playing Video */}
               <video
                 ref={videoRef}
-                key={selectedVideo}
-                src={selectedVideo}
+                src={CONNECTOR_VIDEO_SRC}
                 autoPlay
                 loop
                 muted
                 playsInline
-                preload="auto"
+                preload="metadata"
                 controls={false}
                 disablePictureInPicture
                 disableRemotePlayback
                 onEnded={() => {
-                  // Fallback to guarantee infinite loop if browser loop flag hiccups
                   videoRef.current?.play().catch(() => {});
                 }}
                 className="w-full h-full object-cover pointer-events-none select-none transform-gpu will-change-transform"
               />
-
-              {/* Background Preload for the Inactive Video (ensures 0ms instant tab switching) */}
-              {VIDEOS.filter((v) => v.src !== selectedVideo).map((inactive) => (
-                <video
-                  key={inactive.id}
-                  src={inactive.src}
-                  preload="auto"
-                  muted
-                  className="hidden"
-                  aria-hidden="true"
-                />
-              ))}
             </div>
 
-            {/* Sub-bar with video switcher tabs */}
+            {/* Sub-bar with architecture preview label */}
             <div className="flex items-center justify-between px-2 pt-2.5 pb-1">
               <div className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground select-none">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                 <span>Architecture Preview</span>
-              </div>
-              <div className="flex items-center gap-1 bg-muted/60 p-0.5 rounded-lg border border-border/40">
-                {VIDEOS.map((v) => (
-                  <button
-                    key={v.id}
-                    type="button"
-                    onClick={() => setSelectedVideo(v.src)}
-                    className={cn(
-                      "px-2.5 py-0.5 rounded-md text-[10px] font-medium transition-all duration-150 cursor-pointer",
-                      selectedVideo === v.src
-                        ? "bg-background text-foreground shadow-sm font-semibold"
-                        : "text-muted-foreground hover:text-foreground"
-                    )}
-                  >
-                    {v.label}
-                  </button>
-                ))}
               </div>
             </div>
 
