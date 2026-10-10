@@ -69,11 +69,49 @@ export default defineConfig(({ mode }) => {
           target: env.VITE_PROXY_TARGET || "http://localhost:3000",
           changeOrigin: true,
           ws: true, // voice session WS (/api/voice/session) + agent data channel
+          cookieDomainRewrite: {
+            "*": "",
+          },
+          cookiePathRewrite: {
+            "*": "/",
+          },
+          configure: (proxy) => {
+            proxy.on('proxyRes', (proxyRes) => {
+              const setCookie = proxyRes.headers['set-cookie'];
+              if (Array.isArray(setCookie)) {
+                proxyRes.headers['set-cookie'] = setCookie.map((c) =>
+                  c
+                    .replace(/;\s*Domain=[^;]+/gi, '')
+                    .replace(/;\s*Secure/gi, '')
+                    .replace(/;\s*SameSite=None/gi, '; SameSite=Lax')
+                );
+              }
+            });
+          },
         },
         "/ai-api": {
           target: env.VITE_AI_PROXY_TARGET || "http://localhost:8001",
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/ai-api/, ""),
+          cookieDomainRewrite: {
+            "*": "",
+          },
+          cookiePathRewrite: {
+            "*": "/",
+          },
+          configure: (proxy) => {
+            proxy.on('proxyRes', (proxyRes) => {
+              const setCookie = proxyRes.headers['set-cookie'];
+              if (Array.isArray(setCookie)) {
+                proxyRes.headers['set-cookie'] = setCookie.map((c) =>
+                  c
+                    .replace(/;\s*Domain=[^;]+/gi, '')
+                    .replace(/;\s*Secure/gi, '')
+                    .replace(/;\s*SameSite=None/gi, '; SameSite=Lax')
+                );
+              }
+            });
+          },
         },
       },
     },
