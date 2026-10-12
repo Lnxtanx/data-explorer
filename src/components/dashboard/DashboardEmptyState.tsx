@@ -82,13 +82,13 @@ export function DashboardEmptyState({
       <div className="w-full max-w-4xl px-8 sm:px-12 pr-16 sm:pr-28 py-8 sm:py-9">
         {/* Single Line Heading without emoji — Capitalized 'Generate' */}
         {isTeamMember ? (
-          <h1 className="text-xl sm:text-2xl font-semibold tracking-tight text-foreground">
+          <h2 className="text-xl sm:text-2xl font-semibold tracking-tight text-foreground">
             Team dashboard for {dbLabel} is on the way
-          </h1>
+          </h2>
         ) : (
-          <h1 className="text-xl sm:text-2xl font-semibold tracking-tight text-foreground">
+          <h2 className="text-xl sm:text-2xl font-semibold tracking-tight text-foreground">
             Welcome {cleanName}, Generate {dbLabel} analytics quickly
-          </h1>
+          </h2>
         )}
 
         {/* Timeline for the owner; team explanation for members */}

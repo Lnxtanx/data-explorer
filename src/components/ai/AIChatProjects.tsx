@@ -198,7 +198,7 @@ export function AIChatProjects({ onOpenProject }: AIChatProjectsProps) {
             <div className="flex-1 overflow-y-auto px-8 py-8">
                 <div className="max-w-5xl mx-auto flex flex-col gap-6">
                     <div className="flex flex-col gap-2">
-                        <h1 className="text-3xl font-bold tracking-tight text-foreground">Your Projects</h1>
+                        <h2 className="text-3xl font-bold tracking-tight text-foreground">Your Projects</h2>
                         <p className="text-muted-foreground text-sm">
                             Organize your chats and analysis into shared workspaces.
                         </p>

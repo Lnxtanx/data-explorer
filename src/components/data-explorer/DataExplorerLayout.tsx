@@ -494,9 +494,9 @@ export function DataExplorerLayout({
               ) : (
                 <img src="/resona.png" alt="Schema Weaver" className="w-5 h-5 object-contain shrink-0" />
               )}
-              <h1 className="text-sm font-semibold">
+              <h2 className="text-sm font-semibold">
                 {mode === 'dashboard' ? 'Dashboard' : 'Data Explorer'}
-              </h1>
+              </h2>
             </button>
           )}
           <Button

@@ -33,9 +33,9 @@ export const ChatEmptyState: React.FC<ChatEmptyStateProps> = ({
                 />
 
                 {/* Contextual Greeting & Subtitle */}
-                <h1 className="font-serif text-3xl sm:text-4xl text-foreground font-normal tracking-tight">
+                <h2 className="font-serif text-3xl sm:text-4xl text-foreground font-normal tracking-tight">
                     {greeting.heading}
-                </h1>
+                </h2>
                 <p className="text-sm sm:text-base text-muted-foreground mt-2 font-normal">
                     {greeting.subtitle}
                 </p>

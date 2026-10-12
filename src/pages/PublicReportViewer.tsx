@@ -229,9 +229,9 @@ export default function PublicReportViewer() {
                         {isPdf
                             ? <FileText className="w-4 h-4 shrink-0 text-rose-500" />
                             : <Html5Icon className="w-4 h-4 shrink-0" />}
-                        <h1 className="text-xs sm:text-sm font-semibold text-slate-800 truncate" title={meta.title || meta.filename}>
+                        <h2 className="text-xs sm:text-sm font-semibold text-slate-800 truncate" title={meta.title || meta.filename}>
                             {meta.title || meta.filename}
-                        </h1>
+                        </h2>
                         <span className="hidden sm:inline text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-orange-500/10 text-orange-600 border border-orange-500/20 shrink-0">
                             Report
                         </span>

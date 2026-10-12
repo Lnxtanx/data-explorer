@@ -81,7 +81,7 @@ export function ProjectDetailView({ projectId, onClose, onOpenChat, onNewChat }:
                         <div className="flex items-start justify-between gap-6">
                             <div className="flex flex-col gap-2 flex-1">
                                 <div className="flex items-center gap-3 flex-wrap">
-                                    <h1 className="text-3xl font-bold tracking-tight text-foreground">{project.title}</h1>
+                                    <h2 className="text-3xl font-bold tracking-tight text-foreground">{project.title}</h2>
                                     {isTeamProject && (
                                         <span className="flex items-center gap-1 bg-primary/10 text-primary px-2.5 py-0.5 rounded-full text-xs font-semibold tracking-tight border border-primary/20">
                                             <Users className="w-3.5 h-3.5" />
