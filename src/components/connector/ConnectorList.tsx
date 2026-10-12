@@ -13,6 +13,7 @@ import {
 } from './api/index';
 import type { DatabaseConnector } from './api/index';
 import { useConnections } from './api/useConnections';
+import { useAuth } from '@/components/auth/AuthProvider';
 import { DatabaseEngineIcon, PostgresIcon } from './DatabaseEngineIcon';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -112,6 +113,8 @@ function ConnectorCard({
     const { data: allConnections = [] } = useConnections();
     const revokeMutation = useRevokeConnector();
     const removeMutation = useRemoveConnector();
+    const { user } = useAuth();
+    const isDemo = Boolean(user?.user_metadata?.is_demo || user?.email?.toLowerCase() === 'support@schemaweaver.dev');
 
     // Team-shared connectors are read-only here: they belong to another user,
     // so management actions (revoke/remove) are not available.
@@ -119,6 +122,10 @@ function ConnectorCard({
 
     const handleRevoke = async (e: React.MouseEvent) => {
         e.stopPropagation();
+        if (isDemo) {
+            toast.error('Revoking connectors is disabled in live demo mode');
+            return;
+        }
         try {
             await revokeMutation.mutateAsync(connector.id);
             toast.success(`Connector "${connector.machine_label}" revoked`);
@@ -129,6 +136,10 @@ function ConnectorCard({
 
     const handleRemove = async (e: React.MouseEvent) => {
         e.stopPropagation();
+        if (isDemo) {
+            toast.error('Removing connectors is disabled in live demo mode');
+            return;
+        }
         try {
             await removeMutation.mutateAsync(connector.id);
             toast.success(`Connector "${connector.machine_label}" removed permanently`);
@@ -299,37 +310,56 @@ function ConnectorCard({
                     )}
 
                     {/* Actions */}
-                    <div className="flex items-center gap-2 pt-2 border-t">
-                        {isShared ? (
-                            <p className="text-xs text-muted-foreground">
-                                Shared by {connector.shared_by_name || 'a teammate'} — this connector is managed by its owner.
-                            </p>
-                        ) : (
-                            <>
-                                {!isRevoked && (
+                    <div className="flex flex-col gap-2 pt-2 border-t">
+                        {isDemo && (
+                            <div className="flex items-center gap-2 text-xs text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 px-3 py-1.5 rounded-lg">
+                                <span>Demo connector is protected. Revoke and removal are disabled.</span>
+                            </div>
+                        )}
+                        <div className="flex items-center gap-2">
+                            {isShared ? (
+                                <p className="text-xs text-muted-foreground">
+                                    Shared by {connector.shared_by_name || 'a teammate'} — this connector is managed by its owner.
+                                </p>
+                            ) : (
+                                <>
+                                    {!isRevoked && (
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className={cn(
+                                                "h-8 text-xs rounded-lg transition-colors",
+                                                isDemo
+                                                    ? "opacity-40 cursor-not-allowed border-muted text-muted-foreground hover:bg-transparent hover:text-muted-foreground"
+                                                    : "text-amber-600 hover:text-amber-700"
+                                            )}
+                                            onClick={handleRevoke}
+                                            disabled={isDemo || revokeMutation.isPending}
+                                            title={isDemo ? "Disabled in live demo mode" : undefined}
+                                        >
+                                            <ShieldOff className="w-3.5 h-3.5 mr-1" />
+                                            {revokeMutation.isPending ? 'Revoking...' : 'Revoke'}
+                                        </Button>
+                                    )}
                                     <Button
                                         variant="outline"
                                         size="sm"
-                                        className="h-8 text-xs text-amber-600 hover:text-amber-700 rounded-lg"
-                                        onClick={handleRevoke}
-                                        disabled={revokeMutation.isPending}
+                                        className={cn(
+                                            "h-8 text-xs rounded-lg transition-colors",
+                                            isDemo
+                                                ? "opacity-40 cursor-not-allowed border-muted text-muted-foreground hover:bg-transparent hover:text-muted-foreground"
+                                                : "text-destructive hover:text-destructive"
+                                        )}
+                                        onClick={handleRemove}
+                                        disabled={isDemo || removeMutation.isPending}
+                                        title={isDemo ? "Disabled in live demo mode" : undefined}
                                     >
-                                        <ShieldOff className="w-3.5 h-3.5 mr-1" />
-                                        {revokeMutation.isPending ? 'Revoking...' : 'Revoke'}
+                                        <Trash2 className="w-3.5 h-3.5 mr-1" />
+                                        {removeMutation.isPending ? 'Removing...' : 'Remove'}
                                     </Button>
-                                )}
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="h-8 text-xs text-destructive hover:text-destructive rounded-lg"
-                                    onClick={handleRemove}
-                                    disabled={removeMutation.isPending}
-                                >
-                                    <Trash2 className="w-3.5 h-3.5 mr-1" />
-                                    {removeMutation.isPending ? 'Removing...' : 'Remove'}
-                                </Button>
-                            </>
-                        )}
+                                </>
+                            )}
+                        </div>
                     </div>
                 </div>
             )}

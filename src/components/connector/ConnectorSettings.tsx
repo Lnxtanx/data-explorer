@@ -2,11 +2,14 @@ import { ShieldOff, Trash2, Wifi, WifiOff, RefreshCw, Info, Users } from 'lucide
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useConnectors, useRevokeConnector, useRemoveConnector } from './api/index';
+import { useAuth } from '@/components/auth/AuthProvider';
 import { DatabaseEngineIcon, PostgresIcon } from './DatabaseEngineIcon';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
 export function ConnectorSettings() {
+    const { user } = useAuth();
+    const isDemo = Boolean(user?.user_metadata?.is_demo || user?.email?.toLowerCase() === 'support@schemaweaver.dev');
     const { data: connectors = [], isLoading, isFetching, refetch } = useConnectors();
     const revokeMutation = useRevokeConnector();
     const removeMutation = useRemoveConnector();
@@ -21,6 +24,10 @@ export function ConnectorSettings() {
     };
 
     const handleRevoke = async (connectorId: string, label: string) => {
+        if (isDemo) {
+            toast.error('Revoking connectors is disabled in live demo mode');
+            return;
+        }
         try {
             await revokeMutation.mutateAsync(connectorId);
             toast.success(`Connector "${label}" revoked`);
@@ -30,6 +37,10 @@ export function ConnectorSettings() {
     };
 
     const handleRemove = async (connectorId: string, label: string) => {
+        if (isDemo) {
+            toast.error('Removing connectors is disabled in live demo mode');
+            return;
+        }
         try {
             await removeMutation.mutateAsync(connectorId);
             toast.success(`Connector "${label}" removed permanently`);
@@ -200,29 +211,49 @@ export function ConnectorSettings() {
                                         </span>
                                     </div>
                                 ) : (
-                                    <div className="flex items-center gap-2">
-                                        {!isRevoked && (
+                                    <div className="space-y-2">
+                                        {isDemo && (
+                                            <div className="flex items-center gap-2 text-xs text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 px-3 py-1.5 rounded-lg">
+                                                <Info className="w-3.5 h-3.5 shrink-0" />
+                                                <span>Live demo database connector is protected. Revoke and removal are disabled in demo mode.</span>
+                                            </div>
+                                        )}
+                                        <div className="flex items-center gap-2">
+                                            {!isRevoked && (
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className={cn(
+                                                        "h-8 text-xs rounded-lg transition-colors",
+                                                        isDemo
+                                                            ? "opacity-40 cursor-not-allowed border-muted text-muted-foreground hover:bg-transparent hover:text-muted-foreground"
+                                                            : "text-amber-600 hover:text-amber-700"
+                                                    )}
+                                                    onClick={() => handleRevoke(connector.id, connector.machine_label)}
+                                                    disabled={isDemo || revokeMutation.isPending}
+                                                    title={isDemo ? "Disabled on live demo account" : undefined}
+                                                >
+                                                    <ShieldOff className="w-3.5 h-3.5 mr-1" />
+                                                    Revoke Credentials
+                                                </Button>
+                                            )}
                                             <Button
                                                 variant="outline"
                                                 size="sm"
-                                                className="h-8 text-xs text-amber-600 hover:text-amber-700 rounded-lg"
-                                                onClick={() => handleRevoke(connector.id, connector.machine_label)}
-                                                disabled={revokeMutation.isPending}
+                                                className={cn(
+                                                    "h-8 text-xs rounded-lg transition-colors",
+                                                    isDemo
+                                                        ? "opacity-40 cursor-not-allowed border-muted text-muted-foreground hover:bg-transparent hover:text-muted-foreground"
+                                                        : "text-destructive hover:text-destructive"
+                                                )}
+                                                onClick={() => handleRemove(connector.id, connector.machine_label)}
+                                                disabled={isDemo || removeMutation.isPending}
+                                                title={isDemo ? "Disabled on live demo account" : undefined}
                                             >
-                                                <ShieldOff className="w-3.5 h-3.5 mr-1" />
-                                                Revoke Credentials
+                                                <Trash2 className="w-3.5 h-3.5 mr-1" />
+                                                Remove Connector
                                             </Button>
-                                        )}
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            className="h-8 text-xs text-destructive hover:text-destructive rounded-lg"
-                                            onClick={() => handleRemove(connector.id, connector.machine_label)}
-                                            disabled={removeMutation.isPending}
-                                        >
-                                            <Trash2 className="w-3.5 h-3.5 mr-1" />
-                                            Remove Connector
-                                        </Button>
+                                        </div>
                                     </div>
                                 )}
                             </div>
