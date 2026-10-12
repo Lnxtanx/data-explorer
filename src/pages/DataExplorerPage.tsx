@@ -370,6 +370,28 @@ export default function DataExplorerPage() {
       <>
       <div className="h-screen flex flex-col bg-background overflow-hidden">
         <NotificationBanner />
+        {Boolean(user?.user_metadata?.is_demo || user?.email === 'support@schemaweaver.dev') && (
+          <div className="bg-emerald-500/10 border-b border-emerald-500/20 px-4 py-1.5 flex items-center justify-between text-xs text-emerald-400 shrink-0">
+            <div className="flex items-center gap-2">
+              <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span>
+                <strong>Live PostgreSQL Demo</strong> — Connected to live demo database. Queries, Resona AI, and Dashboards are active.
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setSettingsSection('profile');
+                  setShowSettings(true);
+                }}
+                className="underline hover:text-emerald-300 transition-colors font-medium cursor-pointer"
+              >
+                Sign in with personal account →
+              </button>
+            </div>
+          </div>
+        )}
         <div className="flex-1 flex min-h-0 overflow-hidden">
           <DataExplorerLayout
           mode={mode}

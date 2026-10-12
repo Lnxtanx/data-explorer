@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import {
     loginWithGoogle,
     loginWithGithub,
+    loginWithDemo,
     logout as apiLogout,
     refreshSession as apiRefreshSession,
     validateSession,
@@ -144,7 +145,54 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
     }, []);
 
-    // â”€â”€ Redirect flow: detect ?code= or ?error= in URL after OAuth provider redirects back â”€â”€
+    const handleDemoLogin = useCallback(async () => {
+        setIsLoggingIn(true);
+        try {
+            const response = await loginWithDemo();
+            const { user: dbUser, sessionExpiresAt } = response;
+
+            const mappedUser: User = {
+                id: dbUser.id,
+                app_metadata: { provider: 'demo' },
+                user_metadata: {
+                    full_name: dbUser.full_name || 'Demo Explorer',
+                    avatar_url: dbUser.avatar_url,
+                    is_demo: true,
+                },
+                email: dbUser.email,
+                aud: 'authenticated',
+                created_at: dbUser.created_at || new Date().toISOString(),
+                updated_at: dbUser.updated_at || new Date().toISOString()
+            };
+
+            setUser(mappedUser);
+
+            trackEvent('login', { provider: 'demo' });
+
+            setSessionCookie({
+                userId: dbUser.id,
+                expiresAt: sessionExpiresAt,
+            });
+
+            broadcastSync({
+                type: 'session_changed',
+                payload: {
+                    userId: dbUser.id,
+                }
+            });
+
+            toast.dismiss('auth-toast');
+            toast.success('Connected to Schema Weaver live demo database!');
+        } catch (err: any) {
+            toast.dismiss('auth-toast');
+            logger.error('Demo login failed:', err);
+            toast.error(err?.message || 'Failed to connect to demo account.');
+        } finally {
+            setIsLoggingIn(false);
+        }
+    }, []);
+
+    // ─── Redirect flow: detect ?code= or ?error= in URL after OAuth provider redirects back ───
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
         const code = params.get('code');
@@ -253,6 +301,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         hasInitializedRef.current = true;
 
         const initializeAuth = async () => {
+            const params = new URLSearchParams(window.location.search);
+            const isDemo = params.get('demo') === 'true';
+
+            if (isDemo) {
+                // Clear demo query param from address bar without page reload
+                const cleanUrl = new URL(window.location.href);
+                cleanUrl.searchParams.delete('demo');
+                window.history.replaceState({}, '', cleanUrl.pathname + (cleanUrl.search ? cleanUrl.search : '') + cleanUrl.hash);
+
+                await handleDemoLogin();
+                setLoading(false);
+                return;
+            }
+
             const sessionData = getSessionCookie();
 
             if (sessionData) {
@@ -434,7 +496,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
 
     return (
-        <AuthContext.Provider value={{ user, loading, isLoggingIn, signInWithGoogle, signInWithGithub, signOut, refreshSession }}>
+        <AuthContext.Provider value={{ user, loading, isLoggingIn, signInWithGoogle, signInWithGithub, signInWithDemo: handleDemoLogin, signOut, refreshSession }}>
             {children}
         </AuthContext.Provider>
     );

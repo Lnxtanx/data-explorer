@@ -37,6 +37,7 @@ export interface AuthContextType {
   isLoggingIn: boolean;
   signInWithGoogle: () => void;
   signInWithGithub: () => void;
+  signInWithDemo: () => Promise<void>;
   signOut: () => Promise<void>;
   refreshSession: () => void;
 }
@@ -47,6 +48,7 @@ export const AuthContext = createContext<AuthContextType>({
   isLoggingIn: false,
   signInWithGoogle: () => { },
   signInWithGithub: () => { },
+  signInWithDemo: async () => { },
   signOut: async () => { },
   refreshSession: () => { },
 });

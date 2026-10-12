@@ -96,6 +96,13 @@ export async function loginWithGithub(code: string, redirectUri?: string): Promi
 }
 
 /**
+ * Authenticate into public demo account
+ */
+export async function loginWithDemo(): Promise<AuthResponse> {
+    return post<AuthResponse>('/api/auth/demo');
+}
+
+/**
  * Logout and clear session
  */
 export async function logout(): Promise<{ success: boolean }> {
