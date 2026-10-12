@@ -371,11 +371,17 @@ export default function DataExplorerPage() {
       <div className="h-screen flex flex-col bg-background overflow-hidden">
         <NotificationBanner />
         {Boolean(user?.user_metadata?.is_demo || user?.email === 'support@schemaweaver.dev') && (
-          <div className="bg-emerald-500/10 border-b border-emerald-500/20 px-4 py-1.5 flex items-center justify-between text-xs text-emerald-400 shrink-0">
-            <div className="flex items-center gap-2">
-              <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span>
-                <strong>Live PostgreSQL Demo</strong> — Connected to live demo database. Queries, Resona AI, and Dashboards are active.
+          <div className="bg-gradient-to-r from-orange-600 via-amber-600 to-orange-600 text-white border-b border-orange-500/40 px-4 py-2 flex items-center justify-between text-xs shadow-md shadow-orange-950/20 shrink-0">
+            <div className="flex items-center gap-2.5">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-white"></span>
+              </span>
+              <span className="bg-black/25 text-white border border-white/20 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider text-[10px]">
+                Live Demo
+              </span>
+              <span className="font-medium text-white/95">
+                Connected to live 24/7 PostgreSQL instance. Queries, Resona AI chat, and Dashboards are live.
               </span>
             </div>
             <div className="flex items-center gap-2">
@@ -385,7 +391,7 @@ export default function DataExplorerPage() {
                   setSettingsSection('profile');
                   setShowSettings(true);
                 }}
-                className="underline hover:text-emerald-300 transition-colors font-medium cursor-pointer"
+                className="bg-black/20 hover:bg-black/35 text-white border border-white/25 rounded-md px-2.5 py-1 font-semibold transition-all shadow-xs cursor-pointer"
               >
                 Sign in with personal account →
               </button>
