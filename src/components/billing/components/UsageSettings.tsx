@@ -37,6 +37,21 @@ function timeUntil(target: Date): string {
     return `${mins}m`;
 }
 
+function formatMonthReset(
+    usage: { monthly_reset_at?: string; is_lifetime_cap?: boolean } | undefined,
+    dayUsed: number
+): string {
+    if (!usage) return `${fmtNum(dayUsed)} used today`;
+    if (usage.is_lifetime_cap) return 'Permanent allowance';
+    if (!usage.monthly_reset_at) return `${fmtNum(dayUsed)} used today`;
+
+    const target = new Date(usage.monthly_reset_at);
+    if (isNaN(target.getTime())) return `${fmtNum(dayUsed)} used today`;
+    if (target.getTime() <= Date.now()) return 'Period expired';
+
+    return `Resets in ${timeUntil(target)}`;
+}
+
 const PLAN_META: Record<string, { label: string; badgeClass: string }> = {
     free:          { label: 'Free',    badgeClass: 'bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-500/25' },
     starter:       { label: 'Starter', badgeClass: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/25' },
@@ -325,7 +340,7 @@ export function UsageSettings() {
                 <div className="flex items-center justify-between text-2xs text-muted-foreground">
                     <span className="tabular-nums">{fmtNum(monthRemaining)} credits remaining</span>
                     <span>
-                        {usage?.monthly_reset_at ? `Resets in ${timeUntil(new Date(usage.monthly_reset_at))}` : `${fmtNum(dayUsed)} used today`}
+                        {formatMonthReset(usage, dayUsed)}
                     </span>
                 </div>
             </div>

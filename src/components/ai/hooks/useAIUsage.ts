@@ -68,7 +68,15 @@ export function getProactiveQuotaError(usage: AIUsageStatus | undefined): string
 
     // Monthly / lifetime exhaustion
     if (usage.credit_limit_monthly > 0 && usage.credits_remaining <= 0 && !usage.is_lifetime_cap) {
-        return `Monthly credit limit reached (${usage.credits_used_month} / ${usage.credit_limit_monthly} credits). Upgrade your plan to continue.`;
+        let resetMsg = '';
+        if (usage.monthly_reset_at) {
+            const target = new Date(usage.monthly_reset_at);
+            if (!isNaN(target.getTime()) && target.getTime() > Date.now()) {
+                const diffDays = Math.ceil((target.getTime() - Date.now()) / (24 * 3600 * 1000));
+                resetMsg = ` Resets in ${diffDays} day${diffDays === 1 ? '' : 's'}.`;
+            }
+        }
+        return `Monthly credit limit reached (${usage.credits_used_month} / ${usage.credit_limit_monthly} credits).${resetMsg} Upgrade your plan to continue.`;
     }
 
     return null;

@@ -199,7 +199,11 @@ export function PlansSettings({ user, onOpenCollaboration }: PlansSettingsProps)
     // if the plan is missing from the list (e.g. newly added plan not yet cached).
     const currentPlan =
         allPlans.find((plan) => plan.id === currentPlanId) ?? subscription?.sw_plans ?? null;
-    const isPaid = currentPlanId !== 'free';
+    const isPeriodLive =
+        !subscription?.current_period_end ||
+        subscription.current_period_end === 'infinity' ||
+        new Date(subscription.current_period_end).getTime() > Date.now();
+    const isPaid = currentPlanId !== 'free' && isPeriodLive;
     const cancelScheduled = Boolean(subscription?.cancel_at_period_end);
     const subStatus = subscription?.status ?? 'active';
     const payments = historyData?.payments ?? [];
