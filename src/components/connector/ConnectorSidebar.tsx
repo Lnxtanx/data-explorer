@@ -1,4 +1,4 @@
-import { Settings, Activity, Plus, BarChart3, Heart, Server, ExternalLink } from 'lucide-react';
+import { Settings, Activity, Plus, BarChart3, Heart, Server } from 'lucide-react';
 import { PostgresIcon } from './DatabaseEngineIcon';
 import { cn } from '@/lib/utils';
 
@@ -47,22 +47,10 @@ export function ConnectorSidebar({ activeSection, onSelect }: ConnectorSidebarPr
                 })}
             </nav>
 
-            <div className="p-3 border-t border-border flex flex-col items-center justify-center gap-1">
-                <div className="flex items-center gap-1.5">
-                    <PostgresIcon className="w-3 h-3 opacity-70" />
-                    <span className="text-[10px] text-muted-foreground font-medium">
-                        PostgreSQL Connector v2.0
-                    </span>
-                </div>
-                <a
-                    href="https://github.com/Schema-Weaver/pg-connector"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-[9px] text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1 opacity-80 hover:opacity-100"
-                >
-                    <span>Open Source</span>
-                    <ExternalLink className="w-2.5 h-2.5" />
-                </a>
+            <div className="p-3 border-t border-border">
+                <p className="text-2xs text-muted-foreground text-center">
+                    Connector v2.01
+                </p>
             </div>
         </div>
     );
