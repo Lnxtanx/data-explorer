@@ -20,14 +20,19 @@ export function fmtNumber(val: unknown, config?: PanelRuntimeConfig): string {
   if (val === null || val === undefined) return '—';
   const num = Number(val);
   if (isNaN(num)) return String(val);
-  const currency = config && typeof config.currency === 'string' ? config.currency : null;
+  let currency = config && typeof config.currency === 'string' ? config.currency : null;
+  if (currency === '$') currency = 'USD';
   if (currency) {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency,
-      minimumFractionDigits: 0,
-      maximumFractionDigits: num >= 1000 ? 0 : 2,
-    }).format(num);
+    try {
+      return new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency,
+        minimumFractionDigits: 0,
+        maximumFractionDigits: num >= 1000 ? 0 : 2,
+      }).format(num);
+    } catch (_e) {
+      // Fallback if currency code is not supported
+    }
   }
   if (Math.abs(num) >= 1e9) return (num / 1e9).toFixed(1) + 'B';
   if (Math.abs(num) >= 1e6) return (num / 1e6).toFixed(1) + 'M';
