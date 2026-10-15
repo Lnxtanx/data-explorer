@@ -141,7 +141,7 @@ export const GridRow = memo(function GridRow({
                 {value !== null && value !== undefined && (
                   <button
                     type="button"
-                    className="opacity-0 group-hover/cell:opacity-100 p-0.5 rounded text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-opacity shrink-0 cursor-pointer"
+                    className="opacity-0 group-hover/cell:opacity-100 [@media(hover:none)]:opacity-100 p-0.5 rounded text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-opacity shrink-0 cursor-pointer"
                     onClick={(e) => {
                       e.stopPropagation();
                       handleCopy(value, cellKey);
@@ -158,7 +158,7 @@ export const GridRow = memo(function GridRow({
                 {hasExpandableContent && (
                   <button
                     type="button"
-                    className="opacity-0 group-hover/cell:opacity-100 p-0.5 rounded text-muted-foreground hover:text-primary hover:bg-muted/80 transition-opacity shrink-0 cursor-pointer"
+                    className="opacity-0 group-hover/cell:opacity-100 [@media(hover:none)]:opacity-100 p-0.5 rounded text-muted-foreground hover:text-primary hover:bg-muted/80 transition-opacity shrink-0 cursor-pointer"
                     onClick={(e) => {
                       e.stopPropagation();
                       onCellDoubleClick(value, column, rowIndex);

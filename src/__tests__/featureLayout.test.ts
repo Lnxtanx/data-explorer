@@ -103,6 +103,7 @@ describe('folder layout: src/lib/ is shared infrastructure only', () => {
     'lib/modes.ts',           // AgentMode vocabulary: read by ai, dashboard AND billing
     'lib/persist.ts',         // query-cache persistence
     'lib/queryClient.ts',
+    'lib/useIsMobile.ts',     // cross-cutting responsive-layout primitive (matchMedia)
     'lib/utils.ts',
     'lib/view-mode.ts',       // app-level navigation state
   ]);

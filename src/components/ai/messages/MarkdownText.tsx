@@ -12,13 +12,12 @@
 
 import { memo, useState } from 'react';
 import katex from 'katex';
-import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import {
-    Database, Copy, Check, Info, Lightbulb,
+    Copy, Check, Info, Lightbulb,
     AlertCircle, AlertTriangle, ShieldAlert,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { TablePreview } from './TablePreview';
+import { TablePreviewHoverCard } from './TablePreviewHoverCard';
 
 interface MarkdownTextProps {
     text: string;
@@ -127,26 +126,15 @@ function renderInline(
 
             if (availableTables?.includes(tableName)) {
                 parts.push(
-                    <HoverCard key={`${baseKey}-hc${m.index}`} openDelay={200} closeDelay={100}>
-                        <HoverCardTrigger asChild>
-                            {button}
-                        </HoverCardTrigger>
-                        <HoverCardContent
-                            className="w-[320px] p-4 bg-background/95 backdrop-blur-md border-border/60 shadow-2xl z-[100] rounded-xl"
-                            align="start"
-                            side="top"
-                            sideOffset={12}
-                        >
-                            {connectionId ? (
-                                <TablePreview tableName={tableName} connectionId={connectionId} />
-                            ) : (
-                                <div className="text-xs text-muted-foreground p-2 text-center">
-                                    <Database className="w-8 h-8 mx-auto mb-2 opacity-20" />
-                                    <p>Select a database to see table preview</p>
-                                </div>
-                            )}
-                        </HoverCardContent>
-                    </HoverCard>
+                    <TablePreviewHoverCard
+                        key={`${baseKey}-hc${m.index}`}
+                        tableName={tableName}
+                        connectionId={connectionId}
+                        trigger={button}
+                        align="start"
+                        side="top"
+                        sideOffset={12}
+                    />
                 );
             } else {
                 parts.push(button);

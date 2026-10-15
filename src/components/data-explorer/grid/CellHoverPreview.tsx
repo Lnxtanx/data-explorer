@@ -96,8 +96,9 @@ export function CellHoverPreview({ data, onClose, onOpenInspector, onKeepOpen }:
 
   if (!data) return null;
 
-  // Calculate floating position with viewport boundary clamping
-  const cardWidth = 380;
+  // Calculate floating position with viewport boundary clamping.
+  // Keep the card inside the viewport on narrow screens.
+  const cardWidth = Math.min(380, window.innerWidth - 24);
   const estimatedHeight = 260;
   const padding = 12;
 
@@ -139,7 +140,10 @@ export function CellHoverPreview({ data, onClose, onOpenInspector, onKeepOpen }:
       className={cn(
         'z-[9999] rounded-xl border border-border/80 bg-popover/95 backdrop-blur-md shadow-2xl',
         'text-popover-foreground transition-all animate-in fade-in zoom-in-95 duration-150 select-text overflow-hidden',
-        'ring-1 ring-black/5 dark:ring-white/10'
+        'ring-1 ring-black/5 dark:ring-white/10',
+        // Hover preview is a pointer-only affordance; hide it on touch devices
+        // where it would otherwise float awkwardly over the grid.
+        '[@media(hover:none)]:hidden'
       )}
       onClick={(e) => e.stopPropagation()}
       onMouseEnter={() => onKeepOpen?.()}

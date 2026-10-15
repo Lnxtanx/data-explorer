@@ -5,7 +5,7 @@
 
 import { useState, useCallback, useEffect, useRef, lazy, Suspense } from 'react';
 import { createPortal } from 'react-dom';
-import { PanelLeftClose, PanelLeft, BarChart3 } from 'lucide-react';
+import { PanelLeftClose, PanelLeft, BarChart3, Menu } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTheme } from 'next-themes';
 import { Button } from '@/components/ui/button';
@@ -18,6 +18,7 @@ import { SchemaSelector } from './sidebar/SchemaSelector';
 import { useTableList, useSchemas, usePrefetchTableRows } from './api/index';
 import type { TableInfo, ExportGridContext } from './api/index';
 import { SidebarFooter } from '@/components/layout/SidebarFooter';
+import { useIsMobile } from '@/lib/useIsMobile';
 import { saveLastViewedTable, loadLastViewedTable, getExplorerPageSize } from './storage/explorer-preferences';
 import type { ViewMode } from '@/lib/view-mode';
 
@@ -113,7 +114,9 @@ function AISuspenseFallback({ className }: { className?: string }) {
 interface DataExplorerLayoutProps {
   connectionId: string | null;
   onConnectionChange: (connectionId: string | null) => void;
-  headerContent?: React.ReactNode | ((props: { exportButton: React.ReactNode }) => React.ReactNode);
+  headerContent?:
+    | React.ReactNode
+    | ((props: { exportButton: React.ReactNode; mobileNavButton: React.ReactNode }) => React.ReactNode);
   onOpenSettings?: () => void;
   onOpenPlans?: () => void;
   onOpenConnectWizard?: () => void;
@@ -155,6 +158,8 @@ export function DataExplorerLayout({
 
   const [selectedTable, setSelectedTable] = useState<TableInfo | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const isMobile = useIsMobile();
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [schemaName, setSchemaName] = useState('public');
   const [aiActiveView, setAiActiveView] = useState<'chat' | 'library' | 'projects' | 'artifacts' | 'project_detail'>(() => {
     if (typeof window === 'undefined') return 'chat';
@@ -408,7 +413,8 @@ export function DataExplorerLayout({
     setSelectedTable(table);
     saveLastViewedTable(connectionId || '', schemaName, table.name);
     onTableSelectChange?.(table, schemaName);
-  }, [schemaName, connectionId, onTableSelectChange]);
+    if (isMobile) setMobileSidebarOpen(false);
+  }, [schemaName, connectionId, onTableSelectChange, isMobile]);
   const handleTableMentionClick = useCallback((tableName: string) => {
     // Find the table in current metadata for rich info, or fallback to name-only
     const table = tableList?.tables?.find(t => t.name === tableName);
@@ -420,9 +426,17 @@ export function DataExplorerLayout({
     onModeChange('explorer');
   }, [tableList, handleTableSelect, onModeChange, schemaName]);
 
+  // On phones the sidebar renders as an off-canvas drawer and is always full
+  // width; the collapsed icon-rail only applies on tablet/desktop.
+  const collapsed = isMobile ? false : sidebarCollapsed;
+
   const handleToggleSidebar = useCallback(() => {
-    setSidebarCollapsed(prev => !prev);
-  }, []);
+    if (isMobile) {
+      setMobileSidebarOpen(prev => !prev);
+    } else {
+      setSidebarCollapsed(prev => !prev);
+    }
+  }, [isMobile]);
 
   // Reset explorer state when the connection changes: a stale selected table
   // from another connection must never render against the new connection.
@@ -464,19 +478,33 @@ export function DataExplorerLayout({
 
   return (
     <div className="flex w-full h-full bg-background overflow-hidden">
+      {/* Mobile drawer backdrop */}
+      {isMobile && mobileSidebarOpen && (
+        <div
+          className="fixed inset-0 z-30 bg-black/50 animate-in fade-in duration-200 md:hidden"
+          onClick={() => setMobileSidebarOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
       {/* Sidebar */}
       <aside
         className={cn(
-          'flex flex-col border-r border-border bg-card transition-all duration-300',
-          sidebarCollapsed ? 'w-12' : 'w-64'
+          'flex flex-col border-r border-border bg-card',
+          isMobile
+            ? cn(
+                'fixed inset-y-0 left-0 z-40 w-64 transition-transform duration-300',
+                mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'
+              )
+            : cn('transition-all duration-300', sidebarCollapsed ? 'w-12' : 'w-64')
         )}
       >
         {/* Sidebar Header */}
         <div className={cn(
           "flex items-center px-3 h-10 border-b border-border shrink-0",
-          sidebarCollapsed ? "justify-center" : "justify-between"
+          collapsed ? "justify-center" : "justify-between"
         )}>
-          {!sidebarCollapsed && (
+          {!collapsed && (
             <button
               onClick={() => {
                 if (mode === 'ai' || mode === 'dashboard') {
@@ -505,7 +533,7 @@ export function DataExplorerLayout({
             className="h-7 w-7"
             onClick={handleToggleSidebar}
           >
-            {sidebarCollapsed ? (
+            {collapsed ? (
               <PanelLeft className="w-4 h-4" />
             ) : (
               <PanelLeftClose className="w-4 h-4" />
@@ -515,7 +543,7 @@ export function DataExplorerLayout({
 
         {/* Table List / AI Sidebar */}
         <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
-          {!sidebarCollapsed && (
+          {!collapsed && (
             mode === 'ai' ? (
               <Suspense fallback={<AISuspenseFallback className="flex-1" />}>
                 <AIChatSidebar
@@ -587,7 +615,7 @@ export function DataExplorerLayout({
             onOpenSettings={onOpenSettings} 
             mode={mode} 
             onModeChange={onModeChange} 
-            isCollapsed={sidebarCollapsed}
+            isCollapsed={collapsed}
           />
         </div>
       </aside>
@@ -606,8 +634,20 @@ export function DataExplorerLayout({
               />
             );
 
+          const mobileNavButton = isMobile ? (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 shrink-0"
+              onClick={() => setMobileSidebarOpen(true)}
+              aria-label="Open navigation"
+            >
+              <Menu className="w-5 h-5" />
+            </Button>
+          ) : null;
+
           if (typeof headerContent === 'function') {
-            return headerContent({ exportButton: exportButtonElement });
+            return headerContent({ exportButton: exportButtonElement, mobileNavButton });
           }
 
           return (

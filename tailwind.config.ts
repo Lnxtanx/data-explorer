@@ -84,9 +84,8 @@ export default {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
       },
-      // Screen reader only utility for SEO content
       screens: {
-        'sr-only': {'raw': '(max-width: 0px)'},
+        'xs': '420px',
       },
     },
   },

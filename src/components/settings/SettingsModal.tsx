@@ -76,14 +76,14 @@ export function SettingsModal({ isOpen, onClose, user, signOut, signInWithGoogle
                     <DialogTitle>Settings</DialogTitle>
                 </VisuallyHidden>
 
-                <div className="flex flex-1 overflow-hidden">
+                <div className="flex flex-col md:flex-row flex-1 min-h-0 overflow-hidden">
                     <SettingsSidebar
                         activeSection={activeSection}
                         onSelect={setActiveSection}
                         user={user}
                     />
 
-                    <ScrollArea className="flex-1 [&_[data-radix-scroll-area-thumb]]:w-1 [&_[data-radix-scroll-area-thumb]]:rounded-full">
+                    <ScrollArea className="flex-1 min-h-0 [&_[data-radix-scroll-area-thumb]]:w-1 [&_[data-radix-scroll-area-thumb]]:rounded-full">
                         {renderContent()}
                     </ScrollArea>
                 </div>

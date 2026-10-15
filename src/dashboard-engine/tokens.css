@@ -404,6 +404,18 @@ a:hover {
     opacity: 1 !important;
 }
 
+/* Touch devices never fire :hover, so the rest-state opacity that keeps these
+   controls subtle on desktop leaves them faint. Make them clearly visible. */
+@media (hover: none) {
+    .sw-card-resize-handle {
+        opacity: 0.6;
+    }
+
+    .sw-card-action-btn {
+        opacity: 0.85;
+    }
+}
+
 .sw-refresh-btn {
     width: 26px;
     height: 26px;

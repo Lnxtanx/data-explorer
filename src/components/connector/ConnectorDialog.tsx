@@ -117,13 +117,13 @@ export function ConnectorDialog({ open, onClose, initialTab = 'overview', onSele
                     <DialogTitle>Database Connector</DialogTitle>
                 </VisuallyHidden>
 
-                <div className="flex flex-1 overflow-hidden min-w-0">
+                <div className="flex flex-col md:flex-row flex-1 overflow-hidden min-w-0 min-h-0">
                     <ConnectorSidebar
                         activeSection={activeTab}
                         onSelect={(section) => setActiveTab(section as Tab)}
                     />
 
-                    <div className="flex-1 min-w-0 overflow-y-auto flex flex-col h-full">
+                    <div className="flex-1 min-w-0 min-h-0 overflow-y-auto flex flex-col">
                         {renderContent()}
                     </div>
                 </div>

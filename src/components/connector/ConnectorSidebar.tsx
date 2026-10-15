@@ -19,12 +19,12 @@ const SECTIONS = [
 
 export function ConnectorSidebar({ activeSection, onSelect }: ConnectorSidebarProps) {
     return (
-        <div className="w-48 border-r border-border bg-muted/30 flex flex-col h-full">
-            <div className="px-4 py-3 border-b border-border flex items-center gap-2">
+        <div className="flex w-full shrink-0 flex-col border-b border-border bg-muted/30 md:h-full md:w-48 md:border-b-0 md:border-r">
+            <div className="hidden px-4 py-3 border-b border-border items-center gap-2 md:flex">
                 <PostgresIcon className="w-4 h-4" />
                 <h2 className="text-sm font-semibold text-foreground">Connector</h2>
             </div>
-            <nav className="flex-1 p-2 space-y-1 overflow-y-auto">
+            <nav className="flex flex-1 gap-1 overflow-x-auto p-2 md:flex-col md:overflow-y-auto md:overflow-x-hidden md:space-y-1 md:gap-0">
                 {SECTIONS.map((section) => {
                     const Icon = section.icon;
                     const isActive = activeSection === section.id;
@@ -34,7 +34,7 @@ export function ConnectorSidebar({ activeSection, onSelect }: ConnectorSidebarPr
                             key={section.id}
                             onClick={() => onSelect(section.id)}
                             className={cn(
-                                "w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors text-left",
+                                "flex w-auto shrink-0 items-center gap-2.5 whitespace-nowrap px-3 py-2 rounded-md text-sm transition-colors text-left md:w-full",
                                 isActive
                                     ? "bg-primary/10 text-primary font-medium"
                                     : "text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -47,7 +47,7 @@ export function ConnectorSidebar({ activeSection, onSelect }: ConnectorSidebarPr
                 })}
             </nav>
 
-            <div className="p-3 border-t border-border">
+            <div className="hidden p-3 border-t border-border md:block">
                 <p className="text-2xs text-muted-foreground text-center">
                     Connector v2.01
                 </p>

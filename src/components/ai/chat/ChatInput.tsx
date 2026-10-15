@@ -1,16 +1,15 @@
 import { useState, useCallback, useEffect } from 'react';
-import { Plus, Send, Database, LayoutDashboard, FolderOpen, AtSign, X, Square, Loader2, AlertTriangle } from 'lucide-react';
+import { Plus, Send, LayoutDashboard, FolderOpen, AtSign, X, Square, Loader2, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { ActionTooltip } from '@/components/ui/tooltip';
+import { TablePreviewHoverCard } from '../messages/TablePreviewHoverCard';
 import { MentionPicker } from '../input/MentionPicker';
 import { MicButton, VoicePanel } from '@/components/voice';
 import { ModeSelector } from '../models/ModeSelector';
 import type { AgentMode } from '../models/ModeSelector';
 import type { AgentWarning, ContextMeta } from '../types';
 
-import { TablePreview } from '../messages/TablePreview';
 import { ContextWindowBar } from './ContextWindowBar';
 import AttachmentChip from './AttachmentChip';
 
@@ -42,26 +41,19 @@ function MentionOverlay({
                     const tableName = part.startsWith('@') ? part.slice(1) : null;
                     if (tableName && availableTables.includes(tableName)) {
                         return (
-                            <HoverCard key={i} openDelay={200} closeDelay={100}>
-                                <HoverCardTrigger asChild>
+                            <TablePreviewHoverCard
+                                key={i}
+                                tableName={tableName}
+                                connectionId={connectionId}
+                                align="start"
+                                side="top"
+                                sideOffset={12}
+                                trigger={
                                     <span className="inline relative pointer-events-auto bg-blue-500/15 text-blue-600 dark:text-blue-400 font-normal rounded-sm ring-[1px] ring-blue-500/20 cursor-help transition-all duration-200">
                                         {part}
                                     </span>
-                                </HoverCardTrigger>
-                                <HoverCardContent
-                                    className="w-[320px] p-4 bg-background/95 backdrop-blur-md border-border/60 shadow-2xl z-[100] rounded-xl"
-                                    align="start" side="top" sideOffset={12}
-                                >
-                                    {connectionId ? (
-                                        <TablePreview tableName={tableName} connectionId={connectionId} />
-                                    ) : (
-                                        <div className="text-xs text-muted-foreground p-2 text-center">
-                                            <Database className="w-8 h-8 mx-auto mb-2 opacity-20" />
-                                            <p>Select a database to see table preview</p>
-                                        </div>
-                                    )}
-                                </HoverCardContent>
-                            </HoverCard>
+                                }
+                            />
                         );
                     }
                     return <span key={i}>{part}</span>;

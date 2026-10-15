@@ -72,7 +72,7 @@ export function ColumnStatsPanel({
   };
 
   return (
-    <div className="h-full w-80 bg-card border-l border-border shadow-xl z-30 flex flex-col animate-in slide-in-from-right duration-200">
+    <div className="fixed inset-0 z-40 w-full bg-card border-l border-border shadow-xl flex flex-col animate-in slide-in-from-right duration-200 md:relative md:inset-auto md:z-30 md:h-full md:w-80">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-2.5 border-b border-border shrink-0">
         <div className="flex items-center gap-2 min-w-0">
@@ -323,7 +323,7 @@ function TopValueRow({ item, onFilter }: { item: TopValue; onFilter?: (value: an
           {onFilter && item.value !== null && (
             <button
               onClick={() => onFilter(item.value)}
-              className="opacity-0 group-hover:opacity-100 transition-opacity text-primary hover:text-primary/70"
+              className="opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity text-primary hover:text-primary/70"
               title={`Filter rows where value = ${item.value}`}
             >
               <Filter className="w-3 h-3" />

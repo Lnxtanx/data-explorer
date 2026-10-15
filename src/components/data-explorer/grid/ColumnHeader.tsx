@@ -39,26 +39,28 @@ export function ColumnHeader({
     if (onColumnClick) onColumnClick(column);
   };
 
-  const handleMouseDown = (e: React.MouseEvent) => {
+  const handlePointerDown = (e: React.PointerEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    
-    const startX = e.pageX;
+
+    const startX = e.clientX;
     const startWidth = width || 200;
-    
-    const handleMouseMove = (moveEvent: MouseEvent) => {
+
+    const handlePointerMove = (moveEvent: PointerEvent) => {
       if (onResize) {
-        onResize(Math.max(50, startWidth + (moveEvent.pageX - startX)));
+        onResize(Math.max(50, startWidth + (moveEvent.clientX - startX)));
       }
     };
-    
-    const handleMouseUp = () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
+
+    const handlePointerUp = () => {
+      document.removeEventListener('pointermove', handlePointerMove);
+      document.removeEventListener('pointerup', handlePointerUp);
+      document.removeEventListener('pointercancel', handlePointerUp);
     };
-    
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
+
+    document.addEventListener('pointermove', handlePointerMove);
+    document.addEventListener('pointerup', handlePointerUp);
+    document.addEventListener('pointercancel', handlePointerUp);
   };
 
   const handleDoubleClick = (e: React.MouseEvent) => {
@@ -115,7 +117,7 @@ export function ColumnHeader({
           onClick={handleSortClick}
           className={cn(
             'flex-shrink-0 p-0.5 rounded transition-colors ml-auto',
-            isActive ? 'text-primary' : 'text-muted-foreground/30 opacity-0 group-hover:opacity-100'
+            isActive ? 'text-primary' : 'text-muted-foreground/30 opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100'
           )}
           title={isActive ? (sortDirection === 'asc' ? 'Sorted ascending' : 'Sorted descending') : 'Click to sort'}
         >
@@ -129,8 +131,8 @@ export function ColumnHeader({
 
       {/* Resizer */}
       <div
-        className="absolute right-0 top-0 w-1.5 h-full cursor-col-resize hover:bg-primary z-10 transition-colors"
-        onMouseDown={handleMouseDown}
+        className="absolute right-0 top-0 w-1.5 [@media(hover:none)]:w-3 h-full cursor-col-resize hover:bg-primary z-10 transition-colors touch-none"
+        onPointerDown={handlePointerDown}
         onDoubleClick={handleDoubleClick}
         onClick={(e) => e.stopPropagation()}
         style={{ right: '-3px' }}

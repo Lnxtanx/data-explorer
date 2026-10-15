@@ -338,7 +338,7 @@ export function AIChatSidebar({
                                                     {/* Quick start chat in project button */}
                                                     <button
                                                         onClick={(e) => handleStartProjectChat(project.id, e)}
-                                                        className="w-5 h-5 rounded flex items-center justify-center opacity-0 group-hover:opacity-100 hover:bg-background text-muted-foreground hover:text-foreground transition-all cursor-pointer"
+                                                        className="w-5 h-5 rounded flex items-center justify-center opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 hover:bg-background text-muted-foreground hover:text-foreground transition-all cursor-pointer"
                                                         title={`New chat in ${project.title}`}
                                                     >
                                                         <Plus className="w-3.5 h-3.5" />
@@ -349,7 +349,7 @@ export function AIChatSidebar({
                                                         <DropdownMenuTrigger asChild>
                                                             <button
                                                                 onClick={(e) => e.stopPropagation()}
-                                                                className="w-5 h-5 rounded flex items-center justify-center opacity-0 group-hover:opacity-100 hover:bg-background text-muted-foreground hover:text-foreground transition-all cursor-pointer"
+                                                                className="w-5 h-5 rounded flex items-center justify-center opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 hover:bg-background text-muted-foreground hover:text-foreground transition-all cursor-pointer"
                                                             >
                                                                 <MoreHorizontal className="w-3.5 h-3.5" />
                                                             </button>

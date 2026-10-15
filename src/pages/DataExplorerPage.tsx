@@ -353,7 +353,7 @@ export default function DataExplorerPage() {
 
   if (isLoggingIn) {
     return (
-      <div className="h-screen w-screen flex flex-col items-center justify-center gap-3 bg-background">
+      <div className="h-dvh w-screen flex flex-col items-center justify-center gap-3 bg-background">
         <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
         <p className="text-sm text-muted-foreground">Signing you in...</p>
       </div>
@@ -368,7 +368,7 @@ export default function DataExplorerPage() {
     // the orb follow the user across tabs.
     <VoiceSessionProvider connectionId={connectionId ?? undefined}>
       <>
-      <div className="h-screen flex flex-col bg-background overflow-hidden">
+      <div className="h-dvh flex flex-col bg-background overflow-hidden">
         <NotificationBanner />
         {Boolean(user?.user_metadata?.is_demo || user?.email === 'support@schemaweaver.dev') && (
           <div className="bg-gradient-to-r from-orange-600 via-amber-600 to-orange-600 text-white border-b border-orange-500/40 px-4 py-2 flex items-center justify-between text-xs shadow-md shadow-orange-950/20 shrink-0">
@@ -413,9 +413,10 @@ export default function DataExplorerPage() {
             setShowSettings(true);
           }}
           onTableSelectChange={handleTableSelectChange}
-          headerContent={({ exportButton }) => (
+          headerContent={({ exportButton, mobileNavButton }) => (
             <div className="flex items-center justify-between px-4 h-10 border-b border-border bg-card w-full shrink-0">
               <div className="flex items-center gap-2 min-w-0 flex-1">
+                {mobileNavButton}
                 <div className="flex items-center shrink-0">
                   <ConnectionSelector
                     selectedConnectionId={connectionId}
@@ -439,7 +440,7 @@ export default function DataExplorerPage() {
                   className={
                     mode === 'dashboard'
                       ? 'hidden'
-                      : 'flex items-center gap-1 ml-2'
+                      : 'flex items-center gap-1 ml-2 max-md:min-w-0 max-md:overflow-x-auto'
                   }
                 />
               </div>

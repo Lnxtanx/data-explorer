@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Check, Copy, AtSign, Download, Database, ChevronDown, ChevronUp, Eye, Loader2 } from 'lucide-react';
+import { Check, Copy, AtSign, Download, ChevronDown, ChevronUp, Eye, Loader2 } from 'lucide-react';
 import AttachmentThumb from './AttachmentThumb';
 import ImageLightbox from './ImageLightbox';
 import { imagePreviewUrl, isImageName } from './utils/fileValidation';
@@ -9,9 +9,8 @@ import { AgentStatusBar } from '../messages/AgentStatusBar';
 import { PlanSteps } from '../messages/PlanSteps';
 import { LiveToolSteps } from '../tools/LiveToolSteps';
 import { ArtifactView } from '../artifacts/ArtifactView';
-import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { ActionTooltip } from '@/components/ui/tooltip';
-import { TablePreview } from '../messages/TablePreview';
+import { TablePreviewHoverCard } from '../messages/TablePreviewHoverCard';
 import type { AgentPhase, AgentStatus } from '../hooks/useAIAgent';
 import type { LocalMessage } from './types';
 import type { AgentArtifact } from '../hooks/useAIAgent';
@@ -76,28 +75,18 @@ export const ChatMessage = React.memo(function ChatMessage({
                 {/* @table pill */}
                 {msg.role === 'user' && msg.mentionedTable && (
                     availableTables?.includes(msg.mentionedTable) ? (
-                        <HoverCard openDelay={200} closeDelay={100}>
-                            <HoverCardTrigger asChild>
+                        <TablePreviewHoverCard
+                            tableName={msg.mentionedTable}
+                            connectionId={connectionId}
+                            align="end"
+                            side="bottom"
+                            sideOffset={8}
+                            trigger={
                                 <button className="inline-flex items-center gap-1 text-[11px] text-muted-foreground mb-0.5 hover:text-foreground transition-colors">
                                     <AtSign className="w-2.5 h-2.5" />{msg.mentionedTable}
                                 </button>
-                            </HoverCardTrigger>
-                            <HoverCardContent 
-                                className="w-[320px] p-4 bg-background/95 backdrop-blur-md border-border/60 shadow-2xl z-[100] rounded-xl text-left"
-                                align="end"
-                                side="bottom"
-                                sideOffset={8}
-                            >
-                                {connectionId ? (
-                                    <TablePreview tableName={msg.mentionedTable} connectionId={connectionId} />
-                                ) : (
-                                    <div className="text-xs text-muted-foreground p-2 text-center">
-                                        <Database className="w-8 h-8 mx-auto mb-2 opacity-20" />
-                                        <p>Select a database to see table preview</p>
-                                    </div>
-                                )}
-                            </HoverCardContent>
-                        </HoverCard>
+                            }
+                        />
                     ) : (
                         <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground mb-0.5">
                             <AtSign className="w-2.5 h-2.5" />{msg.mentionedTable}

@@ -17,6 +17,7 @@ import { useParentGenerationSync } from './useParentGenerationSync';
 import { useAIUsage, getProactiveQuotaError, getQuotaWarning } from '../../ai/hooks/useAIUsage';
 import { useConnections } from '@/components/connector/api/useConnections';
 import { cn } from '@/lib/utils';
+import { useIsMobile } from '@/lib/useIsMobile';
 import { useEffect, useRef, useState } from 'react';
 
 export interface ResonaAISidePanelProps {
@@ -48,6 +49,10 @@ export function ResonaAISidePanel({
   onClearPendingInquiry,
 }: ResonaAISidePanelProps) {
   const [inputText, setInputText] = useState('');
+
+  // Phones render the panel as a full-screen overlay; the drag-resize rail is
+  // pointer-only so it is disabled there.
+  const isMobile = useIsMobile();
 
   // Quota & credits status (matching AIChatMain)
   const { data: usageStatus } = useAIUsage();
@@ -126,13 +131,18 @@ export function ResonaAISidePanel({
   return (
     <>
       {/* Full-screen blocker during drag to prevent iframes from capturing mouse events */}
-      {isResizing && (
+      {isResizing && !isMobile && (
         <div className="fixed inset-0 z-[9999] cursor-col-resize select-none pointer-events-auto" />
       )}
 
       <div
-        style={{ width: `${panelWidth}px` }}
-        className="relative h-full shrink-0 flex flex-col transition-[width] duration-75 ease-out select-text pointer-events-auto z-20"
+        style={isMobile ? undefined : { width: `${panelWidth}px` }}
+        className={cn(
+          'h-full flex flex-col select-text pointer-events-auto',
+          isMobile
+            ? 'fixed inset-0 z-50 w-full'
+            : 'relative shrink-0 z-20 transition-[width] duration-75 ease-out'
+        )}
       >
         {/* Drag-to-Resize Handle */}
         <div
@@ -140,7 +150,7 @@ export function ResonaAISidePanel({
           onDoubleClick={handleResetWidth}
           title="Drag to resize · Double click to reset width"
           className={cn(
-            'absolute -left-1 top-0 bottom-0 w-2 cursor-col-resize flex items-center justify-center z-30 select-none group',
+            'absolute -left-1 top-0 bottom-0 w-2 cursor-col-resize flex items-center justify-center z-30 select-none group max-md:hidden',
             isResizing && 'bg-primary/20'
           )}
         >

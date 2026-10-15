@@ -53,7 +53,7 @@ export function InvitationReviewModal({
 
     return (
         <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-            <DialogContent className="sm:max-width-md">
+            <DialogContent className="sm:max-w-md">
                 <DialogHeader>
                     <div className="mx-auto w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-4">
                         {isTeam ? <Users className="w-6 h-6 text-primary" /> : <Layers3 className="w-6 h-6 text-primary" />}

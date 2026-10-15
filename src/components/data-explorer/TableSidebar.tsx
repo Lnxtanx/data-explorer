@@ -178,7 +178,7 @@ export const TableSidebar = memo(function TableSidebar({
                     {onOpenAIForTable && (
                       <span
                         onClick={(e) => { e.stopPropagation(); onOpenAIForTable(table.name); }}
-                        className="opacity-0 group-hover:opacity-100 transition-all hover:scale-110 cursor-pointer"
+                        className="opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 transition-all hover:scale-110 cursor-pointer"
                         title={`Ask AI about ${table.name}`}
                       >
                         <img src="/resona.png" alt="AI" className="w-3.5 h-3.5" />

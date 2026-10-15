@@ -787,7 +787,7 @@ export function ExportButton({
         </Button>
       </PopoverTrigger>
 
-      <PopoverContent align="end" className="w-[340px] p-0 shadow-xl border border-border/80 rounded-xl overflow-hidden bg-popover">
+      <PopoverContent align="end" className="w-[min(340px,calc(100vw_-_1rem))] p-0 shadow-xl border border-border/80 rounded-xl overflow-hidden bg-popover">
         <div className="p-3.5 space-y-3">
           {/* Scope Selector Tabs */}
           <div className="grid grid-cols-3 gap-1 bg-muted/60 p-1 rounded-lg">
@@ -1048,7 +1048,7 @@ export function ExportButton({
               </span>
             </div>
 
-            <div className="grid grid-cols-5 gap-1.5">
+            <div className="grid grid-cols-3 xs:grid-cols-5 gap-1.5">
               {EXPORT_OPTIONS.map((opt) => {
                 const isSelected = format === opt.format;
                 return (
