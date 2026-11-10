@@ -49,7 +49,7 @@ export function ConnectorSidebar({ activeSection, onSelect }: ConnectorSidebarPr
 
             <div className="hidden p-3 border-t border-border md:block">
                 <p className="text-2xs text-muted-foreground text-center">
-                    Connector v2.0.3
+                    Connector v2.0.4
                 </p>
             </div>
         </div>
