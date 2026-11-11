@@ -79,7 +79,7 @@ export function AIChatMain({
     const [workspaceRefreshCount, setWorkspaceRefreshCount] = useState(0);
     const [dismissedWarnings, setDismissedWarnings] = useState<Record<string, boolean>>({});
 
-    const agentMode = Boolean(connectionId);
+    const agentMode = true;
 
     // Context & Connections
     const { data: tableListData } = useTableList(connectionId ?? null, 'public');

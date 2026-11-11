@@ -79,7 +79,25 @@ export const ChatEmptyState: React.FC<ChatEmptyStateProps> = ({
                             </button>
                         ))}
                     </div>
-                ) : null}
+                ) : (
+                    <div className="mt-4 flex flex-wrap gap-2 justify-center w-full max-w-2xl">
+                        {[
+                            'How do I connect my PostgreSQL database?',
+                            'What commands do I run to start the pg-connector CLI?',
+                            'Help me design a database schema from scratch',
+                            'What features can Resona AI help me with?',
+                        ].map(prompt => (
+                            <button
+                                key={prompt}
+                                onClick={() => onSelectPrompt(prompt)}
+                                className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/70 bg-card rounded-full px-3.5 py-1.5 transition-all border border-border/60 hover:border-border shadow-sm cursor-pointer"
+                            >
+                                <ChevronRight className="w-3.5 h-3.5 shrink-0 opacity-50" />
+                                <span>{prompt}</span>
+                            </button>
+                        ))}
+                    </div>
+                )}
             </div>
         </div>
     );

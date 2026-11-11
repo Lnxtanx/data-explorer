@@ -145,9 +145,9 @@ export function useChatSendOrchestrator({
         }
 
         const history = localMessages.filter(m => !m.isStreaming).map(m => ({ role: m.role, content: m.content }));
-        if (agentMode && connectionId) {
+        if (agentMode) {
             await sendAgent({
-                connectionId,
+                connectionId: connectionId ?? undefined,
                 message,
                 chatId: chatId ?? undefined,
                 schemaName: effectiveSchema,
@@ -293,9 +293,9 @@ export function useChatSendOrchestrator({
 
         const history = localMessages.filter(m => !m.isStreaming).map(m => ({ role: m.role, content: m.content }));
 
-        if (agentMode && connectionId) {
+        if (agentMode) {
             await sendAgent({
-                connectionId,
+                connectionId: connectionId ?? undefined,
                 message: messageText,
                 chatId: chatId ?? undefined,
                 schemaName: effectiveSchema,
