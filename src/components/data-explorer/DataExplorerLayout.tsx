@@ -3,7 +3,7 @@
 // Two-column layout: sidebar (table list) + main content (row grid)
 // =============================================================================
 
-import { useState, useCallback, useEffect, useRef, lazy, Suspense } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef, lazy, Suspense } from 'react';
 import { createPortal } from 'react-dom';
 import { PanelLeftClose, PanelLeft, BarChart3, Menu } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
@@ -15,7 +15,13 @@ import { TableGrid } from './TableGrid';
 import { ExportButton } from '../export/ExportButton';
 import { EmptyState } from './EmptyState';
 import { SchemaSelector } from './sidebar/SchemaSelector';
-import { useTableList, useSchemas, usePrefetchTableRows } from './api/index';
+import {
+  useDataExplorerInfo,
+  useExplorerDefaultSchema,
+  usePrefetchTableRows,
+  useSchemas,
+  useTableList,
+} from './api/index';
 import type { TableInfo, ExportGridContext } from './api/index';
 import { SidebarFooter } from '@/components/layout/SidebarFooter';
 import { useIsMobile } from '@/lib/useIsMobile';
@@ -120,6 +126,7 @@ interface DataExplorerLayoutProps {
   onOpenSettings?: () => void;
   onOpenPlans?: () => void;
   onOpenConnectWizard?: () => void;
+  onOpenConnector?: (tab?: 'overview' | 'connectors' | 'databases' | 'settings' | 'logs' | 'health' | 'connect') => void;
   mode: ViewMode;
   onModeChange: (mode: ViewMode) => void;
   onTableSelectChange?: (table: TableInfo | null, schemaName: string) => void;
@@ -141,6 +148,7 @@ export function DataExplorerLayout({
   onOpenSettings,
   onOpenPlans,
   onOpenConnectWizard,
+  onOpenConnector,
   mode,
   onModeChange,
   onTableSelectChange,
@@ -160,7 +168,7 @@ export function DataExplorerLayout({
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const isMobile = useIsMobile();
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
-  const [schemaName, setSchemaName] = useState('public');
+  const [schemaName, setSchemaName] = useState('');
   const [aiActiveView, setAiActiveView] = useState<'chat' | 'library' | 'projects' | 'artifacts' | 'project_detail'>(() => {
     if (typeof window === 'undefined') return 'chat';
     const saved = localStorage.getItem(AI_VIEW_STORAGE_KEY);
@@ -373,16 +381,24 @@ export function DataExplorerLayout({
 
   // Warm the first page of a table before the user clicks it (hover/keyboard).
   const handlePrefetchTable = useCallback((table: TableInfo) => {
-    if (!connectionId) return;
+    if (!connectionId || !schemaName) return;
     prefetchTableRows(connectionId, table.name, {
       schemaName,
       limit: getExplorerPageSize(),
     });
   }, [connectionId, schemaName, prefetchTableRows]);
 
-  // Fetch schemas list
+  // Resolve engine metadata and the schema before listing tables. The old UI
+  // always sent `public`, which made MySQL aliases return an empty table list.
+  const { data: explorerInfo } = useDataExplorerInfo(connectionId);
   const { data: schemasData, isLoading: schemasLoading, refetch: refetchSchemas } = useSchemas(connectionId);
-  const schemas = schemasData?.schemas || [{ name: 'public', tableCount: 0 }];
+  const schemas = useMemo(() => schemasData?.schemas || [], [schemasData]);
+  const defaultSchema = useExplorerDefaultSchema(connectionId);
+  // Fail closed while engine metadata is loading: MySQL must never receive the
+  // PostgreSQL-only stats request, and neither engine gets an unsupported SQL
+  // export format.
+  const statsEnabled = explorerInfo?.capabilities.includes('stats') ?? false;
+  const sqlExportEnabled = explorerInfo?.capabilities.includes('sqlExport') ?? false;
 
   // Fetch table list
   const { data: tableList, isLoading: tablesLoading, error: tablesError, refetch: refetchTables } = useTableList(
@@ -442,9 +458,19 @@ export function DataExplorerLayout({
   // from another connection must never render against the new connection.
   useEffect(() => {
     setSelectedTable(null);
-    setSchemaName('public');
-    onTableSelectChange?.(null, 'public');
+    setSchemaName('');
+    onTableSelectChange?.(null, '');
   }, [connectionId, onTableSelectChange]);
+
+  // Apply the resolved default once metadata is available, without overriding
+  // a schema the user has already chosen for this connection.
+  useEffect(() => {
+    if (!connectionId || !defaultSchema) return;
+    const available = schemas.map((schema) => schema.name);
+    if (schemaName && (available.length === 0 || available.includes(schemaName))) return;
+    setSchemaName(defaultSchema);
+    onTableSelectChange?.(null, defaultSchema);
+  }, [connectionId, defaultSchema, schemas, schemaName, onTableSelectChange]);
 
   // Restore the last-viewed table once per connection/schema after the table
   // list loads, so a reload lands straight on the previously opened grid
@@ -586,9 +612,9 @@ export function DataExplorerLayout({
                   <div className="px-3 py-2 border-b border-border">
                     <SchemaSelector
                       schemas={schemas}
-                      value={schemaName}
+                      value={schemaName || defaultSchema || ''}
                       onChange={handleSchemaChange}
-                      isLoading={schemasLoading}
+                      isLoading={schemasLoading || !schemaName}
                       disabled={!connectionId}
                     />
                   </div>
@@ -599,7 +625,7 @@ export function DataExplorerLayout({
                   onTableSelect={handleTableSelect}
                   onPrefetchTable={handlePrefetchTable}
                   onRetry={() => refetchTables()}
-                  isLoading={tablesLoading}
+                  isLoading={tablesLoading || !schemaName}
                   error={tablesError}
                   hasConnection={!!connectionId}
                   onOpenAIForTable={onOpenAIForTable}
@@ -631,6 +657,7 @@ export function DataExplorerLayout({
                 tableName={selectedTable?.name ?? ''}
                 schemaName={schemaName}
                 gridContext={gridExportContext}
+                sqlExportEnabled={sqlExportEnabled}
               />
             );
 
@@ -720,6 +747,7 @@ export function DataExplorerLayout({
                 tableInfo={selectedTable}
                 onViewReferencedTable={handleTableMentionClick}
                 onGridContextChange={setGridExportContext}
+                statsEnabled={statsEnabled}
               />
             </div>
           ) : (
@@ -748,6 +776,7 @@ export function DataExplorerLayout({
                   onSectionVisible={(secId) => setActiveSectionId(secId)}
                   iframeRef={dashboardIframeRef}
                   onOpenConnectWizard={onOpenConnectWizard}
+                  onOpenConnector={onOpenConnector}
                   onOpenPlans={onOpenPlans ?? onOpenSettings}
                   onInsightWhy={handleInsightWhy}
                 />

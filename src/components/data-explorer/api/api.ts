@@ -4,6 +4,7 @@
 
 import { get, post, del, API_BASE_URL, apiRequestRaw } from '@/lib/api/client';
 import type {
+  DataExplorerInfoResponse,
   SchemaListResponse,
   TableListResponse,
   TableRowsResponse,
@@ -44,6 +45,18 @@ function unwrapResponse<T>(response: ApiResponse<T>): T {
 }
 
 /**
+ * Engine and capability discovery for one resolved connection.
+ */
+export async function fetchDataExplorerInfo(
+  connectionId: string
+): Promise<DataExplorerInfoResponse> {
+  const response = await get<ApiResponse<DataExplorerInfoResponse>>(
+    `/api/data/${encodeURIComponent(connectionId)}/info`
+  );
+  return unwrapResponse(response);
+}
+
+/**
  * Get list of accessible schemas in the database.
  */
 export async function fetchSchemas(connectionId: string): Promise<SchemaListResponse> {
@@ -56,10 +69,14 @@ export async function fetchSchemas(connectionId: string): Promise<SchemaListResp
  */
 export async function fetchTableList(
   connectionId: string,
-  schemaName: string = 'public'
+  schemaName?: string | null
 ): Promise<TableListResponse> {
-  const params = new URLSearchParams({ schemaName });
-  const response = await get<ApiResponse<TableListResponse>>(`/api/data/${connectionId}/tables?${params}`);
+  const params = new URLSearchParams();
+  if (schemaName) params.set('schemaName', schemaName);
+  const query = params.toString();
+  const response = await get<ApiResponse<TableListResponse>>(
+    `/api/data/${connectionId}/tables${query ? `?${query}` : ''}`
+  );
   return unwrapResponse(response);
 }
 

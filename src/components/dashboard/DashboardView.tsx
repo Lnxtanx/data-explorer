@@ -39,6 +39,7 @@ interface DashboardViewProps {
   onSectionVisible?: (sectionId: string) => void;
   iframeRef?: React.RefObject<HTMLIFrameElement>;
   onOpenConnectWizard?: () => void;
+  onOpenConnector?: (tab?: 'overview' | 'connectors' | 'databases' | 'settings' | 'logs' | 'health' | 'connect') => void;
   onOpenPlans?: () => void;
   onInsightWhy?: (panelKey: string, evidence?: InsightEvidence, title?: string) => void;
 }
@@ -56,6 +57,7 @@ export function DashboardView({
   onSectionVisible,
   iframeRef: externalIframeRef,
   onOpenConnectWizard,
+  onOpenConnector,
   onOpenPlans,
   onInsightWhy,
 }: DashboardViewProps) {
@@ -289,12 +291,14 @@ export function DashboardView({
       <DashboardEmptyState
         displayName={displayName}
         databaseName={selectedConnection?.name}
+        connection={selectedConnection}
         hasConnection={hasConnection}
         isOnline={isConnectorOnline}
         quotaError={proactiveQuotaError}
         onOpenPlans={onOpenPlans}
         onGenerate={onGenerate}
         onOpenConnectWizard={onOpenConnectWizard}
+        onOpenConnector={onOpenConnector}
         isGenerating={isGenerating}
         accessType={selectedConnection?.access_type ?? 'owner'}
       />

@@ -3,13 +3,13 @@
 // =============================================================================
 
 import { useState, useMemo } from 'react';
-import { Search, RefreshCw, ArrowRight, } from 'lucide-react';
+import { Search, RefreshCw, ArrowRight, Database } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, } from '@/components/ui/card';
 import { useConnections } from './api/useConnections';
-import { DatabaseEngineIcon, PostgresIcon } from './DatabaseEngineIcon';
+import { DatabaseEngineIcon, PostgresIcon, MysqlIcon, MongoIcon } from './DatabaseEngineIcon';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
@@ -49,7 +49,7 @@ export function ConnectorDatabases({ onSelectConnection }: ConnectorDatabasesPro
                 <div>
                     <h3 className="text-xl font-semibold tracking-tight text-foreground">Databases</h3>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                        All PostgreSQL databases discovered across your active connectors.
+                        All databases discovered across your active connectors.
                     </p>
                 </div>
                 <Button
@@ -84,8 +84,8 @@ export function ConnectorDatabases({ onSelectConnection }: ConnectorDatabasesPro
             <Card className="border rounded-xl shadow-none shrink-0 overflow-hidden flex-1 flex flex-col min-h-0">
                 <CardHeader className="py-2.5 px-4 border-b bg-muted/10 shrink-0 flex flex-row items-center justify-between">
                     <div className="flex items-center gap-2 text-xs font-semibold text-foreground">
-                        <PostgresIcon className="w-4 h-4" />
-                        <span>Discovered PostgreSQL Databases</span>
+                        <Database className="w-4 h-4 text-primary" />
+                        <span>Discovered Databases</span>
                     </div>
                     <span className="text-[11px] font-mono text-muted-foreground">
                         {filteredDatabases.length} {filteredDatabases.length === 1 ? 'database' : 'databases'}
@@ -115,7 +115,7 @@ export function ConnectorDatabases({ onSelectConnection }: ConnectorDatabasesPro
                                         >
                                             <DatabaseEngineIcon
                                                 connection={conn}
-                                                className="w-4.5 h-4.5"
+                                                className="w-4 h-4"
                                                 isOnline={conn.is_online}
                                                 showStatusDot={true}
                                             />
@@ -180,12 +180,24 @@ export function ConnectorDatabases({ onSelectConnection }: ConnectorDatabasesPro
                             <p className="text-xs text-muted-foreground">No databases match your search query.</p>
                         </div>
                     ) : (
-                        <div className="p-8 text-center space-y-2">
-                            <PostgresIcon className="w-8 h-8 mx-auto opacity-50" />
-                            <p className="text-xs font-semibold text-foreground">No databases discovered</p>
-                            <p className="text-[11px] text-muted-foreground max-w-sm mx-auto">
-                                Start your PostgreSQL connector on your host machine with <code className="px-1 py-0.5 bg-muted rounded font-mono text-[10px]">pg-connector start</code> to discover databases.
-                            </p>
+                        <div className="p-8 text-center space-y-3">
+                            <div className="flex items-center justify-center gap-2 mx-auto">
+                                <div className="w-8 h-8 rounded-lg bg-muted/60 border border-border/80 flex items-center justify-center p-1 shadow-2xs">
+                                    <PostgresIcon className="w-4.5 h-4.5" />
+                                </div>
+                                <div className="w-8 h-8 rounded-lg bg-muted/60 border border-border/80 flex items-center justify-center p-1 shadow-2xs">
+                                    <MysqlIcon className="w-4.5 h-4.5" />
+                                </div>
+                                <div className="w-8 h-8 rounded-lg bg-muted/60 border border-border/80 flex items-center justify-center p-1 shadow-2xs">
+                                    <MongoIcon className="w-4.5 h-4.5" />
+                                </div>
+                            </div>
+                            <div>
+                                <p className="text-xs font-semibold text-foreground">No databases discovered</p>
+                                <p className="text-[11px] text-muted-foreground max-w-sm mx-auto mt-0.5">
+                                    Start your connector daemon on your host machine to discover databases automatically.
+                                </p>
+                            </div>
                         </div>
                     )}
                 </CardContent>

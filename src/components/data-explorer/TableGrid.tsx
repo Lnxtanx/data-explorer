@@ -55,6 +55,8 @@ interface TableGridProps {
   onViewReferencedTable?: (schemaName: string, tableName: string) => void;
   /** Pushes the grid's active export context up (filters/sort/columns). */
   onGridContextChange?: (context: ExportGridContext) => void;
+  /** False when the resolved engine does not expose column statistics. */
+  statsEnabled?: boolean;
 }
 
 export function TableGrid({
@@ -64,6 +66,7 @@ export function TableGrid({
   tableInfo,
   onViewReferencedTable,
   onGridContextChange,
+  statsEnabled = true,
 }: TableGridProps) {
   const [sortColumn, setSortColumn] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
@@ -122,8 +125,14 @@ export function TableGrid({
     };
   }, []);
 
-  // Column header profiles for distribution bars (single cheap query)
-  const { data: profilesData } = useColumnHeaderProfiles(connectionId, tableName, schemaName);
+  // Column header profiles for distribution bars. Engines without the `stats`
+  // capability (for example MySQL today) must not receive the pg_stats request.
+  const { data: profilesData } = useColumnHeaderProfiles(
+    connectionId,
+    tableName,
+    schemaName,
+    statsEnabled
+  );
   const profilesByName = useMemo(() => {
     if (!profilesData?.columns) return new Map<string, ColumnStats>();
     return new Map(profilesData.columns.map((c) => [c.name, c]));
@@ -145,6 +154,12 @@ export function TableGrid({
     setColumnWidths(loadColumnWidths(connectionId, schemaName, tableName));
     scrollRef.current?.scrollTo({ top: 0, left: 0 });
   }, [connectionId, schemaName, tableName]);
+
+  // A connection can resolve to an engine without column statistics after the
+  // grid is already mounted; close any open stats panel rather than calling it.
+  useEffect(() => {
+    if (!statsEnabled) setSelectedColumn(null);
+  }, [statsEnabled]);
 
   const [limit, setLimit] = useState<number>(() => getExplorerPageSize());
 
@@ -282,8 +297,9 @@ export function TableGrid({
   }, [displayedRows.length]);
 
   const handleColumnClick = useCallback((column: ColumnInfo) => {
+    if (!statsEnabled) return;
     setSelectedColumn((prev) => (prev?.name === column.name ? null : column));
-  }, []);
+  }, [statsEnabled]);
 
   const handleSort = useCallback((column: string | null, direction: 'asc' | 'desc') => {
     setSortColumn(column);

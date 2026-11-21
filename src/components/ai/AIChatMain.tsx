@@ -28,7 +28,7 @@ import { useAIStream } from './hooks/useAIStream';
 import { useAIAgent } from './hooks/useAIAgent';
 import { useAIChatMessages, aiQueryKeys } from './hooks/useAIChats';
 import { useProjects, projectQueryKeys } from './hooks/useProjects';
-import { useTableList } from '../data-explorer/api/index';
+import { useExplorerDefaultSchema, useTableList } from '../data-explorer/api/index';
 import { useConnections } from '../connector/api/useConnections';
 import { useDatasetCache } from './hooks/useDatasetCache';
 import { useAIUsage, getProactiveQuotaError, getQuotaWarning } from './hooks/useAIUsage';
@@ -81,8 +81,10 @@ export function AIChatMain({
 
     const agentMode = true;
 
-    // Context & Connections
-    const { data: tableListData } = useTableList(connectionId ?? null, 'public');
+    // Context & Connections. Use the connection's resolved schema so MySQL
+    // aliases do not get an empty table list from a hard-coded `public`.
+    const defaultSchema = useExplorerDefaultSchema(connectionId ?? null);
+    const { data: tableListData } = useTableList(connectionId ?? null, defaultSchema);
     const availableTables = tableListData?.tables?.map(t => t.name) ?? [];
     const datasetCache = useDatasetCache();
     const { data: usageStatus } = useAIUsage();

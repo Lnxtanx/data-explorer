@@ -1,6 +1,6 @@
 // =============================================================================
 // Connection API Types
-// Shared interfaces for the PostgreSQL connection system
+// Shared interfaces for the multi-engine connection system
 // =============================================================================
 //
 // Phase 1 note: this file used to declare 15 additional interfaces (PulledSchema,
@@ -23,6 +23,7 @@ export interface Connection {
     sslMode: string;
     agent_id?: string;
     db_alias?: string;
+    db_type?: string;
     machine_label?: string;
     is_online?: boolean;
     host_hash?: string;

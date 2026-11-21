@@ -2,6 +2,33 @@
 // Data Explorer API Types
 // =============================================================================
 
+// ─── Engine Discovery ───────────────────────────────────────────────────────
+
+export type DatasetShape = 'relational' | 'document';
+
+export type DataExplorerCapability =
+  | 'schemaListing'
+  | 'tableListing'
+  | 'schemaTableListing'
+  | 'schemaColumns'
+  | 'tableMeta'
+  | 'indexListing'
+  | 'rowQuery'
+  | 'rowCount'
+  | 'distinct'
+  | 'stats'
+  | 'export'
+  | 'sqlExport';
+
+/** Engine/capability discovery for one resolved connection. */
+export interface DataExplorerInfoResponse {
+  dbType: string;
+  database: string | null;
+  datasetShape: DatasetShape;
+  capabilities: DataExplorerCapability[];
+  engines: string[];
+}
+
 // ─── Schema List ────────────────────────────────────────────────────────────
 
 export interface SchemaInfo {

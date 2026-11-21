@@ -1,10 +1,11 @@
 import { useMemo } from 'react';
-import { Plus, ArrowRight, Clock, Zap, ShieldCheck, Terminal, Server, CheckCircle2, XCircle } from 'lucide-react';
+import { Plus, ArrowRight, Clock, Zap, ShieldCheck, Terminal, Server, Database, CheckCircle2, XCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, } from '@/components/ui/card';
 import { useConnectors, useExecutionLogs, useHealthEvents } from './api/index';
-import { DatabaseEngineIcon, PostgresIcon } from './DatabaseEngineIcon';
+import { useConnections } from './api/useConnections';
+import { DatabaseEngineIcon, PostgresIcon, MysqlIcon, MongoIcon } from './DatabaseEngineIcon';
 import { cn } from '@/lib/utils';
 
 interface ConnectorOverviewProps {
@@ -13,6 +14,7 @@ interface ConnectorOverviewProps {
 
 export function ConnectorOverview({ onNavigate }: ConnectorOverviewProps) {
     const { data: connectors = [], isLoading: connectorsLoading } = useConnectors();
+    const { data: allConnections = [] } = useConnections();
     const { data: logs = [], isLoading: logsLoading } = useExecutionLogs(null);
     const { data: healthData } = useHealthEvents(null);
 
@@ -59,7 +61,7 @@ export function ConnectorOverview({ onNavigate }: ConnectorOverviewProps) {
                 <div className="p-3 rounded-xl border bg-background space-y-1 shadow-sm">
                     <div className="flex items-center justify-between text-muted-foreground">
                         <span className="text-[10px] font-semibold uppercase tracking-wider">Connectors</span>
-                        <PostgresIcon className="w-3.5 h-3.5" />
+                        <Database className="w-3.5 h-3.5 text-primary" />
                     </div>
                     <div className="text-base font-semibold text-foreground pt-0.5">
                         {connectorsLoading ? '—' : `${totalConnectors} ${totalConnectors === 1 ? 'host' : 'hosts'}`}
@@ -139,7 +141,7 @@ export function ConnectorOverview({ onNavigate }: ConnectorOverviewProps) {
             <Card className="border rounded-xl shadow-none shrink-0 overflow-hidden">
                 <CardHeader className="py-2.5 px-4 border-b bg-muted/10 shrink-0 flex flex-row items-center justify-between">
                     <div className="flex items-center gap-2 text-xs font-semibold text-foreground">
-                        <PostgresIcon className="w-3.5 h-3.5" />
+                        <Database className="w-3.5 h-3.5 text-primary" />
                         <span>Registered Connectors</span>
                     </div>
                     <Button
@@ -172,7 +174,8 @@ export function ConnectorOverview({ onNavigate }: ConnectorOverviewProps) {
                                                 : 'bg-muted border-border'
                                         )}>
                                             <DatabaseEngineIcon
-                                                engine="postgres"
+                                                connection={connector as any}
+                                                fallbackConnections={allConnections}
                                                 className="w-4 h-4"
                                                 isOnline={connector.is_online}
                                                 showStatusDot={true}
@@ -226,19 +229,31 @@ export function ConnectorOverview({ onNavigate }: ConnectorOverviewProps) {
                             ))}
                         </div>
                     ) : (
-                        <div className="p-8 text-center space-y-2">
-                            <PostgresIcon className="w-8 h-8 mx-auto opacity-50" />
-                            <p className="text-xs font-semibold text-foreground">No connectors connected</p>
-                            <p className="text-[11px] text-muted-foreground max-w-sm mx-auto">
-                                Run <code className="px-1 py-0.5 rounded bg-muted font-mono text-[10px]">pg-connector start</code> on your local PostgreSQL machine to begin.
-                            </p>
+                        <div className="p-8 text-center space-y-3">
+                            <div className="flex items-center justify-center gap-2 mx-auto">
+                                <div className="w-8 h-8 rounded-lg bg-muted/60 border border-border/80 flex items-center justify-center p-1 shadow-2xs">
+                                    <PostgresIcon className="w-4 h-4" />
+                                </div>
+                                <div className="w-8 h-8 rounded-lg bg-muted/60 border border-border/80 flex items-center justify-center p-1 shadow-2xs">
+                                    <MysqlIcon className="w-4 h-4" />
+                                </div>
+                                <div className="w-8 h-8 rounded-lg bg-muted/60 border border-border/80 flex items-center justify-center p-1 shadow-2xs">
+                                    <MongoIcon className="w-4 h-4" />
+                                </div>
+                            </div>
+                            <div>
+                                <p className="text-xs font-semibold text-foreground">No connectors connected</p>
+                                <p className="text-[11px] text-muted-foreground max-w-sm mx-auto mt-0.5">
+                                    Connect your PostgreSQL, MySQL, or MongoDB database to begin.
+                                </p>
+                            </div>
                             <Button
                                 size="sm"
                                 onClick={() => onNavigate('connect')}
-                                className="h-8 text-xs gap-1.5 mt-2 rounded-lg font-medium"
+                                className="h-8 text-xs gap-1.5 mt-2 rounded-lg font-medium cursor-pointer"
                             >
                                 <Plus className="w-3.5 h-3.5" />
-                                <span>Connect Local Database</span>
+                                <span>Connect Database</span>
                             </Button>
                         </div>
                     )}

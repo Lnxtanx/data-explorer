@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { PostgresIcon } from './DatabaseEngineIcon';
+import { PostgresIcon, MysqlIcon, MongoIcon } from './DatabaseEngineIcon';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
 import { Button } from '@/components/ui/button';
@@ -44,13 +44,15 @@ export function ConnectorDialog({ open, onClose, initialTab = 'overview', onSele
                     <VisuallyHidden>
                         <DialogTitle>Sign In Required</DialogTitle>
                     </VisuallyHidden>
-                    <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center">
-                        <PostgresIcon className="w-6 h-6" />
+                    <div className="flex items-center gap-2 p-2.5 rounded-2xl bg-primary/10 border border-primary/20">
+                        <PostgresIcon className="w-5 h-5" />
+                        <MysqlIcon className="w-5 h-5" />
+                        <MongoIcon className="w-5 h-5" />
                     </div>
                     <div className="space-y-1">
                         <h3 className="text-base font-semibold text-foreground">Sign in required</h3>
                         <p className="text-xs text-muted-foreground max-w-xs mx-auto leading-relaxed">
-                            Please sign in with Google or GitHub to connect, discover, and manage your PostgreSQL databases.
+                            Please sign in with Google or GitHub to connect, discover, and manage your PostgreSQL, MySQL, and MongoDB databases.
                         </p>
                     </div>
                     <div className="flex flex-col w-full gap-2.5 pt-2">

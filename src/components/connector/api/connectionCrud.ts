@@ -8,7 +8,7 @@ import type { DiscoveredDatabase } from './index';
 import type { Connection } from './connectionTypes';
 
 /**
- * List all discovered database connections from registered PostgreSQL connectors
+ * List all discovered database connections from registered connectors
  */
 export async function listConnections(): Promise<{ connections: Connection[] }> {
     try {
@@ -38,6 +38,7 @@ export async function listConnections(): Promise<{ connections: Connection[] }> 
                             name: db.database || db.db_alias,
                             database: db.database || db.db_alias,
                             db_alias: db.db_alias || db.database,
+                            db_type: db.db_type,
                             agent_id: agent.agent_id,
                             machine_label: agent.machine_label,
                             is_online: agent.is_online,

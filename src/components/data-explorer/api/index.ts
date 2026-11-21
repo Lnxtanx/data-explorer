@@ -4,6 +4,9 @@
 
 // Types
 export type {
+  DataExplorerCapability,
+  DataExplorerInfoResponse,
+  DatasetShape,
   SchemaInfo,
   SchemaListResponse,
   TableInfo,
@@ -26,6 +29,7 @@ export type {
 
 // API Functions
 export {
+  fetchDataExplorerInfo,
   fetchSchemas,
   fetchTableList,
   fetchTableRows,
@@ -44,6 +48,8 @@ export {
 // Hooks
 export {
   dataExplorerKeys,
+  useDataExplorerInfo,
+  useExplorerDefaultSchema,
   useSchemas,
   useTableList,
   useTableRows,

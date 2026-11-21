@@ -1,6 +1,5 @@
 import { useState, useMemo } from 'react';
 import { Activity, Loader2, RefreshCw, CheckCircle2, XCircle, Clock, Server, Zap, ShieldCheck } from 'lucide-react';
-import { PostgresIcon } from './DatabaseEngineIcon';
 import { useConnectors, useHealthEvents } from './api/index';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -121,7 +120,7 @@ export function ConnectorHealth() {
                 <div className="p-3 rounded-xl border bg-background space-y-1 shadow-sm">
                     <div className="flex items-center justify-between text-muted-foreground">
                         <span className="text-[10px] font-semibold uppercase tracking-wider">Relay Status</span>
-                        <PostgresIcon className="w-3.5 h-3.5" />
+                        <Server className="w-3.5 h-3.5" />
                     </div>
                     <div className="flex items-center gap-1.5 pt-0.5">
                         <span className={cn(

@@ -13,17 +13,17 @@ export const EXPLORER_ERROR_CATALOG: Record<string, ExplorerErrorEntry> = {
   // ── Connector reachability ──────────────────────────────────────────────
   agent_offline: {
     title: 'Connector is offline',
-    message: 'The PostgreSQL connector for this connection is not running.',
-    hint: 'Open a terminal on your host machine and run: pg-connector start',
+    message: 'The connector for this connection is not running.',
+    hint: 'Start the connector on the host machine (sw-connector start) and retry.',
   },
   agent_wake_failed: {
     title: 'Connector is not responding',
-    message: 'The PostgreSQL connector did not respond in time.',
-    hint: 'Make sure the connector is running (pg-connector start) and connected to the relay.',
+    message: 'The connector did not respond in time.',
+    hint: 'Make sure the connector is running (sw-connector start) and connected to the relay.',
   },
   agent_timeout: {
     title: 'Connector timed out',
-    message: 'The PostgreSQL connector took too long to respond.',
+    message: 'The connector took too long to respond.',
     hint: 'Check the connector status and relay connection, then retry.',
   },
   channel_closed: {
@@ -51,12 +51,12 @@ export const EXPLORER_ERROR_CATALOG: Record<string, ExplorerErrorEntry> = {
   db_auth_failed: {
     title: 'Database login failed',
     message: 'Your database rejected the connector credentials.',
-    hint: 'Verify database credentials with pg-connector db test or pg-connector status.',
+    hint: 'Verify database credentials with sw-connector db test or sw-connector status.'
   },
   db_not_found: {
     title: 'Database not configured',
     message: 'This database is not registered with your connector.',
-    hint: 'Register it with: pg-connector db add',
+    hint: 'Register it with: sw-connector db add'
   },
   db_pool_exhausted: {
     title: 'Connection pool full',
@@ -71,17 +71,17 @@ export const EXPLORER_ERROR_CATALOG: Record<string, ExplorerErrorEntry> = {
   env_var_missing: {
     title: 'Connector config incomplete',
     message: 'The connector is missing a password environment variable for this database.',
-    hint: 'See pg-connector db list for the variable name, set it, then restart the connector.',
+    hint: 'See sw-connector db list for the variable name, set it, then restart the connector.'
   },
   config_invalid: {
     title: 'Connector config invalid',
     message: 'The connector configuration file is invalid.',
-    hint: 'Run: pg-connector debug',
+    hint: 'Run: sw-connector debug'
   },
   config_not_found: {
     title: 'Connector not configured',
     message: 'The connector has no configuration yet.',
-    hint: 'Run: pg-connector init',
+    hint: 'Run: sw-connector init'
   },
 
   // ── Query execution ────────────────────────────────────────────────────
@@ -112,7 +112,7 @@ export const EXPLORER_ERROR_CATALOG: Record<string, ExplorerErrorEntry> = {
   internal_error: {
     title: 'Connector error',
     message: 'The connector hit an internal error.',
-    hint: 'Run: pg-connector debug',
+    hint: 'Run: sw-connector debug'
   },
 
   // ── Permissions ────────────────────────────────────────────────────────
@@ -173,6 +173,15 @@ export const EXPLORER_ERROR_CATALOG: Record<string, ExplorerErrorEntry> = {
   bad_request: {
     title: 'Invalid request',
     message: 'The request was invalid.',
+  },
+  unsupported_engine_capability: {
+    title: 'Not supported for this database',
+    message: 'This database engine does not support this Data Explorer feature.',
+  },
+  unparseable_statement: {
+    title: 'Query could not be parsed',
+    message: 'The connector could not parse the generated statement for this database engine.',
+    hint: 'Refresh the table list. If it persists, check the connector version and retry.',
   },
 };
 

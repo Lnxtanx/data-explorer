@@ -13,7 +13,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useConnections } from '../connector/api/useConnections';
-import { DatabaseEngineIcon, PostgresIcon } from '../connector/DatabaseEngineIcon';
+import { DatabaseEngineIcon, PostgresIcon, MysqlIcon, MongoIcon } from '../connector/DatabaseEngineIcon';
 
 interface ConnectionSelectorProps {
   selectedConnectionId: string | null;
@@ -30,7 +30,9 @@ export function ConnectionSelector({
 }: ConnectionSelectorProps) {
   const { data: connections, isLoading, isFetching, refetch } = useConnections();
 
-  const selectedConnection = connections?.find(c => c.id === selectedConnectionId);
+  const selectedConnection = connections?.find(
+    (c) => c.id === selectedConnectionId || (c.agent_id && c.agent_id === selectedConnectionId)
+  );
 
   return (
     <div className="inline-flex items-center h-8 rounded-lg border border-border bg-card shadow-sm">
@@ -50,6 +52,7 @@ export function ConnectionSelector({
       >
         <DatabaseEngineIcon
           connection={selectedConnection}
+          fallbackConnections={connections}
           className="w-4 h-4"
           isOnline={selectedConnection?.is_online}
           showStatusDot={true}
@@ -64,7 +67,7 @@ export function ConnectionSelector({
             className="flex items-center justify-between gap-1.5 px-2.5 h-full text-xs font-medium rounded-r-lg hover:bg-muted/40 transition-colors min-w-0 max-w-[190px] focus:outline-none"
           >
             <span className="truncate font-medium text-foreground text-left">
-              {selectedConnection?.name || 'Select Database'}
+              {selectedConnection?.name || selectedConnection?.machine_label || 'Select Database'}
             </span>
             <ChevronDown className="w-3.5 h-3.5 shrink-0 text-muted-foreground ml-1" />
           </button>
@@ -105,6 +108,7 @@ export function ConnectionSelector({
                   <div className="flex items-center gap-2 min-w-0">
                     <DatabaseEngineIcon
                       connection={connection}
+                      fallbackConnections={connections}
                       className="w-4 h-4"
                       isOnline={connection.is_online}
                       showStatusDot={true}
@@ -140,7 +144,11 @@ export function ConnectionSelector({
             </div>
           ) : (
             <div className="px-3 py-4 text-center space-y-2">
-              <PostgresIcon className="w-6 h-6 mx-auto opacity-30 grayscale" />
+              <div className="flex items-center justify-center gap-1.5 opacity-35">
+                <PostgresIcon className="w-4 h-4" />
+                <MysqlIcon className="w-4 h-4" />
+                <MongoIcon className="w-4 h-4" />
+              </div>
               <div>
                 <p className="text-xs text-muted-foreground font-medium">No active databases</p>
                 <p className="text-[10px] text-muted-foreground/70 mt-0.5 leading-relaxed">

@@ -24,6 +24,7 @@ import {
   EyeOff,
   Filter,
   Target,
+  CreditCard,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -56,6 +57,7 @@ import {
 import { cn } from '@/lib/utils';
 import { Dashboard, DashboardSection } from './api/dashboard';
 import { useDeleteDashboard } from './hooks/useDashboard';
+import { PaymentGatewaysModal } from './PaymentGatewaysModal';
 import { toast } from 'sonner';
 
 interface DashboardSidebarProps {
@@ -172,6 +174,7 @@ export function DashboardSidebar({
 
   // Delete dashboard dialog state & mutation
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showPaymentGatewaysModal, setShowPaymentGatewaysModal] = useState(false);
   const deleteDashboardMutation = useDeleteDashboard(connectionId || null);
 
   // Handle auto-refresh timer
@@ -467,6 +470,17 @@ export function DashboardSidebar({
                     </DropdownMenuItem>
                   )}
 
+                  {/* Manage Payment Gateways */}
+                  {!isTeamMember && (
+                    <DropdownMenuItem
+                      onClick={() => setShowPaymentGatewaysModal(true)}
+                      className="gap-2 cursor-pointer"
+                    >
+                      <CreditCard className="w-3.5 h-3.5 text-muted-foreground" />
+                      <span>Payment Gateways...</span>
+                    </DropdownMenuItem>
+                  )}
+
                   <DropdownMenuSeparator />
 
                   {!isTeamMember ? (
@@ -565,6 +579,11 @@ export function DashboardSidebar({
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+        {/* Payment Gateways Management Modal */}
+        <PaymentGatewaysModal
+          open={showPaymentGatewaysModal}
+          onOpenChange={setShowPaymentGatewaysModal}
+        />
       </div>
     </TooltipProvider>
   );

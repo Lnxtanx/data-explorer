@@ -323,7 +323,7 @@ export default function DataExplorerPage() {
     setSelectedTable({ table, schema: schemaName });
   }, []);
 
-  const handleOpenConnector = useCallback((tab: 'overview' | 'connect' | 'databases' = 'overview') => {
+  const handleOpenConnector = useCallback((tab: 'overview' | 'connectors' | 'databases' | 'logs' | 'settings' | 'health' | 'connect' = 'overview') => {
     if (!user) {
       setSettingsSection('profile');
       setShowSettings(true);
@@ -485,6 +485,7 @@ export default function DataExplorerPage() {
             setMode('ai');
           }}
           onOpenConnectWizard={() => handleOpenConnector('connect')}
+          onOpenConnector={handleOpenConnector}
           aiContextTable={aiContextTable}
           aiContextSchema={selectedTable.schema}
           isAiPanelOpen={isAiPanelOpen}

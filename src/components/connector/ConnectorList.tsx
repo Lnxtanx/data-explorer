@@ -14,7 +14,8 @@ import {
 import type { DatabaseConnector } from './api/index';
 import { useConnections } from './api/useConnections';
 import { useAuth } from '@/components/auth/AuthProvider';
-import { DatabaseEngineIcon, PostgresIcon } from './DatabaseEngineIcon';
+import { DatabaseEngineIcon, PostgresIcon, MysqlIcon, MongoIcon, resolveDatabaseEngine } from './DatabaseEngineIcon';
+import { Database } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
@@ -47,11 +48,19 @@ export function ConnectorList({ onSelectConnection }: ConnectorListProps) {
     if (connectors.length === 0) {
         return (
             <div className="text-center py-16 space-y-3 font-sans">
-                <div className="w-12 h-12 mx-auto rounded-full bg-muted flex items-center justify-center">
-                    <PostgresIcon className="w-6 h-6" />
+                <div className="flex items-center justify-center gap-2 mx-auto">
+                    <div className="w-10 h-10 rounded-xl bg-muted/80 flex items-center justify-center p-1.5 border border-border">
+                        <PostgresIcon className="w-6 h-6" />
+                    </div>
+                    <div className="w-10 h-10 rounded-xl bg-muted/80 flex items-center justify-center p-1.5 border border-border">
+                        <MysqlIcon className="w-6 h-6" />
+                    </div>
+                    <div className="w-10 h-10 rounded-xl bg-muted/80 flex items-center justify-center p-1.5 border border-border">
+                        <MongoIcon className="w-6 h-6" />
+                    </div>
                 </div>
-                <p className="text-sm font-semibold text-foreground">No PostgreSQL connectors registered</p>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-sm font-semibold text-foreground">No database connectors registered</p>
+                <p className="text-xs text-muted-foreground max-w-sm mx-auto">
                     Install the connector CLI on your host, run <code className="px-1 py-0.5 bg-muted rounded text-[11px]">init</code>, then paste the connection key here.
                 </p>
             </div>
@@ -64,7 +73,7 @@ export function ConnectorList({ onSelectConnection }: ConnectorListProps) {
                 <div>
                     <h3 className="text-xl font-semibold tracking-tight text-foreground">Registered Connectors</h3>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                        Active PostgreSQL connector instances and discovered databases.
+                        Active database connector instances and discovered databases.
                     </p>
                 </div>
                 <Button
@@ -166,21 +175,27 @@ function ConnectorCard({
                     ) : (
                         <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
                     )}
-                    <div className={cn(
-                        'w-9 h-9 rounded-lg flex items-center justify-center shrink-0 border',
-                        connector.is_online
-                            ? 'bg-emerald-500/10 border-emerald-500/20'
-                            : isRevoked
-                            ? 'bg-destructive/10 border-destructive/20'
-                            : 'bg-muted border-border'
-                    )}>
-                        <DatabaseEngineIcon
-                            engine="postgres"
-                            className="w-5 h-5"
-                            isOnline={connector.is_online}
-                            showStatusDot={true}
-                        />
-                    </div>
+                    {(() => {
+                        const matchingConn = allConnections.find(c => c.agent_id === connector.agent_id);
+                        return (
+                            <div className={cn(
+                                'w-9 h-9 rounded-lg flex items-center justify-center shrink-0 border',
+                                connector.is_online
+                                    ? 'bg-emerald-500/10 border-emerald-500/20'
+                                    : isRevoked
+                                    ? 'bg-destructive/10 border-destructive/20'
+                                    : 'bg-muted border-border'
+                            )}>
+                                <DatabaseEngineIcon
+                                    connection={matchingConn || (connector as any)}
+                                    fallbackConnections={allConnections}
+                                    className="w-5 h-5"
+                                    isOnline={connector.is_online}
+                                    showStatusDot={true}
+                                />
+                            </div>
+                        );
+                    })()}
                     <div className="min-w-0">
                         <p className="text-sm font-semibold text-foreground truncate">
                             {connector.machine_label}
@@ -246,8 +261,8 @@ function ConnectorCard({
                     {connector.is_online && (
                         <div className="space-y-2 pt-1 border-t">
                             <div className="flex items-center gap-1.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-                                <PostgresIcon className="w-3 h-3" />
-                                <span>Discovered PostgreSQL Databases</span>
+                                <Database className="w-3 h-3 text-primary" />
+                                <span>Discovered Databases</span>
                             </div>
                             {databases.length > 0 ? (
                                 <div className="space-y-1.5">
@@ -256,6 +271,7 @@ function ConnectorCard({
                                             (c) => c.agent_id === connector.agent_id && (c.db_alias === db.db_alias || c.database === db.database || c.name === db.database)
                                         );
                                         const resolvedConnId = matchingConn?.id || `${connector.agent_id}:${db.db_alias || db.database}`;
+                                        const engine = resolveDatabaseEngine(db as any);
 
                                         return (
                                             <div
@@ -270,7 +286,7 @@ function ConnectorCard({
                                             >
                                                 <div className="flex items-center gap-2">
                                                     <DatabaseEngineIcon
-                                                        engine="postgres"
+                                                        engine={engine}
                                                         className="w-3.5 h-3.5"
                                                         isOnline={connector.is_online}
                                                         showStatusDot={true}

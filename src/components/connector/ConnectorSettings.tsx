@@ -2,8 +2,9 @@ import { ShieldOff, Trash2, Wifi, WifiOff, RefreshCw, Info, Users } from 'lucide
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useConnectors, useRevokeConnector, useRemoveConnector } from './api/index';
+import { useConnections } from './api/useConnections';
 import { useAuth } from '@/components/auth/AuthProvider';
-import { DatabaseEngineIcon, PostgresIcon } from './DatabaseEngineIcon';
+import { DatabaseEngineIcon, PostgresIcon, MysqlIcon, MongoIcon } from './DatabaseEngineIcon';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
@@ -11,6 +12,7 @@ export function ConnectorSettings() {
     const { user } = useAuth();
     const isDemo = Boolean(user?.user_metadata?.is_demo || user?.email?.toLowerCase() === 'support@schemaweaver.dev');
     const { data: connectors = [], isLoading, isFetching, refetch } = useConnectors();
+    const { data: allConnections = [] } = useConnections();
     const revokeMutation = useRevokeConnector();
     const removeMutation = useRemoveConnector();
 
@@ -61,8 +63,12 @@ export function ConnectorSettings() {
     if (connectors.length === 0) {
         return (
             <div className="text-center py-16 space-y-3 font-sans">
-                <PostgresIcon className="w-10 h-10 mx-auto opacity-50" />
-                <p className="text-sm font-semibold text-foreground">No PostgreSQL connectors registered</p>
+                <div className="flex items-center justify-center gap-2">
+                    <PostgresIcon className="w-8 h-8 opacity-40" />
+                    <MysqlIcon className="w-8 h-8 opacity-40" />
+                    <MongoIcon className="w-8 h-8 opacity-40" />
+                </div>
+                <p className="text-sm font-semibold text-foreground">No database connectors registered</p>
                 <p className="text-xs text-muted-foreground">
                     Add a connector to manage its credentials and settings here.
                 </p>
@@ -109,19 +115,25 @@ export function ConnectorSettings() {
                             {/* Header */}
                             <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-3 min-w-0">
-                                    <div className={cn(
-                                        'w-9 h-9 rounded-lg flex items-center justify-center shrink-0 border',
-                                        connector.is_online
-                                            ? 'bg-emerald-500/10 border-emerald-500/20'
-                                            : 'bg-muted border-border'
-                                    )}>
-                                        <DatabaseEngineIcon
-                                            engine="postgres"
-                                            className="w-5 h-5"
-                                            isOnline={connector.is_online}
-                                            showStatusDot={true}
-                                        />
-                                    </div>
+                                    {(() => {
+                                        const matchingConn = allConnections.find(c => c.agent_id === connector.agent_id);
+                                        return (
+                                            <div className={cn(
+                                                'w-9 h-9 rounded-lg flex items-center justify-center shrink-0 border',
+                                                connector.is_online
+                                                    ? 'bg-emerald-500/10 border-emerald-500/20'
+                                                    : 'bg-muted border-border'
+                                            )}>
+                                                <DatabaseEngineIcon
+                                                    connection={matchingConn || (connector as any)}
+                                                    fallbackConnections={allConnections}
+                                                    className="w-5 h-5"
+                                                    isOnline={connector.is_online}
+                                                    showStatusDot={true}
+                                                />
+                                            </div>
+                                        );
+                                    })()}
                                     <div className="min-w-0">
                                         <p className="text-sm font-semibold text-foreground truncate">
                                             {connector.machine_label}

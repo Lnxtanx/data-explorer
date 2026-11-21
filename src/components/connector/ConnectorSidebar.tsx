@@ -1,5 +1,5 @@
-import { Settings, Activity, Plus, BarChart3, Heart, Server } from 'lucide-react';
-import { PostgresIcon } from './DatabaseEngineIcon';
+import { Settings, Activity, Plus, BarChart3, Heart, Server, Database } from 'lucide-react';
+import { PostgresIcon, MysqlIcon, MongoIcon } from './DatabaseEngineIcon';
 import { cn } from '@/lib/utils';
 
 interface ConnectorSidebarProps {
@@ -10,7 +10,7 @@ interface ConnectorSidebarProps {
 const SECTIONS = [
     { id: 'overview', label: 'Overview', icon: BarChart3 },
     { id: 'connectors', label: 'Connectors', icon: Server },
-    { id: 'databases', label: 'Databases', icon: PostgresIcon },
+    { id: 'databases', label: 'Databases', icon: Database },
     { id: 'logs', label: 'Execution Logs', icon: Activity },
     { id: 'health', label: 'Health', icon: Heart },
     { id: 'settings', label: 'Settings', icon: Settings },
@@ -20,9 +20,16 @@ const SECTIONS = [
 export function ConnectorSidebar({ activeSection, onSelect }: ConnectorSidebarProps) {
     return (
         <div className="flex w-full shrink-0 flex-col border-b border-border bg-muted/30 md:h-full md:w-48 md:border-b-0 md:border-r">
-            <div className="hidden px-4 py-3 border-b border-border items-center gap-2 md:flex">
-                <PostgresIcon className="w-4 h-4" />
-                <h2 className="text-sm font-semibold text-foreground">Connector</h2>
+            <div className="hidden px-4 py-3 border-b border-border items-center justify-between md:flex">
+                <div className="flex items-center gap-2">
+                    <Database className="w-4 h-4 text-primary" />
+                    <h2 className="text-sm font-semibold text-foreground">Connectors</h2>
+                </div>
+                <div className="flex items-center gap-1 opacity-70">
+                    <PostgresIcon className="w-3 h-3" />
+                    <MysqlIcon className="w-3 h-3" />
+                    <MongoIcon className="w-3 h-3" />
+                </div>
             </div>
             <nav className="flex flex-1 gap-1 overflow-x-auto p-2 md:flex-col md:overflow-y-auto md:overflow-x-hidden md:space-y-1 md:gap-0">
                 {SECTIONS.map((section) => {
@@ -55,4 +62,3 @@ export function ConnectorSidebar({ activeSection, onSelect }: ConnectorSidebarPr
         </div>
     );
 }
-

@@ -1,9 +1,9 @@
 // =============================================================================
-// PostgreSQL Connector API Types
-// Core type definitions for PostgreSQL database connectors and status
+// Connector API Types
+// Core type definitions for database connectors and status
 // =============================================================================
 
-/** A registered PostgreSQL database connector instance */
+/** A registered database connector instance */
 export interface DatabaseConnector {
     id: string;                   // Registration UUID
     agent_id: string;             // Connector ID, e.g. "agt_laptop_abc123"
@@ -25,10 +25,11 @@ export interface DatabaseConnector {
     shared_by_email?: string | null;
 }
 
-/** A PostgreSQL database discovered on a remote connector */
+/** A database discovered on a remote connector */
 export interface DiscoveredDatabase {
     db_alias: string;             // Alias, e.g. "default", "production"
     database: string;             // Database name, e.g. "mydb"
+    db_type?: string;             // Canonical engine id, e.g. "postgres", "mysql"
     version?: string;             // e.g. "PostgreSQL 16.14"
     status: string;               // e.g. "healthy"
 }

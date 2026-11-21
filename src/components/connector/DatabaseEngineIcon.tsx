@@ -21,50 +21,90 @@ export type DatabaseEngine =
   | 'generic';
 
 /**
- * Resolves the database engine type from connection metadata.
- * Defaults to 'postgres' since current connector relays PostgreSQL.
+ * Resolves the database engine type from connection or connector metadata.
  */
-export function resolveDatabaseEngine(connection?: Partial<Connection> | null): DatabaseEngine {
+export function resolveDatabaseEngine(
+  connection?: Partial<Connection> | any,
+  fallbackConnections?: Connection[]
+): DatabaseEngine {
   if (!connection) return 'postgres';
 
-  // 1. Explicit engine / type property
-  const explicit =
-    (connection as any).engine ||
-    (connection as any).type ||
-    (connection as any).db_type ||
-    (connection as any).dialect;
-
-  if (explicit && typeof explicit === 'string') {
-    const norm = explicit.toLowerCase().trim();
-    if (norm.includes('postgres') || norm === 'pg') return 'postgres';
-    if (norm.includes('mysql')) return 'mysql';
-    if (norm.includes('maria')) return 'mariadb';
+  const matchEngineStr = (val?: string | null): DatabaseEngine | null => {
+    if (!val || typeof val !== 'string') return null;
+    const norm = val.toLowerCase().trim();
+    if (norm.includes('mysql') || norm.includes('maria')) return 'mysql';
+    if (norm.includes('postgres') || norm.includes('pg') || norm.includes('psql')) return 'postgres';
+    if (norm.includes('mongo')) return 'mongodb';
     if (norm.includes('sqlite')) return 'sqlite';
     if (norm.includes('duck')) return 'duckdb';
     if (norm.includes('clickhouse')) return 'clickhouse';
     if (norm.includes('snow')) return 'snowflake';
-    if (norm.includes('mongo')) return 'mongodb';
     if (norm.includes('redis')) return 'redis';
+    return null;
+  };
+
+  // 1. Explicit engine / type property on the connection itself
+  const direct =
+    matchEngineStr(connection.engine) ||
+    matchEngineStr(connection.type) ||
+    matchEngineStr(connection.db_type) ||
+    matchEngineStr(connection.dialect) ||
+    matchEngineStr(connection.database_type);
+  if (direct) return direct;
+
+  // 2. If this is a connector with discovered databases array
+  if (Array.isArray(connection.databases) && connection.databases.length > 0) {
+    for (const db of connection.databases) {
+      const fromDb =
+        matchEngineStr(db.engine) ||
+        matchEngineStr(db.dialect) ||
+        matchEngineStr(db.type) ||
+        matchEngineStr(db.db_alias) ||
+        matchEngineStr(db.database) ||
+        matchEngineStr(db.version);
+      if (fromDb) return fromDb;
+    }
   }
 
-  // 2. Name / alias heuristic check
-  const combined = `${connection.database || ''} ${connection.name || ''} ${connection.db_alias || ''}`.toLowerCase();
-  if (combined.includes('mysql')) return 'mysql';
-  if (combined.includes('mariadb')) return 'mariadb';
-  if (combined.includes('sqlite')) return 'sqlite';
-  if (combined.includes('duckdb')) return 'duckdb';
-  if (combined.includes('clickhouse')) return 'clickhouse';
-  if (combined.includes('mongo')) return 'mongodb';
-  if (combined.includes('redis')) return 'redis';
-  if (combined.includes('snow')) return 'snowflake';
+  // 3. Check name, database, db_alias, version, id
+  const fromProps =
+    matchEngineStr(connection.db_alias) ||
+    matchEngineStr(connection.database) ||
+    matchEngineStr(connection.name) ||
+    matchEngineStr(connection.version) ||
+    matchEngineStr(connection.id);
+  if (fromProps) return fromProps;
 
-  // 3. Current system default: PostgreSQL
+  // 4. If fallbackConnections provided, match by agent_id or connector id
+  if (fallbackConnections && Array.isArray(fallbackConnections)) {
+    const targetAgentId = connection.agent_id || connection.id;
+    const matched = fallbackConnections.find(
+      (c) => (c.agent_id && c.agent_id === targetAgentId) || c.id === targetAgentId
+    );
+    if (matched) {
+      const fromMatched =
+        matchEngineStr(matched.db_alias) ||
+        matchEngineStr(matched.database) ||
+        matchEngineStr(matched.name) ||
+        matchEngineStr((matched as any).engine) ||
+        matchEngineStr((matched as any).dialect);
+      if (fromMatched) return fromMatched;
+    }
+  }
+
+  // 5. Check machine_label or agent_id string heuristics as last resort
+  const fromHost =
+    matchEngineStr(connection.machine_label) ||
+    matchEngineStr(connection.agent_id);
+  if (fromHost) return fromHost;
+
   return 'postgres';
 }
 
 export interface DatabaseEngineIconProps {
   engine?: DatabaseEngine | string;
-  connection?: Partial<Connection> | null;
+  connection?: Partial<Connection> | any;
+  fallbackConnections?: Connection[];
   className?: string;
   wrapperClassName?: string;
   isOnline?: boolean;
@@ -81,15 +121,36 @@ export function PostgresIcon({ className = 'w-4 h-4' }: { className?: string }) 
   );
 }
 
+export function MysqlIcon({ className = 'w-4 h-4' }: { className?: string }) {
+  return (
+    <img
+      src="/mysql.svg"
+      alt="MySQL"
+      className={cn('shrink-0 object-contain', className)}
+    />
+  );
+}
+
+export function MongoIcon({ className = 'w-4 h-4' }: { className?: string }) {
+  return (
+    <img
+      src="/mongodb.svg"
+      alt="MongoDB"
+      className={cn('shrink-0 object-contain', className)}
+    />
+  );
+}
+
 export function DatabaseEngineIcon({
   engine,
   connection,
+  fallbackConnections,
   className = 'w-4 h-4',
   wrapperClassName,
   isOnline,
   showStatusDot = false,
 }: DatabaseEngineIconProps) {
-  const resolved = engine ? (engine as DatabaseEngine) : resolveDatabaseEngine(connection);
+  const resolved = engine ? (engine as DatabaseEngine) : resolveDatabaseEngine(connection, fallbackConnections);
 
   const renderIcon = () => {
     switch (resolved) {
@@ -106,13 +167,11 @@ export function DatabaseEngineIcon({
       case 'mysql':
       case 'mariadb':
         return (
-          <svg viewBox="0 0 24 24" fill="none" className={cn('shrink-0', className)}>
-            <circle cx="12" cy="12" r="10" fill="#00758F" />
-            <path
-              d="M7 14c1.5-2 3.5-3 5-3 2 0 3.5 1.5 5 1.5s2-.5 2-.5-1 2-3 2-3.5-1-5-1c-1.5 0-3 1-4 1z"
-              fill="#F29111"
-            />
-          </svg>
+          <img
+            src="/mysql.svg"
+            alt="MySQL"
+            className={cn('shrink-0 object-contain', className)}
+          />
         );
 
       case 'sqlite':
@@ -156,13 +215,11 @@ export function DatabaseEngineIcon({
 
       case 'mongodb':
         return (
-          <svg viewBox="0 0 24 24" fill="none" className={cn('shrink-0', className)}>
-            <path
-              d="M12 2s-6 6.5-6 11c0 3.3 2.7 6 6 6s6-2.7 6-6c0-4.5-6-11-6-11z"
-              fill="#00ED64"
-            />
-            <path d="M12 3v15" stroke="#13AA52" strokeWidth="1.5" />
-          </svg>
+          <img
+            src="/mongodb.svg"
+            alt="MongoDB"
+            className={cn('shrink-0 object-contain', className)}
+          />
         );
 
       case 'redis':

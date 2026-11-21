@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { useVerifyConnector, useConnectors } from './api/index';
 import type { ConnectorVerifyResult } from './api/index';
-import { DatabaseEngineIcon, PostgresIcon } from './DatabaseEngineIcon';
+import { DatabaseEngineIcon, PostgresIcon, MysqlIcon, MongoIcon, resolveDatabaseEngine } from './DatabaseEngineIcon';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
@@ -17,22 +17,50 @@ interface ConnectorWizardProps {
 }
 
 type Step = 'install' | 'credentials' | 'result';
+type EngineType = 'postgres' | 'mysql' | 'mongodb';
 
-const CLI_COMMANDS = [
-    { step: '1', cmd: 'npm i -g @schema-weaver/pg-connector', comment: '# Install CLI globally' },
-    { step: '2', cmd: 'pg-connector init', comment: '# Generate secret connector key' },
-    { step: '3', cmd: 'pg-connector db add', comment: '# Attach your PostgreSQL database' },
-    { step: '4', cmd: 'pg-connector start', comment: '# Launch background daemon' },
-];
+const ENGINE_CONFIG: Record<EngineType, {
+    name: string;
+    icon: React.ComponentType<{ className?: string }>;
+    addCmd: string;
+    addComment: string;
+}> = {
+    postgres: {
+        name: 'PostgreSQL',
+        icon: PostgresIcon,
+        addCmd: 'pg-connector db add',
+        addComment: '# Attach your PostgreSQL database',
+    },
+    mysql: {
+        name: 'MySQL',
+        icon: MysqlIcon,
+        addCmd: 'pg-connector db add --type mysql',
+        addComment: '# Attach your MySQL database',
+    },
+    mongodb: {
+        name: 'MongoDB',
+        icon: MongoIcon,
+        addCmd: 'pg-connector db add --type mongodb',
+        addComment: '# Attach your MongoDB database or cluster',
+    },
+};
 
 export function ConnectorWizard({ onClose }: ConnectorWizardProps) {
     const [step, setStep] = useState<Step>('install');
+    const [selectedEngine, setSelectedEngine] = useState<EngineType>('postgres');
     const [connectorIdInput, setConnectorIdInput] = useState('');
     const [connectionKeyInput, setConnectionKeyInput] = useState('');
     const [result, setResult] = useState<ConnectorVerifyResult | null>(null);
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [copiedAll, setCopiedAll] = useState(false);
     const [copiedLine, setCopiedLine] = useState<string | null>(null);
+
+    const cliCommands = [
+        { step: '1', cmd: 'npm i -g @schema-weaver/pg-connector', comment: '# Install CLI globally' },
+        { step: '2', cmd: 'pg-connector init', comment: '# Generate secret connector key' },
+        { step: '3', cmd: ENGINE_CONFIG[selectedEngine].addCmd, comment: ENGINE_CONFIG[selectedEngine].addComment },
+        { step: '4', cmd: 'pg-connector start', comment: '# Launch background daemon' },
+    ];
 
     const verifyMutation = useVerifyConnector();
     const { data: connectors = [], refetch: refetchConnectors } = useConnectors();
@@ -78,7 +106,7 @@ export function ConnectorWizard({ onClose }: ConnectorWizardProps) {
     };
 
     const handleCopyAll = () => {
-        const fullScript = CLI_COMMANDS.map(c => c.cmd).join('\n');
+        const fullScript = cliCommands.map(c => c.cmd).join('\n');
         navigator.clipboard.writeText(fullScript);
         setCopiedAll(true);
         toast.success('Copied all setup commands');
@@ -127,14 +155,11 @@ export function ConnectorWizard({ onClose }: ConnectorWizardProps) {
         <div className="p-6 space-y-5 flex flex-col h-full overflow-y-auto justify-between">
             {/* ── Header ── */}
             <div className="space-y-4">
-                <div className="flex items-center justify-between pb-3 border-b">
-                    <div className="space-y-0.5">
+                <div className="flex items-center justify-between pb-3 border-b gap-3 flex-wrap">
+                    <div className="space-y-1">
                         <div className="flex items-center gap-2 flex-wrap">
-                            <div className="w-6 h-6 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center p-0.5 shrink-0">
-                                <PostgresIcon className="w-4 h-4" />
-                            </div>
                             <h3 className="text-lg font-semibold tracking-tight text-foreground">
-                                Connect PostgreSQL Database
+                                Connect Database
                             </h3>
                             <a
                                 href="https://github.com/Schema-Weaver/pg-connector"
@@ -154,6 +179,33 @@ export function ConnectorWizard({ onClose }: ConnectorWizardProps) {
                             Connect your local or VPC database via outbound connector without exposing credentials to the cloud.
                         </p>
                     </div>
+
+                    {/* Engine Selector */}
+                    {step === 'install' && (
+                        <div className="flex items-center gap-1 p-1 bg-muted/60 border rounded-xl">
+                            {(['postgres', 'mysql', 'mongodb'] as const).map((engine) => {
+                                const cfg = ENGINE_CONFIG[engine];
+                                const Icon = cfg.icon;
+                                const isSelected = selectedEngine === engine;
+                                return (
+                                    <button
+                                        key={engine}
+                                        type="button"
+                                        onClick={() => setSelectedEngine(engine)}
+                                        className={cn(
+                                            "flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-all cursor-pointer",
+                                            isSelected
+                                                ? "bg-background text-foreground shadow-xs border border-border/80 font-semibold"
+                                                : "text-muted-foreground hover:text-foreground"
+                                        )}
+                                    >
+                                        <Icon className="w-3.5 h-3.5" />
+                                        <span>{cfg.name}</span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    )}
                 </div>
 
                 {/* ── Modern Stepper ── */}
@@ -166,7 +218,7 @@ export function ConnectorWizard({ onClose }: ConnectorWizardProps) {
                     <div className="space-y-3">
                         <div className="flex items-center justify-between">
                             <p className="text-xs text-muted-foreground">
-                                Run these commands in your terminal where PostgreSQL is running:
+                                Run these commands in your terminal where {ENGINE_CONFIG[selectedEngine].name} is running:
                             </p>
                             <span className="text-[10px] text-muted-foreground font-mono">
                                 Node.js 18+ required
@@ -204,7 +256,7 @@ export function ConnectorWizard({ onClose }: ConnectorWizardProps) {
 
                             {/* Commands List */}
                             <div className="p-3 space-y-1.5 font-mono text-xs">
-                                {CLI_COMMANDS.map((item) => (
+                                {cliCommands.map((item) => (
                                     <div
                                         key={item.step}
                                         className="flex items-center justify-between gap-3 px-2.5 py-1.5 rounded-lg hover:bg-muted/50 transition-colors group"
@@ -329,7 +381,8 @@ export function ConnectorWizard({ onClose }: ConnectorWizardProps) {
                                             : 'bg-amber-500/10 border-amber-500/25'
                                     )}>
                                         <DatabaseEngineIcon
-                                            engine="postgres"
+                                            connection={result as any}
+                                            engine={resolveDatabaseEngine(result as any) || selectedEngine}
                                             className="w-5 h-5"
                                             isOnline={result.is_online}
                                             showStatusDot={true}
@@ -374,7 +427,8 @@ export function ConnectorWizard({ onClose }: ConnectorWizardProps) {
                                             <div key={db.db_alias} className="flex items-center justify-between px-3 py-2 rounded-xl bg-muted/40 border border-border/50 hover:bg-muted/70 transition-colors">
                                                 <div className="flex items-center gap-2.5 min-w-0">
                                                     <DatabaseEngineIcon
-                                                        engine="postgres"
+                                                        connection={db as any}
+                                                        engine={resolveDatabaseEngine(db as any) || selectedEngine}
                                                         className="w-4 h-4"
                                                         isOnline={result.is_online}
                                                         showStatusDot={true}
